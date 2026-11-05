@@ -34,6 +34,11 @@ export type Deck = {
   trashedAt: number | null
   /** The entry whose trashing took this one with it (itself for a directly trashed entry). */
   trashedRoot?: string
+  /** Sync: when this entry last changed (hybrid clock) and on which device. */
+  clock?: number
+  device?: string
+  /** Sync: when the deck's slides or theme last changed. */
+  docClock?: number
   sizeBytes: number
   theme: SlideTheme
   slides: SlideSpec[]
@@ -55,6 +60,8 @@ export type Folder = {
   starred: boolean
   trashedAt: number | null
   trashedRoot?: string
+  clock?: number
+  device?: string
 }
 
 export type Entry = Deck | Folder
@@ -62,6 +69,8 @@ export type Entry = Deck | Folder
 export type LibraryState = {
   entries: Record<string, Entry>
   lastBackupAt: number | null
+  /** Sync: ids deleted permanently on this device, with the clock of the deletion. */
+  tombstones?: Record<string, number>
 }
 
 export type ExportFormat = 'pptx' | 'html'

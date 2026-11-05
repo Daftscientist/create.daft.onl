@@ -7,7 +7,7 @@ import { claimOwnership, ownInMemory, persistStorage, storage } from '../storage
 import type { Mutation } from '../storage/protocol'
 import { blankTheme, sampleLibrary } from './fixtures'
 import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideSpec } from './types'
-import { noteLocalChange } from './sync'
+import { deviceId, noteLocalChange } from './sync'
 import { toast } from './toasts'
 import { confirm } from '../ui/Dialog'
 
@@ -33,7 +33,7 @@ function fromOpened(o: Awaited<ReturnType<typeof storage.open>>): LibraryState {
     if (x.type === 'deck' && x.status === 'importing') x = { ...x, status: 'failed', phase: undefined, error: 'The import was interrupted. Try again.' }
     entries[e.id] = x
   }
-  return { entries, lastBackupAt: (o.meta.lastBackupAt as number | null) ?? null }
+  return { entries, lastBackupAt: (o.meta.lastBackupAt as number | null) ?? null, tombstones: (o.meta.tombstones as Record<string, number> | undefined) ?? {} }
 }
 
 async function seed() {
@@ -89,19 +89,44 @@ function diff(prev: LibraryState, next: LibraryState): Mutation[] {
   }
   for (const id of Object.keys(prev.entries)) if (!(id in next.entries)) out.push({ kind: 'delete', id })
   if (prev.lastBackupAt !== next.lastBackupAt) out.push({ kind: 'meta', key: 'lastBackupAt', value: next.lastBackupAt })
+  if (prev.tombstones !== next.tombstones) out.push({ kind: 'meta', key: 'tombstones', value: next.tombstones ?? {} })
   return out
 }
 
 let writing = Promise.resolve()
 let askedPersist = false
-/** `quiet`: view state (last opened, last slide) still syncs but never prompts about paused sync. */
-function commit(next: LibraryState, quiet = false) {
+// Hybrid logical clock: never goes backwards, even if the system clock does.
+let lastClock = 0
+export const tick = () => (lastClock = Math.max(Date.now(), lastClock + 1))
+
+/** Local changes get a clock and device stamp (and deletions a tombstone) so sync can merge them. */
+function stamp(prev: LibraryState, next: LibraryState): LibraryState {
+  let entries = next.entries
+  let tombstones = next.tombstones ?? prev.tombstones ?? {}
+  const device = deviceId()
+  for (const [id, e] of Object.entries(next.entries)) {
+    const p = prev.entries[id]
+    if (p === e) continue
+    const docChanged = e.type === 'deck' && (!p || p.type !== 'deck' || p.slides !== e.slides || p.theme !== e.theme)
+    const t = tick()
+    if (entries === next.entries) entries = { ...entries }
+    entries[id] = { ...e, clock: t, device, ...(docChanged ? { docClock: t } : {}) } as Entry
+  }
+  const gone = Object.keys(prev.entries).filter((id) => !(id in next.entries))
+  if (gone.length) { tombstones = { ...tombstones }; for (const id of gone) tombstones[id] = tick() }
+  return { ...next, entries, tombstones }
+}
+
+/** `quiet`: view state (last opened, last slide) still syncs but never prompts about paused sync.
+ *  `origin: 'remote'`: changes pulled from the cloud, applied without restamping them as local edits. */
+function commit(next: LibraryState, quiet = false, origin: 'local' | 'remote' = 'local') {
   const prev = state
+  if (origin === 'local') next = stamp(prev, next)
   state = next
   emit()
   const mutations = diff(prev, next)
   if (!mutations.length) return
-  noteLocalChange(1, quiet)
+  if (origin === 'local') noteLocalChange(1, quiet)
   if (new URLSearchParams(location.search).has('memory')) return
   if (!askedPersist) { askedPersist = true; void persistStorage() }
   writing = writing.then(async () => { await storage.apply(mutations) }).catch(async (e: Error) => {
@@ -448,4 +473,21 @@ export function backUp() {
     commit({ ...state, lastBackupAt: Date.now() })
     toast({ message: `Backed up ${plural(n, 'deck')}`, tone: 'ok' })
   }, 1400)
+}
+
+// ---------- sync engine hooks ----------
+
+/** Applies entries and deck content pulled from the cloud (no restamping, no "paused" prompts). */
+export function applyRemote(change: { upserts: Entry[]; deletes: string[] }) {
+  if (!change.upserts.length && !change.deletes.length) return
+  const entries = { ...state.entries }
+  for (const e of change.upserts) entries[e.id] = e
+  for (const id of change.deletes) delete entries[id]
+  commit({ ...state, entries }, true, 'remote')
+}
+
+/** Keeps this device's version of a deck that also changed elsewhere, as a visible copy. */
+export function addConflictCopy(d: Deck, deviceName: string) {
+  const copy: Deck = { ...d, id: `d-${id()}`, name: uniqueName(`${d.name} (from ${deviceName})`, d.parentId, 'deck'), modifiedAt: Date.now() }
+  commit({ ...state, entries: { ...state.entries, [copy.id]: copy } })
 }

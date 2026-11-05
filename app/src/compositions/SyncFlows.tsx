@@ -3,6 +3,7 @@
 import { CircleNotch, Lock } from '@phosphor-icons/react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { decks, getLibrary, isLive, backUp } from '../data/library'
+import { DRIVES } from '../cloud'
 import { cancelConnect, connect, finishConnect, PROVIDERS, setEncryption, unlock, useSync, type ProviderId } from '../data/sync'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Dialog'
@@ -12,9 +13,16 @@ import s from './SyncFlows.module.css'
 
 type Flow = null | 'connect' | 'unlock' | 'encrypt'
 let flow: Flow = null
-let pending: ProviderId | null = null
-/** Connect straight to one provider (the provider rows are the connect controls). */
-export function startConnect(id: ProviderId) { pending = id; openSyncFlow('connect') }
+let pending: Promise<Awaited<ReturnType<typeof connect>>> | null = null
+let pendingError: string | null = null
+/** Connect straight to one provider (the provider rows are the connect controls). Runs inside the
+ *  click so the sign-in window isn't blocked; the flow shows its progress and the next question. */
+export function startConnect(id: ProviderId) {
+  pendingError = null
+  pending = connect(id).catch((e: Error) => { pendingError = e.name === 'PopupBlocked' ? 'Your browser blocked the sign-in window. Allow pop-ups for this site and try again.' : e.message; return 'cancelled' as const })
+  openSyncFlow('connect')
+}
+export function prepareProviders() { for (const d of Object.values(DRIVES)) d.prepare() }
 const listeners = new Set<() => void>()
 export function openSyncFlow(f: Flow) { flow = f; listeners.forEach((l) => l()) }
 const useFlow = () => useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => flow)
@@ -33,20 +41,28 @@ const ORDER: ProviderId[] = ['dropbox', 'onedrive', 'google']
 function ConnectFlow({ onClose }: { onClose: () => void }) {
   const sync = useSync()
   const [step, setStep] = useState<'pick' | 'signing' | 'choose'>(() => (pending ? 'signing' : 'pick'))
+  const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    const id = pending
+    const p = pending
     pending = null
-    if (id) void connect(id).then(() => setStep('choose'))
-  }, [])
+    if (!p) return
+    void p.then((r) => {
+      if (r === 'choose') setStep('choose')
+      else if (r === 'locked') { onClose(); openSyncFlow('unlock') }
+      else if (r === 'done') onClose()
+      else { setError(pendingError); setStep('pick'); if (!pendingError) onClose() }
+    })
+  }, [onClose])
   const local = decks(getLibrary()).filter(isLive).length
 
   if (step === 'pick') {
     return (
       <Modal title="Sync your library" onClose={onClose} width={480} actions={<Button variant="ghost" onClick={onClose}>Cancel</Button>}>
+        {error && <p className={s.error}>{error}</p>}
         <p>Your decks are stored in a private folder in your own cloud account. {`Ream`} has no servers and never sees them.</p>
         <div className={s.providers}>
           {ORDER.map((id) => (
-            <button key={id} type="button" className={s.provider} onClick={async () => { setStep('signing'); await connect(id); setStep('choose') }}>
+            <button key={id} type="button" className={s.provider} onClick={() => { startConnect(id); onClose(); openSyncFlow('connect') }}>
               <ProviderMark id={id} />
               <span className={s.pText}>
                 <span className={s.pName}>{PROVIDERS[id].name}{PROVIDERS[id].recommended && <span className={s.badge}>Recommended</span>}</span>
@@ -62,7 +78,7 @@ function ConnectFlow({ onClose }: { onClose: () => void }) {
     return (
       <Modal title={`Signing in to ${sync.provider ? PROVIDERS[sync.provider].name : ''}`} onClose={() => { cancelConnect(); onClose() }} actions={<Button variant="ghost" onClick={() => { cancelConnect(); onClose() }}>Cancel</Button>}>
         <p className={s.waiting}><CircleNotch size={18} className={s.spin} /> Finish signing in in the window that opened.</p>
-        <p className={s.small}>Nothing happening? Your browser may have blocked the window. <button type="button" className={s.link} onClick={() => setStep('pick')}>Try again</button></p>
+        <p className={s.small}>Nothing happening? Your browser may have blocked the window. Close this and try again.</p>
       </Modal>
     )
   }
@@ -120,7 +136,7 @@ function EncryptFlow({ onClose }: { onClose: () => void }) {
       title="Turn on end-to-end encryption"
       onClose={onClose}
       width={480}
-      actions={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!ok} onClick={() => { onClose(); void setEncryption(true) }}>Encrypt library</Button></>}
+      actions={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!ok} onClick={() => { onClose(); void setEncryption(true, a) }}>Encrypt library</Button></>}
     >
       <p>Everything is encrypted in this browser before it reaches your cloud, so the provider only ever stores unreadable data. You’ll need this passphrase on each new device.</p>
       <TextField label="Passphrase" type="password" autoFocus value={a} hint="At least 8 characters" onChange={(e) => setA(e.target.value)} />

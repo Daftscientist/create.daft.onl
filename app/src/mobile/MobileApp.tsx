@@ -72,7 +72,7 @@ export function MobileApp() {
         <>
           <TextButton onClick={() => setSelecting(true)}>Select</TextButton>
           <IconButton label={`New in ${destName}`} size="lg" tone="plain" tooltip={false} onClick={() => setSheet({ kind: 'create' })}><Plus size={22} /></IconButton>
-          {route.name === 'files' && !route.folderId && <IconButton label="Settings" size="lg" tone="plain" tooltip={false} onClick={() => navigate({ name: 'settings', section: null })}><GearSix size={22} /></IconButton>}
+          {(route.name === 'home' || (route.name === 'files' && !route.folderId)) && <IconButton label="Settings" size="lg" tone="plain" tooltip={false} onClick={() => navigate({ name: 'settings', section: null })}><GearSix size={22} /></IconButton>}
         </>
       ),
       leading: selecting ? (

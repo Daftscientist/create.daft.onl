@@ -3,8 +3,14 @@
 // the simulated transport; the state model and every surface built on it stay.
 import { useSyncExternalStore } from 'react'
 import { toast } from './toasts'
+import { DRIVES } from '../cloud'
+import { loadKey, newKey, storeKey, unlockKey } from '../cloud/crypto'
+import { NeedsSignIn, ProviderFull } from '../cloud/types'
+import { decks, getLibrary, isLive } from './library'
+import { ENTRIES, KEYFILE, pendingCount, readKeyFile, resetBase, rewriteAll, syncOnce, type SyncContext } from './syncEngine'
 
-export type ProviderId = 'dropbox' | 'google' | 'onedrive'
+import type { ProviderId } from '../cloud/types'
+export type { ProviderId }
 export type Auth = 'none' | 'authorizing' | 'ok' | 'expired' | 'revoked' | 'reconnecting'
 export type Issue = null | 'provider-full' | 'folder-deleted'
 
@@ -17,6 +23,9 @@ export const PROVIDERS: Record<ProviderId, { name: string; stays: string; folder
 export type SyncState = {
   provider: ProviderId | null
   account: string | null
+  accountName?: string
+  avatar?: string
+  lastError?: string
   deviceName: string
   auth: Auth
   online: boolean
@@ -138,16 +147,24 @@ function relShort(ms: number) {
 }
 
 // ---------- local changes ----------
+// ---------- device identity ----------
+export function deviceId(): string {
+  let id = localStorage.getItem('ream.device.id')
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem('ream.device.id', id) }
+  return id
+}
+
+// ---------- local changes ----------
 let notifiedThisInterruption = false
-export function noteLocalChange(n = 1, quiet = false) {
+export function noteLocalChange(_n = 1, quiet = false) {
   if (!state.provider) return
-  set({ pending: state.pending + n })
+  set({ pending: pendingCount() })
   if (!quiet && needsSignIn(state) && state.online && !notifiedThisInterruption && !document.fullscreenElement) {
     notifiedThisInterruption = true
     toast({
       message: `${PROVIDERS[state.provider].name} sync is paused. Your changes are saved in this browser.`,
       duration: 10_000,
-      action: { label: 'Reconnect', run: reconnect },
+      action: { label: 'Reconnect', run: () => void reconnect() },
     })
   }
 }
@@ -156,77 +173,143 @@ let pushTimer: number | undefined
 function schedulePush() {
   clearTimeout(pushTimer)
   if (!canSync(state) || !state.pending || state.transfer) return
-  pushTimer = window.setTimeout(() => {
-    if (canSync(state) && state.pending) set({ pending: 0, lastSyncAt: Date.now() })
-  }, 2500)
+  pushTimer = window.setTimeout(() => void syncNow(), 3000)
 }
 
-// ---------- actions (simulated transport) ----------
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+// ---------- the real thing ----------
+async function context(): Promise<SyncContext> {
+  return { drive: DRIVES[state.provider!], device: deviceId(), deviceName: state.deviceName, key: state.encrypted ? await loadKey() : null }
+}
 
-async function runTransfer(label: string, total: number) {
-  for (let done = 0; done <= total; done += Math.max(1, Math.ceil(total / 8))) {
-    set({ transfer: { label, done, total } })
-    await wait(260)
+let running: Promise<void> | null = null
+/** Runs one sync and maps provider failures onto the status model. */
+export function syncNow(): Promise<void> {
+  if (!state.provider || state.locked || !state.online) return Promise.resolve()
+  running ??= (async () => {
+    try {
+      const drive = DRIVES[state.provider!]
+      if (!(await drive.ready())) { set({ auth: 'expired' }); return }
+      const result = await syncOnce(await context(), (label, done, total) => set({ transfer: { label, done, total } }))
+      set({ auth: 'ok', transfer: null, pending: pendingCount(), lastSyncAt: Date.now(), issue: null, lastError: undefined,
+        conflicts: state.conflicts + result.conflicts, otherDevice: result.otherDevice })
+      if (result.conflicts) toast({ message: `${result.conflicts} ${result.conflicts === 1 ? 'deck was' : 'decks were'} changed on two devices. Both versions are kept.` })
+    } catch (e) {
+      set({ transfer: null })
+      if (e instanceof NeedsSignIn) set({ auth: 'expired' })
+      else if (e instanceof ProviderFull) set({ issue: 'provider-full' })
+      else if ((e as Error).name === 'Locked') set({ locked: true })
+      else if (!navigator.onLine) set({ online: false })
+      else { set({ lastError: (e as Error).message }); toast({ message: `Sync failed: ${(e as Error).message}`, tone: 'danger' }) }
+    } finally {
+      running = null
+    }
+  })()
+  return running
+}
+
+addEventListener('focus', () => { if (canSync(state)) void syncNow() })
+setInterval(() => { if (canSync(state) && document.visibilityState === 'visible') void syncNow() }, 3 * 60_000)
+addEventListener('online', () => { if (canSync(state)) void syncNow() })
+
+/** Sign in (call from a click). Returns what the connect flow should ask next. */
+export async function connect(provider: ProviderId): Promise<'choose' | 'done' | 'cancelled' | 'locked'> {
+  set({ auth: 'authorizing', provider, lastError: undefined })
+  try {
+    const acct = await DRIVES[provider].signIn()
+    set({ auth: 'ok', account: acct.email, accountName: acct.name, avatar: acct.avatar, issue: null })
+  } catch (e) {
+    set({ provider: null, auth: 'none', account: null })
+    if ((e as Error).name === 'SignInCancelled') return 'cancelled'
+    throw e
   }
-  set({ transfer: null, pending: 0, lastSyncAt: Date.now() })
+  const files = await DRIVES[provider].list()
+  const remoteHasLibrary = files.some((f) => f.name === ENTRIES)
+  const encrypted = files.some((f) => f.name === KEYFILE)
+  resetBase()
+  if (encrypted) { set({ encrypted: true, locked: true }); return 'locked' }
+  const localDecks = decks(getLibrary()).filter(isLive).length
+  if (remoteHasLibrary && localDecks) return 'choose'
+  await finishConnect('merge')
+  return 'done'
 }
 
-/** Starts sign-in. Returns 'choose' when this device already has a library and the remote has one too. */
-export async function connect(provider: ProviderId): Promise<'choose' | 'done' | 'cancelled'> {
-  set({ auth: 'authorizing', provider })
-  await wait(1100)
-  set({ auth: 'ok', account: 'leo@example.com', issue: null, otherDevice: { name: 'Laptop', at: Date.now() - 6 * H } })
-  return 'choose'
-}
-
-export async function finishConnect(choice: 'merge' | 'remote' | 'upload', localDecks: number) {
+export async function finishConnect(choice: 'merge' | 'remote' | 'upload', _localDecks = 0) {
   notifiedThisInterruption = false
-  if (choice === 'upload') await runTransfer(`Uploading ${localDecks} decks`, localDecks)
-  else await runTransfer(choice === 'merge' ? 'Merging libraries' : 'Bringing in your library', localDecks + 6)
-  toast({ message: `${PROVIDERS[state.provider!].name} is up to date`, tone: 'ok' })
+  if (choice === 'remote') {
+    const { applyRemote } = await import('./library')
+    applyRemote({ upserts: [], deletes: Object.keys(getLibrary().entries) })
+  }
+  set({ transfer: { label: 'Syncing your library', done: 0, total: 1 } })
+  await syncNow()
+  if (!state.lastError && state.provider) toast({ message: `${PROVIDERS[state.provider].name} is up to date`, tone: 'ok' })
 }
 
 export function cancelConnect() {
   set({ provider: null, account: null, auth: 'none', transfer: null })
 }
 
+/** A user gesture: Google needs one to hand out a new token. */
 export async function reconnect() {
   if (!state.provider || state.auth === 'reconnecting') return
   set({ auth: 'reconnecting' })
-  await wait(1200)
-  set({ auth: 'ok' })
-  notifiedThisInterruption = false
-  if (state.pending || (state.otherDevice && state.otherDevice.at > (state.lastSyncAt ?? 0))) {
-    await runTransfer('Catching up', Math.max(3, state.pending))
-  } else set({ lastSyncAt: Date.now() })
-  toast({ message: `${PROVIDERS[state.provider].name} is up to date`, tone: 'ok' })
+  try {
+    await DRIVES[state.provider].reconnect()
+    set({ auth: 'ok' })
+    notifiedThisInterruption = false
+    await syncNow()
+    if (!state.lastError) toast({ message: `${PROVIDERS[state.provider].name} is up to date`, tone: 'ok' })
+  } catch (e) {
+    set({ auth: 'expired' })
+    if ((e as Error).name === 'PopupBlocked') toast({ message: 'Your browser blocked the sign-in window. Allow pop-ups for this site and try again.' })
+  }
 }
 
-export function disconnect() {
-  const name = state.provider ? PROVIDERS[state.provider].name : ''
+export async function disconnect() {
+  const p = state.provider
+  if (p) await DRIVES[p].signOut().catch(() => {})
+  await storeKey(null)
+  resetBase()
   set({ ...initial, deviceName: state.deviceName, online: state.online })
-  toast({ message: `Disconnected ${name}. Your library stays in this browser.` })
-}
-
-export async function syncNow() {
-  if (!canSync(state)) return
-  await runTransfer('Checking for changes', 4)
+  if (p) toast({ message: `Disconnected ${PROVIDERS[p].name}. Your library stays in this browser.` })
 }
 
 export async function unlock(passphrase: string): Promise<boolean> {
-  await wait(700)
-  if (passphrase.length < 4) return false
-  set({ locked: false })
-  await runTransfer('Decrypting library', 12)
+  const file = await readKeyFile(DRIVES[state.provider!])
+  if (!file) { set({ locked: false, encrypted: false }); return true }
+  const key = await unlockKey(passphrase, file)
+  if (!key) return false
+  await storeKey(key)
+  set({ locked: false, encrypted: true })
+  await syncNow()
   return true
 }
 
-export async function setEncryption(on: boolean) {
-  set({ encrypted: on })
-  await runTransfer(on ? 'Encrypting library' : 'Removing encryption', 20)
+/** Turning encryption on re-uploads everything sealed with a key from the passphrase; off re-uploads it readable. */
+export async function setEncryption(on: boolean, passphrase?: string) {
+  const ctx = await context()
+  const from = state.encrypted ? await loadKey() : null
+  if (on) {
+    const { key, file } = await newKey(passphrase!)
+    await rewriteAll({ ...ctx, key }, from, (done, total) => set({ transfer: { label: 'Encrypting your library', done, total } }))
+    await ctx.drive.put(KEYFILE, JSON.stringify(file))
+    await storeKey(key)
+  } else {
+    await rewriteAll({ ...ctx, key: null }, from, (done, total) => set({ transfer: { label: 'Removing encryption', done, total } }))
+    await ctx.drive.remove(KEYFILE)
+    await storeKey(null)
+  }
+  set({ encrypted: on, transfer: null })
 }
 
 export const setDeviceName = (deviceName: string) => set({ deviceName })
 export const setVisibleCopies = (visibleCopies: boolean) => set({ visibleCopies })
 export const resolveConflicts = () => set({ conflicts: 0 })
+
+// First check on load: is the linked provider still usable without asking?
+if (state.provider && !new URLSearchParams(location.search).has('sync')) {
+  DRIVES[state.provider].prepare()
+  void DRIVES[state.provider].ready().then((ok) => {
+    set({ auth: ok ? 'ok' : 'expired', pending: pendingCount() })
+    if (ok) void syncNow()
+  })
+}

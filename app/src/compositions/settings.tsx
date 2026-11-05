@@ -20,7 +20,7 @@ import { Segmented } from '../ui/Segmented'
 import { useShell } from '../lib/shell'
 import { isPreview } from '../lib/preview'
 import { ProviderMark } from './ProviderMark'
-import { openSyncFlow, startConnect } from './SyncFlows'
+import { openSyncFlow, prepareProviders, startConnect } from './SyncFlows'
 import { runSyncAction, useSyncSummary } from './SyncStatus'
 import s from './settings.module.css'
 
@@ -155,6 +155,7 @@ const ORDER = ['dropbox', 'onedrive', 'google'] as const
 
 function Sync() {
   const sync = useSync()
+  useEffect(() => { prepareProviders() }, [])
   const [off, setOff] = useState(false)
   const { sum } = useSyncSummary()
   if (!sync.provider) {
@@ -177,9 +178,10 @@ function Sync() {
     <>
       <SettingGroup title={p.name}>
         <div className={s.providerHead}>
-          <ProviderMark id={sync.provider} size={36} />
+          {sync.avatar ? <img className={s.avatar} src={sync.avatar} alt="" referrerPolicy="no-referrer" /> : <ProviderMark id={sync.provider} size={36} />}
           <div className={s.providerText}>
-            <span className={s.providerName}>{sync.account}</span>
+            <span className={s.providerName}>{sync.accountName ?? sync.account}</span>
+            {sync.accountName && <span className={s.providerMeta}>{sync.account}</span>}
             <span className={s.providerMeta}>Stored in {p.folder}</span>
           </div>
         </div>
