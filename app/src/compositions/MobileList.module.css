@@ -1,0 +1,3 @@
+.list { display: flex; flex-direction: column; margin: 0 -8px; }
+.section { margin-bottom: 24px; }
+.sectionTitle { font-size: 13px; font-weight: 600; color: var(--ink-3); margin: 0 0 4px; letter-spacing: 0.01em; }

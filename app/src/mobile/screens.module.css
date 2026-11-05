@@ -1,0 +1,15 @@
+.places { display: flex; flex-direction: column; border-radius: 14px; background: var(--paper); box-shadow: var(--shadow-tile); margin-bottom: 20px; overflow: hidden; }
+.place { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 14px 0 16px; font-size: 16px; text-align: left; }
+.place + .place { box-shadow: inset 0 1px 0 var(--hair); }
+.place:active { background: var(--fill); }
+.placeIcon { color: var(--ink-2); display: grid; }
+.placeLabel { flex: 1; }
+.placeCount { color: var(--ink-3); font-size: 15px; }
+.chev { color: var(--ink-3); }
+.storage {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 28px; padding: 14px 14px 14px 16px;
+  border-radius: 14px; background: var(--paper); box-shadow: var(--shadow-tile);
+}
+.storageTitle { font-size: 15px; font-weight: 560; }
+.storageMeta { font-size: 13px; color: var(--ink-3); }
+.note { font-size: 13px; color: var(--ink-3); margin: -8px 0 12px; }

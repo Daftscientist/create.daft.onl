@@ -1,0 +1,21 @@
+.dock {
+  position: fixed;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+}
+.row, .batch { pointer-events: auto; }
+.row { display: flex; gap: 10px; align-items: center; max-width: 480px; margin: 0 auto; }
+.bar { flex: 1; display: flex; height: 60px; padding: 5px; border-radius: var(--r-pill); }
+.tab { position: relative; flex: 1; border-radius: var(--r-pill); color: var(--ink-2); }
+.tab[aria-current] { color: var(--ink); }
+.pill { position: absolute; inset: 0; border-radius: inherit; background: var(--fill-2); }
+.tabInner { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; height: 100%; font-size: 11px; font-weight: 600; }
+.search { width: 60px; height: 60px; flex: none; border-radius: 50%; display: grid; place-items: center; color: var(--ink); }
+.search:active, .tab:active { scale: 0.96; }
+.batch {
+  display: flex; align-items: stretch; height: 60px; padding: 5px; border-radius: var(--r-pill); max-width: 480px; margin: 0 auto;
+}

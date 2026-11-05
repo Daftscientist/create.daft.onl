@@ -1,0 +1,23 @@
+# ui/: primitives
+
+Domain-agnostic building blocks. They know nothing about decks or folders. **Check this list before
+writing any markup with its own styling; if what you need is missing, add it here, never inline it in a screen.**
+
+| Primitive | Use for | Notes |
+|---|---|---|
+| `Button` | Every labelled button | `variant`: primary · secondary · ghost · danger; `size`: md (34) · lg (44, mobile) |
+| `IconButton` | Every icon-only button | Required `label` (aria + tooltip); `size` sm/md/lg; `tone` fill/plain/glass |
+| `TextButton` | Mobile header text actions ("Select", "Done") | iOS style, 44px tall |
+| `BackButton` | Mobile back | Always visible alongside edge-swipe |
+| `Kbd` | Shortcut hints | |
+| `Tooltip` | Desktop hints on any control | 450ms delay, instant on keyboard focus, never on touch |
+| `Menu` | Context and ⋯ menus, sort menus, Move to… (desktop) | Glass; arrow keys, type-ahead, returns focus |
+| `Segmented` | 2–4 mutually exclusive options | Sliding thumb (`layoutId`) |
+| `Overlay` | Any modal surface | Smoke, focus trap, Esc, focus return |
+| `Sheet` / `SheetActions` / `SheetTitle` | Every mobile bottom sheet | Drag-to-dismiss from grabber, velocity-aware |
+| `LargeTitle` | Every mobile screen header | Collapses into a solid bar |
+| `SearchTrigger` | Desktop search pill | Opens the palette; not a second search |
+| `Toaster` | Toast region (one per shell) | Use `toast()` from `data/toasts`, never a custom banner |
+| `FileMarks` (`PptxMark`, `HtmlMark`, `DeckGlyph`) | Format marks | Faithful format badges |
+
+Styling lives only in each primitive's `.module.css`, using tokens from `styles/tokens.css`.

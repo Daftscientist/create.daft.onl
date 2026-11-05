@@ -1,0 +1,7 @@
+.card { border-radius: 18px; background: var(--paper); box-shadow: var(--shadow-tile); padding: 6px; margin-bottom: 28px; }
+.media { display: block; width: 100%; --thumb-r: 13px; }
+.media:active { scale: 0.99; }
+.foot { display: flex; align-items: center; gap: 12px; padding: 12px 8px 8px 10px; }
+.text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.name { font-size: 17px; line-height: 22px; font-weight: 620; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { font-size: 13px; color: var(--ink-3); }

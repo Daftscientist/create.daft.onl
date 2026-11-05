@@ -40,3 +40,18 @@ export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTM
 export function Kbd({ children }: { children: ReactNode }) {
   return <kbd className={s.kbd}>{children}</kbd>
 }
+
+/** iOS-style text action for mobile headers ("Select", "Done", "Empty"). */
+export function TextButton({ children, className, type = 'button', ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return <button type={type} className={`${s.textBtn} ${className ?? ''}`} {...rest}>{children}</button>
+}
+
+/** Mobile back control: chevron + "Back", always visible beside the edge-swipe gesture. */
+export function BackButton({ onClick, label = 'Back' }: { onClick: () => void; label?: string }) {
+  return (
+    <button type="button" className={s.backBtn} onClick={onClick}>
+      <svg width="12" height="20" viewBox="0 0 12 20" aria-hidden><path d="M10 2 2 10l8 8" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      {label}
+    </button>
+  )
+}

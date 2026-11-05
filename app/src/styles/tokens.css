@@ -18,7 +18,7 @@
   --ok: #1e9e62;
   --on-ink: #ffffff;
 
-  --glass: rgb(255 255 255 / 0.74);
+  --glass: rgb(250 250 252 / 0.84);
   --glass-edge: rgb(255 255 255 / 0.7);
   --glass-line: rgb(23 23 28 / 0.08);
   --smoke: rgb(10 10 14 / 0.32);
@@ -57,7 +57,7 @@
     --danger: #ff6b6b;
     --ok: #4cc38a;
     --on-ink: #17171c;
-    --glass: rgb(32 32 36 / 0.7);
+    --glass: rgb(30 30 34 / 0.82);
     --glass-edge: rgb(255 255 255 / 0.08);
     --glass-line: rgb(255 255 255 / 0.08);
     --smoke: rgb(0 0 0 / 0.5);

@@ -1,0 +1,12 @@
+.app { min-height: 100%; background: var(--frame); }
+.main {
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(108px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  max-width: 640px;
+  margin: 0 auto;
+}
+.batch { flex: 1; display: flex; align-items: center; gap: 4px; padding-left: 16px; }
+.batchCount { flex: 1; font-size: 15px; font-weight: 600; }
+.batchBtn { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; color: var(--ink); }
+.batchBtn:disabled { color: var(--ink-3); opacity: 0.5; }
+.batchBtn:active:not(:disabled) { background: var(--fill-2); }
+.danger { color: var(--danger); }

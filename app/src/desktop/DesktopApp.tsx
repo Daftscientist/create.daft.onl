@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CommandPalette } from '../compositions/CommandPalette'
 import { DropVeil } from '../compositions/DropVeil'
 import { QuickLook } from '../compositions/QuickLook'
-import { getLibrary, importFiles, newDeck, openDeck } from '../data/library'
+import { pickPptx } from '../compositions/importPicker'
+import { getLibrary, newDeck, openDeck } from '../data/library'
 import { toast } from '../data/toasts'
 import type { Entry } from '../data/types'
 import { navigate, useRoute } from '../lib/router'
@@ -23,12 +24,13 @@ export function DesktopApp() {
   const route = useRoute()
   const [palette, setPalette] = useState(false)
   const [ql, setQl] = useState<{ deckId: string; slide: number } | null>(null)
-  const fileInput = useRef<HTMLInputElement>(null)
   const panel = useRef<HTMLElement>(null)
 
   // Where New/Import land: the open folder in Files, otherwise the Files root (VISION v3).
   const destination = route.name === 'files' ? route.folderId : null
   const destName = destination ? getLibrary().entries[destination]?.name ?? 'Files' : 'Files'
+  const destinationRef = useRef(destination)
+  destinationRef.current = destination
 
   const actions = useMemo<DesktopActions>(() => ({
     open: (e: Entry) => {
@@ -39,7 +41,7 @@ export function DesktopApp() {
     preview: (deckId, slide) => setQl({ deckId, slide: slide ?? 0 }),
     openFolder: (folderId) => navigate({ name: 'files', folderId }),
     openPalette: () => setPalette(true),
-    pickFiles: () => fileInput.current?.click(),
+    pickFiles: () => pickPptx(destinationRef.current),
   }), [])
 
   const create = useCallback(() => {
@@ -100,18 +102,6 @@ export function DesktopApp() {
         </AnimatePresence>
       </LayoutGroup>
       <AnimatePresence>{palette && <CommandPalette key="cp" onClose={() => setPalette(false)} />}</AnimatePresence>
-      <input
-        ref={fileInput}
-        type="file"
-        accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        multiple
-        hidden
-        onChange={(e) => {
-          const files = [...(e.currentTarget.files ?? [])]
-          if (files.length) importFiles(files, destination)
-          e.currentTarget.value = ''
-        }}
-      />
     </ActionsContext.Provider>
   )
 }

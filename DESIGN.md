@@ -17,6 +17,16 @@ Instrument Sans Variable via Fontsource. Data layer: `app/src/data/library.ts` (
 simulated engine; the engine phase swaps in SQLite/OPFS + domOXML behind the same API).
 Dev server: `cd app && npx vite` → http://leovm.tail53f5e9.ts.net:5180 (tailnet only).
 
+## 0b. Hard rule: never reinvent
+
+The user's hard rule: **every element, structure and composition is built once, centrally, and reused.**
+- `app/src/ui/`: domain-agnostic primitives (catalogue: `app/src/ui/README.md`).
+- `app/src/compositions/`: domain structures built from primitives (catalogue: `app/src/compositions/README.md`).
+- `app/src/desktop/`, `app/src/mobile/`: shells that only arrange compositions. A shell file never defines a
+  button, menu, sheet, list row, title or empty state of its own.
+- Missing something? Add it to `ui/` or `compositions/`, add a row to that catalogue, then use it.
+- Two similar things are one component with a prop, not two components.
+
 ## 1. Principles
 
 1. **The user's files are the only loud thing on screen.** Chrome is greyscale; colour comes from slides and file marks.
@@ -110,7 +120,7 @@ Icon-only buttons always have an `aria-label` and a tooltip on desktop.
 |---|---|---|
 | Frame / Panel | Persistent chrome | Solid tokens. Never `backdrop-filter`. |
 | Paper | File tiles, slides | `--paper`, `--shadow-tile`. Slides keep their own colours in both themes. |
-| Glass | Selection bar, context menus, mobile tab bar (only where it floats over document previews) | `--glass` tint (light `rgb(255 255 255 / .74)`, dark `rgb(32 32 36 / .70)`), `blur(24px) saturate(1.4)`, 1px `--glass-edge` border, `--shadow-float`. |
+| Glass | Selection bar, context menus, mobile tab bar (only where it floats over document previews) | `--glass` tint (light `rgb(250 250 252 / .84)`, dark `rgb(30 30 34 / .82)`), `blur(24px) saturate(1.4)`, 1px `--glass-edge` border, `--shadow-float`. |
 | Smoke | Behind sheets, Quick Look, ⌘K | `rgb(10 10 14 / .32)` light, `.5` dark. No blur. |
 
 - At most two glass surfaces visible at once. Toasts, ⌘K and sheets are **solid** `--paper` with `--shadow-float` (budget rule, xhigh review).

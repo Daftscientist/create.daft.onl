@@ -1,0 +1,5 @@
+.header { display: flex; align-items: center; gap: 14px; padding: 4px 4px 14px; }
+.thumb { width: 96px; flex: none; --thumb-r: 8px; }
+.text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.name { font-size: 17px; line-height: 22px; font-weight: 620; overflow-wrap: anywhere; }
+.meta { font-size: 13px; line-height: 18px; color: var(--ink-3); }

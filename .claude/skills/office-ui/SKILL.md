@@ -52,6 +52,10 @@ user** (genuine taste calls). Reviewers are evidence, not authority. Two reviewe
 confidence; a finding that contradicts VISION.md loses unless it shows VISION.md is wrong.
 
 ## 4. Build
+**Hard rule (user): never reinvent.** Before writing markup, read `app/src/ui/README.md` and
+`app/src/compositions/README.md`. Use what exists; if something is missing, add it centrally (ui = primitives,
+compositions = domain structures), add its catalogue row, then use it. Shell files (`desktop/`, `mobile/`) only
+compose. Grep for an existing class or component before creating one; duplicated styling is a bug.
 Match the existing code's tokens, components and motion presets. Glass only on tools, never on content.
 Every interactive state from the spec gets built, including empty, error and reduced-motion.
 
@@ -70,7 +74,9 @@ Stop escalating when a level yields no new confirmed finding. Append one row per
 `docs/design/review-log.md`: date, surface, reviewer, effort, findings raised / confirmed / new vs previous level.
 
 ## 6. Show the user
-Serve the dev server on the tailnet and give the URL with a short note: what changed, which review
+The dev server runs at http://leovm.tail53f5e9.ts.net:5180 (`cd app && npx vite`, hot reload). As each page
+becomes viewable, send the user direct links to it (and to interesting states: `?empty`, `?reset`, a specific
+folder or deck). Give the URL with a short note: what changed, which review
 findings you accepted or rejected, and any taste calls they need to make.
 
 ## Codex rules
