@@ -11,6 +11,8 @@ import {
 import { toast } from '../data/toasts'
 import { bytes, count, relTimeInline } from '../lib/format'
 import { KEYMAP } from '../lib/keymap'
+import { AI_PROVIDER_IDS, AI_PROVIDERS, providerDef, type AiProviderId } from '../data/ai/providers'
+import { setAi, setProvider, useAi } from '../data/ai/settings'
 import { persistStorage, storage } from '../storage/client'
 import { PRODUCT } from '../ui/Brand'
 import { Button, Keys } from '../ui/Button'
@@ -18,7 +20,6 @@ import { Confirm } from '../ui/Dialog'
 import { SettingGroup, SettingRow, Switch, TextField } from '../ui/Field'
 import { Segmented } from '../ui/Segmented'
 import { useShell } from '../lib/shell'
-import { isPreview } from '../lib/preview'
 import { ProviderMark } from './ProviderMark'
 import { openSyncFlow, prepareProviders, startConnect } from './SyncFlows'
 import { runSyncAction, useSyncSummary } from './SyncStatus'
@@ -31,12 +32,11 @@ export const SECTIONS: SectionDef[] = [
   { id: 'shortcuts', label: 'Keyboard shortcuts', group: 'This browser', icon: <Keyboard size={18} />, render: () => <Shortcuts />, keyboardOnly: true },
   { id: 'storage', label: 'Storage', group: 'Library', icon: <Database size={18} />, render: () => <Storage /> },
   { id: 'sync', label: 'Sync', group: 'Library', icon: <Cloud size={18} />, render: () => <Sync /> },
-  { id: 'ai', label: 'AI', group: 'Library', icon: <Sparkle size={18} />, render: () => <AiPreview />, preview: true },
+  { id: 'ai', label: 'AI', group: 'Library', icon: <Sparkle size={18} />, render: () => <AiSettings /> },
   { id: 'about', label: `About ${PRODUCT}`, group: 'Ream', icon: <Info size={18} />, render: () => <About /> },
 ]
 /** Shortcuts only where there is a keyboard (review: it was dead UI on phones). */
-export const visibleSections = () =>
-  SECTIONS.filter((x) => (!x.preview || isPreview('ai')) && (!x.keyboardOnly || matchMedia('(any-pointer: fine)').matches))
+export const visibleSections = () => SECTIONS.filter((x) => !x.keyboardOnly || matchMedia('(any-pointer: fine)').matches)
 
 // ---------- This device ----------
 
@@ -217,11 +217,77 @@ function Sync() {
   )
 }
 
-function AiPreview() {
+function AiSettings() {
+  const ai = useAi()
+  const sync = useSync()
+  const configured = AI_PROVIDER_IDS.filter((id) => ai.providers[id])
+  const [adding, setAdding] = useState<AiProviderId | null>(null)
+  const [models, setModels] = useState<Partial<Record<AiProviderId, string[]>>>({})
+  const [busy, setBusy] = useState<AiProviderId | null>(null)
+  const [error, setError] = useState<{ id: AiProviderId; message: string } | null>(null)
+
+  const load = async (id: AiProviderId, config = ai.providers[id] ?? {}) => {
+    const def = providerDef(id)
+    if (!def.models) return
+    setBusy(id); setError(null)
+    try { setModels((m) => ({ ...m, [id]: [] })); const list = await def.models(config); setModels((m) => ({ ...m, [id]: list })) }
+    catch (e) { setError({ id, message: (e as Error).message }) }
+    finally { setBusy(null) }
+  }
+  const options = configured.flatMap((id) => (models[id] ?? []).map((m) => ({ id, m })))
+
   return (
-    <SettingGroup>
-      <SettingRow label={<>Models <span className={s.badge}>Preview</span></>} description="AI co-editing is paused while we choose how to connect models without a server. See docs/architecture/AI.md." />
-    </SettingGroup>
+    <>
+      <p className={s.lede}>Ream uses your own AI account and calls the provider straight from this browser. Nothing goes through Ream.</p>
+      <SettingGroup title="Model">
+        <SettingRow label="Model for Ask Ream" description={ai.model ? `${AI_PROVIDERS[ai.model.provider].name}` : configured.length ? 'Load models from a provider below, then pick one.' : 'Add a provider first.'}>
+          <select className={s.select} aria-label="Model" value={ai.model ? `${ai.model.provider}|${ai.model.id}` : ''} onChange={(e) => { const [provider, ...rest] = e.target.value.split('|'); setAi({ model: { provider: provider as AiProviderId, id: rest.join('|') } }) }}>
+            <option value="" disabled>{options.length ? 'Choose a model' : ai.model ? ai.model.id : 'No models loaded'}</option>
+            {ai.model && !options.some((o) => o.id === ai.model!.provider && o.m === ai.model!.id) && <option value={`${ai.model.provider}|${ai.model.id}`}>{ai.model.id}</option>}
+            {configured.map((id) => (models[id]?.length ? (
+              <optgroup key={id} label={AI_PROVIDERS[id].name}>{models[id]!.map((m) => <option key={m} value={`${id}|${m}`}>{m}</option>)}</optgroup>
+            ) : null))}
+          </select>
+        </SettingRow>
+      </SettingGroup>
+      <SettingGroup title="Providers">
+        {AI_PROVIDER_IDS.map((id) => {
+          const def = providerDef(id)
+          const config = ai.providers[id]
+          const open = adding === id
+          return (
+            <SettingRow
+              key={id}
+              label={def.name}
+              description={error?.id === id ? <span className={s.err}>{error.message}</span> : config ? `Connected${models[id]?.length ? ` · ${models[id]!.length} models` : ''}` : open ? undefined : def.keysUrl ? <a href={def.keysUrl} target="_blank" rel="noreferrer" className={s.link}>Get a key</a> : def.baseHint}
+            >
+              {config ? (
+                <>
+                  {def.models && <Button variant="secondary" disabled={busy === id} onClick={() => void load(id)}>{busy === id ? 'Loading…' : 'Load models'}</Button>}
+                  <Button variant="ghost" onClick={() => setProvider(id, null)}>Remove</Button>
+                </>
+              ) : open ? (
+                <form className={s.keyForm} onSubmit={(e) => {
+                  e.preventDefault()
+                  const f = new FormData(e.currentTarget)
+                  const c = { apiKey: String(f.get('apiKey') ?? '') || undefined, baseURL: String(f.get('baseURL') ?? '') || undefined }
+                  setProvider(id, c); setAdding(null); void load(id, c)
+                }}>
+                  {def.needs.includes('baseURL') && <TextField label="Base URL" hideLabel name="baseURL" placeholder={def.baseHint} autoFocus />}
+                  {(def.needs.includes('apiKey') || id === 'local') && <TextField label="API key" hideLabel name="apiKey" type="password" placeholder={id === 'local' ? 'API key (optional)' : def.keyHint ?? 'API key'} autoFocus={!def.needs.includes('baseURL')} autoComplete="off" />}
+                  <Button variant="primary" type="submit">Save</Button>
+                </form>
+              ) : (
+                <Button variant="secondary" onClick={() => { setAdding(id); setError(null) }}>Add</Button>
+              )}
+            </SettingRow>
+          )
+        })}
+      </SettingGroup>
+      <p className={s.note}>{sync.provider
+        ? sync.encrypted ? 'Keys sync with your library, end-to-end encrypted.' : `Keys sync with your library, so ${PROVIDERS[sync.provider].name} can read them. Turn on end-to-end encryption in Sync to prevent that.`
+        : 'Keys are stored in this browser’s library. If you connect sync, they go with it.'}</p>
+    </>
   )
 }
 

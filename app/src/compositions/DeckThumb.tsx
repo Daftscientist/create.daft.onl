@@ -2,7 +2,7 @@
 import { Warning } from '@phosphor-icons/react'
 import { motion } from 'motion/react'
 import type { Deck } from '../data/types'
-import { Slide } from '../slides/Slide'
+import { SlideView } from '../slides/SlideView'
 import s from './DeckThumb.module.css'
 
 const PHASE_LABEL = { queued: 'Waiting for engine', reading: 'Reading file', converting: 'Converting slides', saving: 'Saving' }
@@ -24,10 +24,10 @@ export function DeckThumb({ deck, slide = 0, layoutId, className }: { deck: Deck
       </div>
     )
   }
-  const spec = deck.slides[Math.min(slide, deck.slides.length - 1)]
+  const doc = deck.slides[Math.min(slide, deck.slides.length - 1)]
   return (
     <motion.div layoutId={layoutId} className={`${s.thumb} ${className ?? ''}`}>
-      <Slide spec={spec} theme={deck.theme} />
+      {doc && <SlideView slide={doc} />}
     </motion.div>
   )
 }

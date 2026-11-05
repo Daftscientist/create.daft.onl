@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { download, setLastSlide, useLibrary } from '../data/library'
 import { count, relTimeInline } from '../lib/format'
 import { back, navigate } from '../lib/router'
-import { Slide } from '../slides/Slide'
+import { SlideView } from '../slides/SlideView'
 import { Button, IconButton } from '../ui/Button'
 import { HtmlMark, PptxMark } from '../ui/FileMarks'
 import { Tooltip } from '../ui/Tooltip'
@@ -13,7 +13,6 @@ import { DeckThumb } from '../compositions/DeckThumb'
 import { EmptyState } from '../compositions/PageHeader'
 import { SyncInline } from '../compositions/SyncStatus'
 import { AgentPanel } from '../compositions/AgentPanel'
-import { isPreview } from '../lib/preview'
 import { modKey } from '../lib/shell'
 import { Toaster } from '../ui/Toaster'
 import s from './DeckPage.module.css'
@@ -25,7 +24,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const stage = useRef<HTMLDivElement>(null)
   const rail = useRef<HTMLDivElement>(null)
   const n = deck?.type === 'deck' ? deck.slides.length : 0
-  const ai = isPreview('ai')
+  const ai = true
   const [ask, setAsk] = useState(() => ai && localStorage.getItem('ream.ask.open') === '1')
   useEffect(() => { try { localStorage.setItem('ream.ask.open', ask ? '1' : '0') } catch { /* ok */ } }, [ask])
 
@@ -81,7 +80,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         </nav>
         <div className={s.stageWrap}>
           <div className={s.stage} ref={stage} data-stage tabIndex={-1}>
-            <Slide spec={deck.slides[index]} theme={deck.theme} />
+            <SlideView slide={deck.slides[index]} interactive />
           </div>
           <div className={s.pager}>
             <IconButton label="Previous slide" hint="←" side="top" disabled={index === 0} onClick={() => setIndex(index - 1)}><CaretLeft size={16} /></IconButton>

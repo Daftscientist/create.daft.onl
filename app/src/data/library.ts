@@ -5,8 +5,9 @@
 import { useSyncExternalStore } from 'react'
 import { claimOwnership, ownInMemory, persistStorage, storage } from '../storage/client'
 import type { Mutation } from '../storage/protocol'
-import { blankTheme, sampleLibrary } from './fixtures'
-import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideSpec } from './types'
+import { blankSlide, sampleLibrary, sampleSlides } from './fixtures'
+import { slideText as textOf } from '../slides/SlideView'
+import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideDoc } from './types'
 import { deviceId, noteLocalChange } from './sync'
 import { toast } from './toasts'
 import { confirm } from '../ui/Dialog'
@@ -29,11 +30,16 @@ function fromOpened(o: Awaited<ReturnType<typeof storage.open>>): LibraryState {
   const entries: Record<string, Entry> = {}
   for (const e of o.entries) {
     let x = e.type === 'deck' ? ({ ...e, ...(o.docs[e.id] as object) } as Deck) : e
+    // Decks saved before slides became normalized HTML: samples get their domOXML version.
+    if (x.type === 'deck' && (!Array.isArray(x.slides) || x.slides.some((sl) => typeof (sl as SlideDoc).html !== 'string'))) {
+      const fresh = sampleSlides(x.id)
+      x = { ...x, slides: fresh.length ? fresh : [blankSlide(`${x.id}-s1`, x.name)] }
+    }
     // An import can't survive a reload (the engine work lives in memory): say so instead of spinning forever.
     if (x.type === 'deck' && x.status === 'importing') x = { ...x, status: 'failed', phase: undefined, error: 'The import was interrupted. Try again.' }
     entries[e.id] = x
   }
-  return { entries, lastBackupAt: (o.meta.lastBackupAt as number | null) ?? null, tombstones: (o.meta.tombstones as Record<string, number> | undefined) ?? {} }
+  return { entries, lastBackupAt: (o.meta.lastBackupAt as number | null) ?? null, tombstones: (o.meta.tombstones as Record<string, number> | undefined) ?? {}, settings: (o.meta.settings as LibraryState['settings']) ?? {} }
 }
 
 async function seed() {
@@ -75,8 +81,8 @@ export function bootLibrary() {
 // ---------- persistence ----------
 function toMutations(e: Entry): Mutation[] {
   if (e.type !== 'deck') return [{ kind: 'entry', entry: e }]
-  const { slides, theme, ...meta } = e
-  return [{ kind: 'entry', entry: meta as Entry }, { kind: 'doc', id: e.id, doc: { slides, theme } }]
+  const { slides, ...meta } = e
+  return [{ kind: 'entry', entry: meta as Entry }, { kind: 'doc', id: e.id, doc: { slides } }]
 }
 
 function diff(prev: LibraryState, next: LibraryState): Mutation[] {
@@ -84,12 +90,13 @@ function diff(prev: LibraryState, next: LibraryState): Mutation[] {
   for (const [id, e] of Object.entries(next.entries)) {
     const p = prev.entries[id]
     if (p === e) continue
-    if (!p || e.type !== 'deck' || p.type !== 'deck' || p.slides !== e.slides || p.theme !== e.theme) out.push(...toMutations(e))
+    if (!p || e.type !== 'deck' || p.type !== 'deck' || p.slides !== e.slides) out.push(...toMutations(e))
     else out.push(toMutations(e)[0])
   }
   for (const id of Object.keys(prev.entries)) if (!(id in next.entries)) out.push({ kind: 'delete', id })
   if (prev.lastBackupAt !== next.lastBackupAt) out.push({ kind: 'meta', key: 'lastBackupAt', value: next.lastBackupAt })
   if (prev.tombstones !== next.tombstones) out.push({ kind: 'meta', key: 'tombstones', value: next.tombstones ?? {} })
+  if (prev.settings !== next.settings) out.push({ kind: 'meta', key: 'settings', value: next.settings ?? {} })
   return out
 }
 
@@ -107,7 +114,7 @@ function stamp(prev: LibraryState, next: LibraryState): LibraryState {
   for (const [id, e] of Object.entries(next.entries)) {
     const p = prev.entries[id]
     if (p === e) continue
-    const docChanged = e.type === 'deck' && (!p || p.type !== 'deck' || p.slides !== e.slides || p.theme !== e.theme)
+    const docChanged = e.type === 'deck' && (!p || p.type !== 'deck' || p.slides !== e.slides)
     const t = tick()
     if (entries === next.entries) entries = { ...entries }
     entries[id] = { ...e, clock: t, device, ...(docChanged ? { docClock: t } : {}) } as Entry
@@ -201,20 +208,7 @@ export function coverFor(s: LibraryState, folderId: string): Deck | undefined {
     .sort((a, b) => b.modifiedAt - a.modifiedAt)[0]
 }
 
-export function slideText(d: Deck): string[] {
-  return d.slides.map((sl) => {
-    switch (sl.kind) {
-      case 'title': return [sl.eyebrow, sl.title, sl.subtitle].filter(Boolean).join(' ')
-      case 'bullets': return [sl.title, ...sl.items].join(' ')
-      case 'stat': return [sl.value, sl.label, sl.note].filter(Boolean).join(' ')
-      case 'chart': return [sl.title, ...sl.labels].join(' ')
-      case 'quote': return `${sl.text} ${sl.by}`
-      case 'split': return [sl.tag, sl.title, sl.body].filter(Boolean).join(' ')
-      case 'grid': return [sl.title, ...sl.cells.flatMap((c) => [c.label, c.value])].join(' ')
-      case 'section': return sl.title
-    }
-  })
-}
+export const slideText = (d: Deck): string[] => d.slides.map(textOf)
 
 // ---------- names ----------
 
@@ -237,11 +231,11 @@ export function openDeck(deckId: string) {
 }
 
 /** Replaces one slide (agent edits, later the editor). A real edit: it prompts about paused sync. */
-export function updateSlide(deckId: string, index: number, spec: SlideSpec) {
+export function updateSlide(deckId: string, index: number, slide: SlideDoc) {
   const d = state.entries[deckId]
   if (!d || d.type !== 'deck') return
   const slides = d.slides.slice()
-  slides[index] = spec
+  slides[index] = slide
   patch(deckId, { slides, modifiedAt: Date.now() })
 }
 
@@ -398,8 +392,8 @@ export function newDeck(parentId: string | null): string {
   const d: Deck = {
     type: 'deck', id: `d-${id()}`, name: uniqueName('Untitled deck', parentId, 'deck'), parentId,
     createdAt: Date.now(), modifiedAt: Date.now(), openedAt: Date.now(), starred: false, trashedAt: null,
-    sizeBytes: 24_000, theme: blankTheme, lastSlide: 0, status: 'ready',
-    slides: [{ kind: 'title', title: 'Untitled deck', subtitle: 'Click to add a subtitle' }],
+    sizeBytes: 24_000, lastSlide: 0, status: 'ready',
+    slides: [blankSlide(`s-${id()}`, 'Untitled deck')],
   }
   commit({ ...state, entries: { ...state.entries, [d.id]: d } })
   return d.id
@@ -416,8 +410,8 @@ export function importFiles(files: { name: string; size: number }[], parentId: s
     const d: Deck = {
       type: 'deck', id: deckId, name: uniqueName(base, parentId, 'deck'), parentId,
       createdAt: Date.now(), modifiedAt: Date.now(), openedAt: Date.now(), starred: false, trashedAt: null,
-      sizeBytes: file.size, theme: blankTheme, lastSlide: 0, status: 'importing', phase: 'queued', progress: 0,
-      slides: [{ kind: 'title', eyebrow: 'Imported', title: base, subtitle: 'Converted on this device' }],
+      sizeBytes: file.size, lastSlide: 0, status: 'importing', phase: 'queued', progress: 0,
+      slides: [blankSlide(`s-${id()}`, base)],
     }
     commit({ ...state, entries: { ...state.entries, [deckId]: d } })
     const fails = /locked|password/i.test(file.name)
@@ -490,4 +484,20 @@ export function applyRemote(change: { upserts: Entry[]; deletes: string[] }) {
 export function addConflictCopy(d: Deck, deviceName: string) {
   const copy: Deck = { ...d, id: `d-${id()}`, name: uniqueName(`${d.name} (from ${deviceName})`, d.parentId, 'deck'), modifiedAt: Date.now() }
   commit({ ...state, entries: { ...state.entries, [copy.id]: copy } })
+}
+
+/** Library-wide settings (synced). A local change stamps the clock so it wins over older copies. */
+export function setLibrarySettings(update: Record<string, unknown>) {
+  commit({ ...state, settings: { ...state.settings, ...update, clock: tick() } })
+}
+/** Settings pulled from the cloud, applied as-is. */
+export function applyRemoteSettings(settings: LibraryState['settings']) {
+  commit({ ...state, settings }, true, 'remote')
+}
+
+/** Replaces a deck's slides in one change (agent edits, reorders). */
+export function updateSlides(deckId: string, slides: SlideDoc[]) {
+  const d = state.entries[deckId]
+  if (!d || d.type !== 'deck') return
+  patch(deckId, { slides, modifiedAt: Date.now() })
 }

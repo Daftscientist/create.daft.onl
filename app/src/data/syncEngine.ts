@@ -1,19 +1,20 @@
 // The sync engine (docs/architecture/SYNC.md). Cloud layout, all inside the provider's app folder:
 //   ream-entries.json   every deck and folder's metadata, each with its own clock and device (merged per entry)
-//   ream-doc-<id>.json  one deck's content (slides + theme), with its content clock
+//   ream-doc-<id>.json  one deck's content (normalized HTML slides), with its content clock
 //   ream-key.json       present only with end-to-end encryption: salt + check value, never the key
 // Never syncs the SQLite file. Writes to ream-entries.json are conditional, so two devices syncing at
 // once re-read and merge instead of overwriting each other.
 import { isSealed, open, seal, type KeyFile } from '../cloud/crypto'
 import { RemoteConflict, type CloudDrive } from '../cloud/types'
-import { addConflictCopy, applyRemote, getLibrary } from './library'
+import { addConflictCopy, applyRemote, applyRemoteSettings, getLibrary } from './library'
 import type { Deck, Entry } from './types'
 
 export const ENTRIES = 'ream-entries.json'
 export const KEYFILE = 'ream-key.json'
+export const SETTINGS = 'ream-settings.json'
 const docName = (id: string) => `ream-doc-${id}.json`
 
-type Meta = Omit<Deck, 'slides' | 'theme'> | Entry
+type Meta = Omit<Deck, 'slides'> | Entry
 type RemoteEntry = { entry?: Meta; clock: number; device: string; deleted?: true }
 export type EntriesFile = { format: 1; entries: Record<string, RemoteEntry>; devices: Record<string, { name: string; seen: number }> }
 type Base = { entries: Record<string, number>; docs: Record<string, number> }
@@ -34,7 +35,7 @@ export function pendingCount(): number {
   return n
 }
 
-const meta = (e: Entry): Meta => (e.type === 'deck' ? (({ slides: _s, theme: _t, ...m }) => m)(e) : e)
+const meta = (e: Entry): Meta => (e.type === 'deck' ? (({ slides: _s, ...m }) => m)(e) : e)
 
 export type SyncContext = { drive: CloudDrive; device: string; deviceName: string; key: CryptoKey | null }
 
@@ -111,12 +112,12 @@ export async function syncOnce(ctx: SyncContext, onProgress?: (label: string, do
       onProgress?.('Bringing in changes', done++, total)
       const got = await read(ctx, docName(id))
       const rm = remote.entries[id].entry as Deck
-      if (got) upserts.push({ ...rm, ...(got.data as Pick<Deck, 'slides' | 'theme'>) } as Deck)
+      if (got) upserts.push({ ...rm, ...(got.data as Pick<Deck, 'slides'>) } as Deck)
     }
     // Push deck content that changed here.
     for (const d of docPush) {
       onProgress?.('Sending changes', done++, total)
-      await write(ctx, docName(d.id), { slides: d.slides, theme: d.theme, docClock: d.docClock })
+      await write(ctx, docName(d.id), { slides: d.slides, docClock: d.docClock })
     }
     // Deleted decks: remove their content files too (best effort).
     for (const [id, r] of Object.entries(merged)) if (r.deleted && remote.entries[id] && !remote.entries[id].deleted) await ctx.drive.remove(docName(id)).catch(() => {})
@@ -130,6 +131,7 @@ export async function syncOnce(ctx: SyncContext, onProgress?: (label: string, do
     }
 
     applyRemote({ upserts, deletes })
+    await syncSettings(ctx)
     for (const c of conflictCopies) addConflictCopy(c, ctx.deviceName)
     saveBase({
       entries: Object.fromEntries(Object.entries(merged).map(([id, r]) => [id, r.clock])),
@@ -147,8 +149,17 @@ export async function syncOnce(ctx: SyncContext, onProgress?: (label: string, do
 }
 
 /** Re-uploads every synced file under a new key (or none): used when encryption is turned on or off. */
+/** Library settings: newest clock wins, whole file. */
+async function syncSettings(ctx: SyncContext) {
+  const local = getLibrary().settings ?? {}
+  const remote = await read(ctx, SETTINGS)
+  const r = (remote?.data ?? {}) as { clock?: number }
+  if ((r.clock ?? 0) > (local.clock ?? 0)) applyRemoteSettings(r)
+  else if ((local.clock ?? 0) > (r.clock ?? 0)) await write(ctx, SETTINGS, local)
+}
+
 export async function rewriteAll(ctx: SyncContext, from: CryptoKey | null, onProgress?: (done: number, total: number) => void) {
-  const files = (await ctx.drive.list()).filter((f) => f.name === ENTRIES || f.name.startsWith('ream-doc-'))
+  const files = (await ctx.drive.list()).filter((f) => f.name === ENTRIES || f.name === SETTINGS || f.name.startsWith('ream-doc-'))
   let i = 0
   for (const f of files) {
     onProgress?.(i++, files.length)

@@ -1,24 +1,9 @@
 // UI-phase data model. The real engine (domOXML on Pyodide + OPFS/SQLite) replaces the store's
 // implementation later; these shapes are what the UI depends on.
 
-export type SlideTheme = {
-  bg: string
-  fg: string
-  muted: string
-  accent: string
-  surface: string
-  serif?: boolean
-}
-
-export type SlideSpec =
-  | { kind: 'title'; eyebrow?: string; title: string; subtitle?: string }
-  | { kind: 'bullets'; title: string; items: string[] }
-  | { kind: 'stat'; value: string; label: string; note?: string }
-  | { kind: 'chart'; title: string; bars: number[]; labels: string[]; highlight?: number }
-  | { kind: 'quote'; text: string; by: string }
-  | { kind: 'split'; title: string; body: string; tag?: string }
-  | { kind: 'grid'; title: string; cells: { label: string; value: string }[] }
-  | { kind: 'section'; index: string; title: string }
+/** One slide as normalized HTML (domOXML's output shape): what the viewer renders, the AI reads and
+ *  edits, and the engine converts to and from PPTX. `id` is stable across edits and reorders. */
+export type SlideDoc = { id: string; html: string }
 
 export type ImportPhase = 'queued' | 'reading' | 'converting' | 'saving'
 
@@ -40,8 +25,7 @@ export type Deck = {
   /** Sync: when the deck's slides or theme last changed. */
   docClock?: number
   sizeBytes: number
-  theme: SlideTheme
-  slides: SlideSpec[]
+  slides: SlideDoc[]
   lastSlide: number
   status: 'ready' | 'importing' | 'failed'
   phase?: ImportPhase
@@ -71,6 +55,8 @@ export type LibraryState = {
   lastBackupAt: number | null
   /** Sync: ids deleted permanently on this device, with the clock of the deletion. */
   tombstones?: Record<string, number>
+  /** Library-wide settings that sync (AI providers and model). `clock` orders changes across devices. */
+  settings?: { ai?: unknown; clock?: number }
 }
 
 export type ExportFormat = 'pptx' | 'html'

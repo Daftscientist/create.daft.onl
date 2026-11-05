@@ -1,12 +1,16 @@
-// AI co-editing panel (docs/design/specs/ai-panel.md + both review rounds). Preview only, with a
-// scripted "Demo agent". Activity lines hold ≥1.6s, queue at most one, and flush when the answer starts.
+// AI co-editing panel (docs/design/specs/ai-panel.md + both review rounds), driving the real agent
+// (data/ai/agent.ts). Activity lines hold ≥1.6s, queue at most one, and flush when the answer starts.
 import { ArrowUp, ChatCircleText, Check, NotePencil, Stop, X } from '@phosphor-icons/react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
-import { activityLabel, demoEdit, script } from '../data/agent'
-import { getLibrary, updateSlide } from '../data/library'
+import type { ModelMessage } from 'ai'
+import { runAgent } from '../data/ai/agent'
+import { aiReady, useAi } from '../data/ai/settings'
+import { AI_PROVIDERS } from '../data/ai/providers'
+import { getLibrary, updateSlides } from '../data/library'
+import { navigate } from '../lib/router'
 import { toast } from '../data/toasts'
-import type { Deck, SlideSpec } from '../data/types'
+import type { Deck, SlideDoc } from '../data/types'
 import { modKey } from '../lib/shell'
 import { IconButton } from '../ui/Button'
 import { DeckThumb } from './DeckThumb'
@@ -18,7 +22,10 @@ type Turn = {
   slide: number
   steps: Step[]
   text: string
-  edit?: { slide: number; before: SlideSpec; after: SlideSpec; undone?: boolean }
+  thought?: string
+  edited?: number[]
+  edit?: { before: SlideDoc[]; after: SlideDoc[]; undone?: boolean }
+  error?: string
   state: 'running' | 'done' | 'stopped'
   startedAt: number
   ms?: number
@@ -32,11 +39,12 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   const [draft, setDraft] = useState('')
   const [line, setLine] = useState<string | null>(null)
   const sched = useRef({ shownAt: 0, next: null as string | null, timer: 0 })
-  const stopRef = useRef(false)
   const input = useRef<HTMLTextAreaElement>(null)
   const thread = useRef<HTMLDivElement>(null)
   const atBottom = useRef(true)
   const running = turns.some((t) => t.state === 'running')
+  const ai = useAi()
+  const ready = aiReady(ai)
 
   useEffect(() => { input.current?.focus() }, [])
   useEffect(() => { try { localStorage.setItem(key(deck.id), JSON.stringify(turns.map((t) => (t.state === 'running' ? { ...t, state: 'stopped' } : t)))) } catch { /* ok */ } }, [turns, deck.id])
@@ -55,38 +63,52 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
 
   const patchLast = (fn: (t: Turn) => Turn) => setTurns((ts) => ts.map((t, i) => (i === ts.length - 1 ? fn(t) : t)))
 
+  const abort = useRef<AbortController | null>(null)
   const send = async (prompt: string) => {
     const text = prompt.trim()
-    if (!text || running) return
+    if (!text || running || !ready) return
     setDraft('')
-    stopRef.current = false
     const target = slide
+    const history: ModelMessage[] = turns.flatMap((t) => [{ role: 'user' as const, content: t.prompt }, ...(t.text ? [{ role: 'assistant' as const, content: t.text }] : [])])
     setTurns((ts) => [...ts, { prompt: text, slide: target, steps: [], text: '', state: 'running', startedAt: Date.now() }])
-    for (const ev of script(deck, target, text)) {
-      if (stopRef.current) break
-      if (ev.type === 'thinking') { show('Thinking'); patchLast((t) => ({ ...t, steps: [...t.steps, { label: 'Thinking', ms: ev.ms }] })); await sleep(ev.ms) }
-      else if (ev.type === 'tool') { const l = activityLabel(ev.activity); show(l); patchLast((t) => ({ ...t, steps: [...t.steps, { label: l, ms: ev.ms }] })); await sleep(ev.ms) }
-      else if (ev.type === 'edit') {
-        const d = getLibrary().entries[deck.id] as Deck
-        const before = d.slides[target]
-        const after = demoEdit(before)
-        updateSlide(deck.id, target, after)
-        patchLast((t) => ({ ...t, edit: { slide: target, before, after } }))
-      } else if (ev.type === 'text') { flush(); patchLast((t) => ({ ...t, text: t.text + ev.chunk })); await sleep(28) }
-      else if (ev.type === 'done') { flush(); patchLast((t) => ({ ...t, state: 'done', ms: Date.now() - t.startedAt })) }
+    const ac = new AbortController()
+    abort.current = ac
+    try {
+      const { before, after } = await runAgent({
+        deckId: deck.id, slide: target, prompt: text, history, signal: ac.signal,
+        on: (ev) => {
+          if (ev.type === 'thinking') {
+            if (ev.on) show('Thinking')
+            else patchLast((t) => ({ ...t, thought: ev.summary, steps: [...t.steps, { label: 'Thinking', ms: 0 }] }))
+          } else if (ev.type === 'activity') {
+            show(ev.label)
+            patchLast((t) => ({ ...t, steps: [...t.steps, { label: ev.label, ms: 0 }] }))
+          } else if (ev.type === 'text') { flush(); patchLast((t) => ({ ...t, text: t.text + ev.delta })) }
+          else if (ev.type === 'edit') patchLast((t) => ({ ...t, edited: ev.slides }))
+          else if (ev.type === 'error') { flush(); patchLast((t) => ({ ...t, error: ev.message })) }
+        },
+      })
+      flush()
+      patchLast((t) => ({ ...t, state: 'done', ms: Date.now() - t.startedAt, edit: before !== after ? { before, after } : undefined }))
+    } catch (e) {
+      flush()
+      const stopped = ac.signal.aborted
+      const d = getLibrary().entries[deck.id] as Deck
+      patchLast((t) => ({ ...t, state: stopped ? 'stopped' : 'done', ms: Date.now() - t.startedAt, error: stopped ? undefined : (e as Error).message, edit: t.edited?.length ? { before: deck.slides, after: d.slides } : undefined }))
+    } finally {
+      abort.current = null
     }
-    if (stopRef.current) { flush(); patchLast((t) => ({ ...t, state: 'stopped', ms: Date.now() - t.startedAt })) }
   }
 
   const undo = (i: number) => {
     const t = turns[i]
     if (!t.edit || t.edit.undone) return
     const d = getLibrary().entries[deck.id] as Deck
-    if (d.slides[t.edit.slide] !== t.edit.after) {
-      toast({ message: `Slide ${t.edit.slide + 1} changed after this edit, so it wasn’t undone.` })
+    if (d.slides !== t.edit.after) {
+      toast({ message: 'The deck changed after this edit, so it wasn’t undone. Undo the later changes first.' })
       return
     }
-    updateSlide(deck.id, t.edit.slide, t.edit.before)
+    updateSlides(deck.id, t.edit.before)
     setTurns((ts) => ts.map((x, j) => (j === i ? { ...x, edit: { ...x.edit!, undone: true } } : x)))
   }
 
@@ -96,7 +118,9 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
     <aside className={s.panel} aria-label="Ask Ream">
       <header className={s.head}>
         <span className={s.model}><ChatCircleText size={15} /> Ask Ream</span>
-        <span className={s.chipModel} title="A scripted demo: no model is connected">Demo · scripted</span>
+        <button type="button" className={s.chipModel} title={ai.model ? `${AI_PROVIDERS[ai.model.provider].name} · ${ai.model.id}. Change it in Settings → AI` : 'Choose a model in Settings → AI'} onClick={() => navigate({ name: 'settings', section: 'ai' })}>
+          {ai.model ? ai.model.id.split('/').pop() : 'Choose a model'}
+        </button>
         <span className={s.headSpacer} />
         <IconButton label="New chat" size="sm" tone="plain" disabled={running || !turns.length} onClick={() => { const prev = turns; setTurns([]); toast({ message: 'Started a new chat', action: { label: 'Undo', run: () => setTurns(prev) } }) }}><NotePencil size={16} /></IconButton>
         <IconButton label="Close" hint={`${modKey}J`} size="sm" tone="plain" onClick={onClose}><X size={16} /></IconButton>
@@ -106,10 +130,11 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
         {!turns.length && (
           <div className={s.empty}>
             <p className={s.emptyTitle}>Ask Ream to change this deck</p>
-            <p className={s.emptyBody}>Changes apply to the deck as it works, and you can undo them.</p>
-            <div className={s.suggestions}>
+            <p className={s.emptyBody}>{ready ? 'Changes apply to the deck as it works, and you can undo them.' : 'Ream uses your own AI provider account. Add a key in Settings to start.'}</p>
+            {!ready && <button type="button" className={s.suggestion} onClick={() => navigate({ name: 'settings', section: 'ai' })}>Set up AI in Settings</button>}
+            {ready && <div className={s.suggestions}>
               {suggestions.map((x) => <button key={x} type="button" className={s.suggestion} onClick={() => void send(x)}>{x}</button>)}
-            </div>
+            </div>}
           </div>
         )}
         {turns.map((t, i) => (
@@ -131,14 +156,16 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
                 <ol>{t.steps.map((st, j) => <li key={j}><Check size={12} weight="bold" />{st.label}</li>)}</ol>
               </details>
             )}
+            {t.thought && <details className={s.steps}><summary>Thought it through</summary><p className={s.thought}>{t.thought}</p></details>}
             {t.text && <p className={s.answer}>{t.text}</p>}
-            {t.edit && (
+            {t.error && <p className={s.error}>{t.error}</p>}
+            {t.edit && t.edited?.length ? (
               <div className={s.change}>
-                <span className={s.changeThumb}><DeckThumb deck={{ ...deck, slides: [t.edit.undone ? t.edit.before : t.edit.after] }} /></span>
-                <span className={s.changeText}>{t.edit.undone ? `Undid the edit to slide ${t.edit.slide + 1}` : `Edited slide ${t.edit.slide + 1}`}</span>
+                <span className={s.changeThumb}><DeckThumb deck={{ ...deck, slides: (t.edit.undone ? t.edit.before : t.edit.after) }} slide={Math.max(0, (t.edited[0] ?? 1) - 1)} /></span>
+                <span className={s.changeText}>{t.edit.undone ? 'Undid these edits' : `Edited ${t.edited.length === 1 ? `slide ${t.edited[0]}` : `slides ${t.edited.join(', ')}`}`}</span>
                 {!t.edit.undone && t.state !== 'running' && <button type="button" className={s.undo} onClick={() => undo(i)}>Undo</button>}
               </div>
-            )}
+            ) : null}
           </div>
         ))}
       </div>
@@ -159,11 +186,10 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
           }}
         />
         {running
-          ? <IconButton label="Stop" size="sm" tone="fill" type="button" onClick={() => { stopRef.current = true }}><Stop size={14} weight="fill" /></IconButton>
+          ? <IconButton label="Stop" size="sm" tone="fill" type="button" onClick={() => abort.current?.abort()}><Stop size={14} weight="fill" /></IconButton>
           : <IconButton label="Send" hint="↵" size="sm" tone="fill" type="submit" disabled={!draft.trim()} className={s.send}><ArrowUp size={15} weight="bold" /></IconButton>}
       </form>
     </aside>
   )
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))

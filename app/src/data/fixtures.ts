@@ -1,5 +1,23 @@
-// Sample library for the UI phase. Times are relative to first load so "2h ago" stays meaningful.
-import type { Deck, Entry, Folder, SlideSpec, SlideTheme } from './types'
+// Sample library. Each deck's design lives here as simple specs (the source for
+// scripts/gen-sample-slides.py); the slides the app shows are domOXML's normalized HTML generated from
+// them (sample-slides.json). Times are relative to first load so "2h ago" stays meaningful.
+import samples from './sample-slides.json'
+import type { Deck, Entry, Folder, SlideDoc } from './types'
+
+type SlideTheme = { bg: string; fg: string; muted: string; accent: string; surface: string; serif?: boolean }
+type SlideSpec =
+  | { kind: 'title'; eyebrow?: string; title: string; subtitle?: string }
+  | { kind: 'bullets'; title: string; items: string[] }
+  | { kind: 'stat'; value: string; label: string; note?: string }
+  | { kind: 'chart'; title: string; bars: number[]; labels: string[]; highlight?: number }
+  | { kind: 'quote'; text: string; by: string }
+  | { kind: 'split'; title: string; body: string; tag?: string }
+  | { kind: 'grid'; title: string; cells: { label: string; value: string }[] }
+  | { kind: 'section'; index: string; title: string }
+
+const SAMPLE = samples as Record<string, string[]>
+export const sampleSlides = (deckId: string): SlideDoc[] =>
+  (SAMPLE[deckId] ?? []).map((html, i) => ({ id: `${deckId}-s${i + 1}`, html }))
 
 const H = 3600_000
 const D = 24 * H
@@ -175,6 +193,9 @@ const folderSeeds: { id: string; name: string; parent: string | null; modified: 
   { id: 'f-archive', name: 'Archive', parent: null, modified: 300 * D },
 ]
 
+/** Design specs for scripts/dump-fixtures.ts (regenerating sample-slides.json). */
+export const sampleSpecs = () => seeds.map((s) => ({ id: s.id, theme: s.theme, slides: s.slides }))
+
 export function sampleLibrary(now = Date.now()): Record<string, Entry> {
   const out: Record<string, Entry> = {}
   for (const f of folderSeeds) {
@@ -190,11 +211,20 @@ export function sampleLibrary(now = Date.now()): Record<string, Entry> {
       createdAt: now - s.modified - 20 * D, modifiedAt: now - s.modified,
       openedAt: s.opened === null ? null : now - s.opened,
       starred: s.starred ?? false, trashedAt: null, sizeBytes: s.size,
-      theme: s.theme, slides: s.slides, lastSlide: s.lastSlide ?? 0, status: 'ready', simplified: s.simplified,
+      slides: sampleSlides(s.id), lastSlide: s.lastSlide ?? 0, status: 'ready', simplified: s.simplified,
     }
     out[s.id] = deck
   }
   return out
 }
 
-export const blankTheme = themes.paper
+/** A blank slide in the same normalized shape domOXML emits. */
+export function blankSlide(id: string, title: string): SlideDoc {
+  const esc = title.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
+  return {
+    id,
+    html: `<div class="domoxml-slide" style="position:relative;overflow:hidden;box-sizing:border-box;width:1280px;height:720px;background-color:rgba(255,255,255,1)">`
+      + `<div class="domoxml-shape" data-domoxml-node-id="title" style="position:absolute;box-sizing:border-box;left:102px;top:290px;width:1076px;height:90px">`
+      + `<div class="domoxml-text"><span style="font-family:Instrument Sans Variable,sans-serif;font-size:48pt;font-weight:650;color:rgba(22,22,27,1);letter-spacing:-1.5pt">${esc}</span></div></div></div>`,
+  }
+}

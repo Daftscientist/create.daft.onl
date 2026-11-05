@@ -7,7 +7,7 @@ import { ActionSheet } from '../compositions/ActionSheet'
 import { FolderSheet } from '../compositions/FolderSheet'
 import { setLastSlide, useLibrary } from '../data/library'
 import { back, navigate } from '../lib/router'
-import { Slide } from '../slides/Slide'
+import { SlideView } from '../slides/SlideView'
 import { Button, IconButton } from '../ui/Button'
 import { EmptyState } from '../compositions/PageHeader'
 import s from './Viewer.module.css'
@@ -62,7 +62,7 @@ export function MobileViewer({ deckId, slide }: { deckId: string; slide?: number
       >
         {deck.slides.map((sp, i) => (
           <div key={i} className={s.page} aria-hidden={i !== index}>
-            <div className={s.slide}><Slide spec={sp} theme={deck.theme} /></div>
+            <div className={s.slide}><SlideView slide={sp} interactive={i === index} /></div>
           </div>
         ))}
       </div>

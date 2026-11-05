@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 import { getLibrary, openDeck } from '../data/library'
 import { gentle } from '../lib/motion'
 import { navigate } from '../lib/router'
-import { Slide } from '../slides/Slide'
+import { SlideView } from '../slides/SlideView'
 import { Button, IconButton } from '../ui/Button'
 import { Overlay } from '../ui/Overlay'
 import s from './QuickLook.module.css'
@@ -32,7 +32,7 @@ export function QuickLook({ deckId, slide, onSlide, onClose }: { deckId: string;
     <Overlay label={`Quick Look: ${deck.name}`} onClose={onClose}>
       <div className={s.stage}>
         <motion.div layoutId={`ql-${deck.id}`} className={s.slide} transition={gentle}>
-          <Slide spec={deck.slides[slide]} theme={deck.theme} />
+          <SlideView slide={deck.slides[slide]} interactive />
         </motion.div>
         <motion.div
           className={`${s.bar} glass`}

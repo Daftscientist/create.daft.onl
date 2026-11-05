@@ -16,3 +16,9 @@
 .or { font-size: 12px; color: var(--ink-3); }
 .lede { font-size: 14px; line-height: 21px; color: var(--ink-2); margin: -8px 0 20px; max-width: 60ch; }
 .avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1px var(--hair); }
+.select { height: 34px; max-width: 280px; padding: 0 10px; border-radius: var(--r-sm); border: 0; background: var(--paper); box-shadow: inset 0 0 0 1px var(--hair); font-size: 13.5px; }
+.keyForm { display: flex; gap: 8px; align-items: center; }
+.keyForm label { width: 220px; }
+.err { color: var(--danger); }
+.note { font-size: 13px; color: var(--ink-3); padding-left: 16px; margin-top: -12px; max-width: 64ch; }
+@media (max-width: 759px) { .keyForm { flex-direction: column; align-items: stretch; width: 100%; } .keyForm label { width: auto; } .select { width: 100%; max-width: none; height: 44px; } }
