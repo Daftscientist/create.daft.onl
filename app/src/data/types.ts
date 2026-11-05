@@ -32,6 +32,8 @@ export type Deck = {
   openedAt: number | null
   starred: boolean
   trashedAt: number | null
+  /** The entry whose trashing took this one with it (itself for a directly trashed entry). */
+  trashedRoot?: string
   sizeBytes: number
   theme: SlideTheme
   slides: SlideSpec[]
@@ -52,6 +54,7 @@ export type Folder = {
   modifiedAt: number
   starred: boolean
   trashedAt: number | null
+  trashedRoot?: string
 }
 
 export type Entry = Deck | Folder

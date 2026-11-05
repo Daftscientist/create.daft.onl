@@ -3,7 +3,7 @@ import {
   CaretRight, ClockCounterClockwise, DotsThree, FolderSimple, Plus, Star, Trash, UploadSimple,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
-import { backUp, childrenOf, folders, isLive, isWithin, move, newFolder, useLibrary, getLibrary, importFiles } from '../data/library'
+import { backUp, childrenOf, folders, isLive, isTrashRoot, isWithin, move, newFolder, useLibrary, getLibrary, importFiles } from '../data/library'
 import type { Folder } from '../data/types'
 import { relTimeInline } from '../lib/format'
 import { toast } from '../data/toasts'
@@ -17,7 +17,7 @@ import s from './Sidebar.module.css'
 export function Sidebar({ route }: { route: Route }) {
   const lib = useLibrary()
   const starred = Object.values(lib.entries).filter((e) => e.starred && isLive(e)).length
-  const trashed = Object.values(lib.entries).filter((e) => e.trashedAt !== null).length
+  const trashed = Object.values(lib.entries).filter(isTrashRoot).length
   const top = folders(lib).filter((f) => f.parentId === null && isLive(f)).sort((a, b) => a.name.localeCompare(b.name))
   const [storageMenu, setStorageMenu] = useState<MenuAnchor | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(route.name === 'files' && route.folderId ? ancestors(route.folderId) : []))

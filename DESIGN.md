@@ -4,6 +4,8 @@ This file holds the concrete standards: tokens, components, states, motion and c
 [`docs/design/VISION.md`](docs/design/VISION.md), the references in
 [`docs/design/moodboard/`](docs/design/moodboard/README.md), and the process in the `office-ui` skill.
 Tokens live in code at `app/src/styles/tokens.css`; this file and that file must agree.
+Storage: the library index is SQLite (official WASM) on OPFS in `app/src/storage/db.worker.ts`; the UI reads an
+in-memory snapshot written behind (`app/src/data/library.ts`). One tab owns the library (Web Locks).
 
 **Closest references** (the user's favourites): Superlist (frame + inset panel, big quiet titles, round
 icon buttons), Proton Drive (file tiles: preview, hairline, name strip), Cosmos (one calm search, black pill

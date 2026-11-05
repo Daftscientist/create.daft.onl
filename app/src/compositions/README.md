@@ -23,3 +23,4 @@ Domain-aware structures built from `ui/` primitives. Shells (`desktop/`, `mobile
 | `dnd` | Shared drag state + spring-loaded dwell | Collection, Sidebar, DropVeil |
 | `MobileList` / `MobileSection` / `MobileRow` | Mobile lists (tap, long-press, swipe, select) | Every mobile screen |
 | `ContinueCard` | Resume-where-you-were hero | Mobile Recents |
+| `LibraryGate` | Startup states: opening, open in another tab, moved, storage unavailable | App root |

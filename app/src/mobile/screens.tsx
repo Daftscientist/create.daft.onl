@@ -5,7 +5,7 @@ import { ContinueCard } from '../compositions/ContinueCard'
 import { pickPptx } from '../compositions/importPicker'
 import { MobileList, MobileSection, type MobileSelect } from '../compositions/MobileList'
 import { EmptyState } from '../compositions/PageHeader'
-import { backUp, childrenOf, emptyTrash, isLive, recents, trashDaysLeft, useLibrary } from '../data/library'
+import { backUp, childrenOf, emptyTrash, isLive, isTrashRoot, recents, trashDaysLeft, useLibrary } from '../data/library'
 import type { Deck, Entry } from '../data/types'
 import { count, relTimeInline } from '../lib/format'
 import { sortEntries } from '../lib/prefs'
@@ -63,7 +63,7 @@ export function FilesScreen(p: ScreenProps & { folderId: string | null }) {
   const entries = useMemo(() => sortEntries(childrenOf(lib, p.folderId), 'name'), [lib, p.folderId])
   useReport(entries, p.reportIds)
   const starred = Object.values(lib.entries).filter((e) => e.starred && isLive(e)).length
-  const trashed = Object.values(lib.entries).filter((e) => e.trashedAt !== null).length
+  const trashed = Object.values(lib.entries).filter(isTrashRoot).length
   return (
     <LargeTitle title={folder ? folder.name : 'Files'} leading={p.header.leading} trailing={p.header.trailing}>
       {!p.folderId && !p.select.active && (
@@ -97,7 +97,7 @@ export function StarredScreen(p: ScreenProps) {
 
 export function TrashScreen(p: ScreenProps) {
   const lib = useLibrary()
-  const entries = Object.values(lib.entries).filter((e) => e.trashedAt !== null).sort((a, b) => (b.trashedAt ?? 0) - (a.trashedAt ?? 0))
+  const entries = Object.values(lib.entries).filter(isTrashRoot).sort((a, b) => (b.trashedAt ?? 0) - (a.trashedAt ?? 0))
   useReport(entries, p.reportIds)
   return (
     <LargeTitle

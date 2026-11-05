@@ -4,7 +4,7 @@ import { Fragment, useMemo } from 'react'
 import { Collection } from '../compositions/Collection'
 import { EmptyState, PageHeader, SectionHeader } from '../compositions/PageHeader'
 import { ViewTools } from '../compositions/ViewTools'
-import { childrenOf, emptyTrash, isLive, newDeck, newFolder, pathTo, recents, trashDaysLeft, useLibrary, decks } from '../data/library'
+import { childrenOf, emptyTrash, isLive, isTrashRoot, newDeck, newFolder, pathTo, recents, trashDaysLeft, useLibrary, decks } from '../data/library'
 import type { Entry } from '../data/types'
 import { count, relTimeInline } from '../lib/format'
 import { usePrefs, sortEntries } from '../lib/prefs'
@@ -137,7 +137,7 @@ export function StarredView() {
 export function TrashView() {
   const lib = useLibrary()
   const cp = useCollectionProps()
-  const entries = Object.values(lib.entries).filter((e) => e.trashedAt !== null).sort((a, b) => (b.trashedAt ?? 0) - (a.trashedAt ?? 0))
+  const entries = Object.values(lib.entries).filter(isTrashRoot).sort((a, b) => (b.trashedAt ?? 0) - (a.trashedAt ?? 0))
   return (
     <>
       <PageHeader

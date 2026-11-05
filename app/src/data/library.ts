@@ -1,37 +1,108 @@
-// The library store. UI phase: state lives in memory and localStorage, and engine work (import,
-// export, backup) is simulated with realistic timings so every UI state can be seen.
-// The real implementation (SQLite on OPFS + domOXML worker) keeps this module's API.
+// The library store. The UI reads a synchronous in-memory snapshot (instant, optimistic); every change
+// is diffed into mutations and written behind it to SQLite on OPFS (storage/db.worker.ts). If a write
+// fails the snapshot is reloaded from the database, which is the source of truth.
+// Engine work (import, export, backup) is still simulated until the domOXML worker exists.
 import { useSyncExternalStore } from 'react'
+import { claimOwnership, ownInMemory, persistStorage, storage } from '../storage/client'
+import type { Mutation } from '../storage/protocol'
 import { blankTheme, sampleLibrary } from './fixtures'
 import type { Deck, Entry, ExportFormat, Folder, LibraryState } from './types'
 import { toast } from './toasts'
 
-const KEY = 'office.ui.library.v1'
 const TRASH_DAYS = 30
 
-function load(): LibraryState {
-  try {
-    if (new URLSearchParams(location.search).has('reset')) localStorage.removeItem(KEY)
-    if (new URLSearchParams(location.search).has('empty')) return { entries: {}, lastBackupAt: null }
-    const raw = localStorage.getItem(KEY)
-    if (raw) return JSON.parse(raw) as LibraryState
-  } catch {
-    /* storage unavailable: fall through to the sample library */
+let state: LibraryState = { entries: {}, lastBackupAt: null }
+const listeners = new Set<() => void>()
+const emit = () => { for (const l of listeners) l() }
+
+// ---------- boot ----------
+export type BootState = 'booting' | 'ready' | 'failed'
+let boot: BootState = 'booting'
+let bootError = ''
+const setBoot = (b: BootState) => { boot = b; emit() }
+export const useBoot = () => useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => boot)
+export const getBootError = () => bootError
+
+function fromOpened(o: Awaited<ReturnType<typeof storage.open>>): LibraryState {
+  const entries: Record<string, Entry> = {}
+  for (const e of o.entries) {
+    let x = e.type === 'deck' ? ({ ...e, ...(o.docs[e.id] as object) } as Deck) : e
+    // An import can't survive a reload (the engine work lives in memory): say so instead of spinning forever.
+    if (x.type === 'deck' && x.status === 'importing') x = { ...x, status: 'failed', phase: undefined, error: 'The import was interrupted. Try again.' }
+    entries[e.id] = x
   }
-  return { entries: sampleLibrary(), lastBackupAt: Date.now() - 2 * 86_400_000 }
+  return { entries, lastBackupAt: (o.meta.lastBackupAt as number | null) ?? null }
 }
 
-let state: LibraryState = load()
-const listeners = new Set<() => void>()
+async function seed() {
+  const entries = sampleLibrary()
+  const lastBackupAt = Date.now() - 2 * 86_400_000
+  await storage.apply([
+    ...Object.values(entries).flatMap(toMutations),
+    { kind: 'meta', key: 'lastBackupAt', value: lastBackupAt },
+    { kind: 'meta', key: 'seeded', value: true },
+  ])
+  return { entries, lastBackupAt }
+}
 
-function commit(next: LibraryState) {
-  state = next
-  try {
-    if (!new URLSearchParams(location.search).has('empty')) localStorage.setItem(KEY, JSON.stringify(state))
-  } catch {
-    /* quota or private mode: the UI keeps working in memory */
+export function bootLibrary() {
+  if (new URLSearchParams(location.search).has('memory')) {
+    ownInMemory()
+    state = { entries: sampleLibrary(), lastBackupAt: null }
+    toast({ message: 'Nothing is being saved in this mode. Reload without ?memory to use your library.', duration: 8000 })
+    return setBoot('ready')
   }
-  for (const l of listeners) l()
+  claimOwnership(async () => {
+    try {
+      const params = new URLSearchParams(location.search)
+      if (params.has('reset') || params.has('empty')) {
+        await storage.wipe()
+        if (params.has('empty')) await storage.apply([{ kind: 'meta', key: 'seeded', value: true }])
+        history.replaceState(null, '', location.pathname)
+      }
+      const opened = await storage.open()
+      state = opened.meta.seeded ? fromOpened(opened) : await seed()
+      setBoot('ready')
+    } catch (e) {
+      bootError = (e as Error).message
+      setBoot('failed')
+    }
+  })
+}
+
+// ---------- persistence ----------
+function toMutations(e: Entry): Mutation[] {
+  if (e.type !== 'deck') return [{ kind: 'entry', entry: e }]
+  const { slides, theme, ...meta } = e
+  return [{ kind: 'entry', entry: meta as Entry }, { kind: 'doc', id: e.id, doc: { slides, theme } }]
+}
+
+function diff(prev: LibraryState, next: LibraryState): Mutation[] {
+  const out: Mutation[] = []
+  for (const [id, e] of Object.entries(next.entries)) {
+    const p = prev.entries[id]
+    if (p === e) continue
+    if (!p || e.type !== 'deck' || p.type !== 'deck' || p.slides !== e.slides || p.theme !== e.theme) out.push(...toMutations(e))
+    else out.push(toMutations(e)[0])
+  }
+  for (const id of Object.keys(prev.entries)) if (!(id in next.entries)) out.push({ kind: 'delete', id })
+  if (prev.lastBackupAt !== next.lastBackupAt) out.push({ kind: 'meta', key: 'lastBackupAt', value: next.lastBackupAt })
+  return out
+}
+
+let writing = Promise.resolve()
+let askedPersist = false
+function commit(next: LibraryState) {
+  const prev = state
+  state = next
+  emit()
+  const mutations = diff(prev, next)
+  if (!mutations.length || new URLSearchParams(location.search).has('memory')) return
+  if (!askedPersist) { askedPersist = true; void persistStorage() }
+  writing = writing.then(async () => { await storage.apply(mutations) }).catch(async (e: Error) => {
+    toast({ message: e.name === 'QuotaExceededError' ? 'Couldn’t save: browser storage is full. Free space in Settings → Storage.' : 'Couldn’t save that change. Your library was reloaded.', tone: 'danger' })
+    try { state = fromOpened(await storage.open()); emit() } catch { /* keep in-memory state */ }
+  })
 }
 
 function patch(id: string, update: Partial<Deck> | Partial<Folder>) {
@@ -200,41 +271,61 @@ export function move(ids: string[], folderId: string | null): number {
   return movable.length
 }
 
+function subtree(id: string): string[] {
+  const out = [id]
+  for (const e of Object.values(state.entries)) if (e.parentId === id && e.trashedAt === null) out.push(...subtree(e.id))
+  return out
+}
+
+/** Trashing a folder takes everything inside it along, so nothing inside stays visible elsewhere. */
 export function trash(ids: string[]) {
   const now = Date.now()
   const entries = { ...state.entries }
-  for (const i of ids) if (entries[i]) entries[i] = { ...entries[i], trashedAt: now }
+  let inside = 0
+  for (const root of ids) {
+    if (!entries[root] || entries[root].trashedAt !== null) continue
+    for (const i of subtree(root)) {
+      entries[i] = { ...entries[i], trashedAt: now, trashedRoot: root }
+      if (i !== root && entries[i].type === 'deck') inside++
+    }
+  }
   commit({ ...state, entries })
   const name = ids.length === 1 ? `“${state.entries[ids[0]]?.name}”` : plural(ids.length, 'item')
   toast({
-    message: `Moved ${name} to Trash`,
+    message: `Moved ${name}${inside ? ` and ${plural(inside, 'deck')} inside` : ''} to Trash`,
     action: { label: 'Undo', run: () => restore(ids, true) },
   })
 }
 
+/** Trash shows only what was trashed directly; its contents come back with it. */
+export const isTrashRoot = (e: Entry) => e.trashedAt !== null && (e.trashedRoot ?? e.id) === e.id
+
 export function restore(ids: string[], quiet = false) {
   const entries = { ...state.entries }
-  for (const i of ids) {
-    const e = entries[i]
-    if (!e) continue
-    // A deck whose folder is gone or trashed comes back to the top level.
-    const parent = e.parentId ? entries[e.parentId] : undefined
-    const parentId = parent && parent.trashedAt === null ? e.parentId : null
-    entries[i] = { ...e, trashedAt: null, parentId }
+  for (const root of ids) {
+    for (const e of Object.values(entries)) {
+      if (e.trashedAt === null || (e.trashedRoot ?? e.id) !== root) continue
+      const isRoot = e.id === root
+      // A root whose folder is gone or trashed comes back to the top level.
+      const parent = isRoot && e.parentId ? entries[e.parentId] : undefined
+      const parentId = !isRoot ? e.parentId : parent && parent.trashedAt === null ? e.parentId : null
+      entries[e.id] = { ...e, trashedAt: null, trashedRoot: undefined, parentId }
+    }
   }
   commit({ ...state, entries })
   if (!quiet) toast({ message: `Restored ${ids.length === 1 ? `“${state.entries[ids[0]]?.name}”` : plural(ids.length, 'item')}` })
 }
 
 export function deleteForever(ids: string[]) {
-  const n = ids.length
-  remove(ids)
-  toast({ message: `Deleted ${plural(n, 'item')} permanently` })
+  const all = new Set<string>()
+  for (const root of ids) for (const e of Object.values(state.entries)) if (e.id === root || e.trashedRoot === root) all.add(e.id)
+  remove([...all])
+  toast({ message: `Deleted ${plural(ids.length, 'item')} permanently` })
 }
 
 export function emptyTrash() {
-  const ids = Object.values(state.entries).filter((e) => e.trashedAt !== null).map((e) => e.id)
-  if (ids.length) deleteForever(ids)
+  const roots = Object.values(state.entries).filter(isTrashRoot).map((e) => e.id)
+  if (roots.length) deleteForever(roots)
 }
 
 export const trashDaysLeft = (e: Entry) =>
