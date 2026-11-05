@@ -6,8 +6,9 @@ import { z } from 'zod'
 import { getLibrary, updateSlides } from '../library'
 import type { Deck, SlideDoc } from '../types'
 import { sanitize, slideText, SLIDE_H, SLIDE_W } from '../../slides/SlideView'
+import { runBrowserLoop } from './browser'
 import { providerDef } from './providers'
-import { getAi } from './settings'
+import { getActiveModel, getAi } from './settings'
 
 export type AgentEvent =
   | { type: 'thinking'; on: boolean; summary?: string }
@@ -76,10 +77,8 @@ export async function runAgent(opts: {
   signal: AbortSignal
   on: (e: AgentEvent) => void
 }): Promise<{ before: SlideDoc[]; after: SlideDoc[] }> {
-  const ai = getAi()
-  if (!ai.model) throw new Error('Choose a model in Settings → AI.')
-  const def = providerDef(ai.model.provider)
-  const model = await def.make(ai.providers[ai.model.provider] ?? {}, ai.model.id)
+  const chosen = getActiveModel()
+  if (!chosen) throw new Error('Choose a model in Settings → AI.')
   const before = deck(opts.deckId).slides
   const edited = new Set<number>()
   const commit = (slides: SlideDoc[], touched: number[]) => {
@@ -195,9 +194,33 @@ export async function runAgent(opts: {
     edit_element: 'Editing a slide', insert_slide: 'Adding a slide', delete_slide: 'Removing a slide', move_slide: 'Reordering slides',
   }
 
+  const sys = system(deck(opts.deckId), opts.slide)
+
+  if (chosen.provider === 'browser') {
+    const { reply, steps } = await runBrowserLoop({
+      system: sys,
+      prompt: [...opts.history.map((m) => `${m.role === 'user' ? 'User' : 'You'}: ${String(m.content)}`), opts.prompt].join('\n\n'),
+      maxSteps: 16,
+      signal: opts.signal,
+      onDownload: (f) => opts.on({ type: 'activity', label: `Downloading the model ${Math.round(f * 100)}%` }),
+      onTool: (name, input) => opts.on({ type: 'activity', label: activityLabel(input.activity as string | undefined, FALLBACK[name] ?? 'Working on it') }),
+      tools: Object.entries(tools).map(([name, t]) => ({
+        name,
+        description: typeof t.description === 'string' ? t.description : '',
+        schema: z.toJSONSchema(t.inputSchema as z.ZodType),
+        run: async (input) => (t.execute as (i: unknown, o: unknown) => Promise<unknown>)((t.inputSchema as z.ZodType).parse(input), { toolCallId: name, messages: [] }),
+      })),
+    })
+    if (reply) opts.on({ type: 'text', delta: reply })
+    opts.on({ type: 'done', steps })
+    return { before, after: deck(opts.deckId).slides }
+  }
+
+  const ai = getAi()
+  const model = await providerDef(chosen.provider).make(ai.providers[chosen.provider] ?? {}, chosen.id)
   const result = streamText({
     model,
-    system: system(deck(opts.deckId), opts.slide),
+    system: sys,
     messages: [...opts.history, { role: 'user', content: opts.prompt }],
     tools,
     stopWhen: isStepCount(16),

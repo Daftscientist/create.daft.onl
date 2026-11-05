@@ -18,8 +18,10 @@ type Def = {
 async function list(url: string, headers: Record<string, string>, pick: (j: any) => string[]): Promise<string[]> {
   const res = await fetch(url, { headers })
   if (!res.ok) throw new Error(res.status === 401 ? 'That key wasn’t accepted.' : `The provider answered ${res.status}.`)
-  return pick(await res.json()).sort()
+  return pick(await res.json()).filter((id) => !NOT_CHAT.test(id)).sort()
 }
+/** Listing endpoints include embedding, speech and image models; Ask Ream needs chat models. */
+const NOT_CHAT = /embed|tts|whisper|dall-e|moderation|transcri|realtime|audio|image|rerank|guard|davinci|babbage|search-preview|computer-use|veo|imagen|lyria/i
 const openaiLike = (base: string) => (c: ProviderConfig) =>
   list(`${c.baseURL || base}/models`, c.apiKey ? { Authorization: `Bearer ${c.apiKey}` } : {}, (j) => (j.data ?? []).map((m: { id: string }) => m.id))
 

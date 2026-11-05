@@ -11,8 +11,9 @@ import {
 import { toast } from '../data/toasts'
 import { bytes, count, relTimeInline } from '../lib/format'
 import { KEYMAP } from '../lib/keymap'
-import { AI_PROVIDER_IDS, AI_PROVIDERS, providerDef, type AiProviderId } from '../data/ai/providers'
-import { setAi, setProvider, useAi } from '../data/ai/settings'
+import { useBrowserModel } from '../data/ai/browser'
+import { AI_PROVIDER_IDS, providerDef, type AiProviderId } from '../data/ai/providers'
+import { providerName, setAi, setModels, setProvider, useActiveModel, useAi } from '../data/ai/settings'
 import { persistStorage, storage } from '../storage/client'
 import { PRODUCT } from '../ui/Brand'
 import { Button, Keys } from '../ui/Button'
@@ -20,6 +21,8 @@ import { Confirm } from '../ui/Dialog'
 import { SettingGroup, SettingRow, Switch, TextField } from '../ui/Field'
 import { Segmented } from '../ui/Segmented'
 import { useShell } from '../lib/shell'
+import { AiMark } from './AiMark'
+import { ModelPicker } from './ModelPicker'
 import { ProviderMark } from './ProviderMark'
 import { openSyncFlow, prepareProviders, startConnect } from './SyncFlows'
 import { runSyncAction, useSyncSummary } from './SyncStatus'
@@ -220,9 +223,9 @@ function Sync() {
 function AiSettings() {
   const ai = useAi()
   const sync = useSync()
-  const configured = AI_PROVIDER_IDS.filter((id) => ai.providers[id])
+  const browser = useBrowserModel()
+  const active = useActiveModel()
   const [adding, setAdding] = useState<AiProviderId | null>(null)
-  const [models, setModels] = useState<Partial<Record<AiProviderId, string[]>>>({})
   const [busy, setBusy] = useState<AiProviderId | null>(null)
   const [error, setError] = useState<{ id: AiProviderId; message: string } | null>(null)
 
@@ -230,27 +233,30 @@ function AiSettings() {
     const def = providerDef(id)
     if (!def.models) return
     setBusy(id); setError(null)
-    try { setModels((m) => ({ ...m, [id]: [] })); const list = await def.models(config); setModels((m) => ({ ...m, [id]: list })) }
+    try { setModels(id, await def.models(config)) }
     catch (e) { setError({ id, message: (e as Error).message }) }
     finally { setBusy(null) }
   }
-  const options = configured.flatMap((id) => (models[id] ?? []).map((m) => ({ id, m })))
+  const status = (id: AiProviderId) => {
+    const n = ai.models?.[id]?.length ?? 0
+    return busy === id ? 'Loading models…' : `Connected${n ? ` · ${count(n, 'model')}` : ''}`
+  }
 
   return (
     <>
       <p className={s.lede}>Ream uses your own AI account and calls the provider straight from this browser. Nothing goes through Ream.</p>
       <SettingGroup title="Model">
-        <SettingRow label="Model for Ask Ream" description={ai.model ? `${AI_PROVIDERS[ai.model.provider].name}` : configured.length ? 'Load models from a provider below, then pick one.' : 'Add a provider first.'}>
-          <select className={s.select} aria-label="Model" value={ai.model ? `${ai.model.provider}|${ai.model.id}` : ''} onChange={(e) => { const [provider, ...rest] = e.target.value.split('|'); setAi({ model: { provider: provider as AiProviderId, id: rest.join('|') } }) }}>
-            <option value="" disabled>{options.length ? 'Choose a model' : ai.model ? ai.model.id : 'No models loaded'}</option>
-            {ai.model && !options.some((o) => o.id === ai.model!.provider && o.m === ai.model!.id) && <option value={`${ai.model.provider}|${ai.model.id}`}>{ai.model.id}</option>}
-            {configured.map((id) => (models[id]?.length ? (
-              <optgroup key={id} label={AI_PROVIDERS[id].name}>{models[id]!.map((m) => <option key={m} value={`${id}|${m}`}>{m}</option>)}</optgroup>
-            ) : null))}
-          </select>
+        <SettingRow label="Model for Ask Ream" description={active ? providerName(active.provider, browser) : 'Add a provider below.'}>
+          <ModelPicker variant="field" />
         </SettingRow>
       </SettingGroup>
       <SettingGroup title="Providers">
+        {browser && (
+          <SettingRow
+            label={<><AiMark id="browser" size={22} />{browser.name}</>}
+            description={`${browser.model} runs on this device: free, private and offline. ${browser.status === 'available' ? 'Ready.' : 'It downloads the first time you use it.'} Small, so best for short edits.`}
+          />
+        )}
         {AI_PROVIDER_IDS.map((id) => {
           const def = providerDef(id)
           const config = ai.providers[id]
@@ -258,12 +264,12 @@ function AiSettings() {
           return (
             <SettingRow
               key={id}
-              label={def.name}
-              description={error?.id === id ? <span className={s.err}>{error.message}</span> : config ? `Connected${models[id]?.length ? ` · ${models[id]!.length} models` : ''}` : open ? undefined : def.keysUrl ? <a href={def.keysUrl} target="_blank" rel="noreferrer" className={s.link}>Get a key</a> : def.baseHint}
+              label={<><AiMark id={id} size={22} />{def.name}</>}
+              description={error?.id === id ? <span className={s.err}>{error.message}</span> : config ? status(id) : open ? undefined : def.keysUrl ? <a href={def.keysUrl} target="_blank" rel="noreferrer" className={s.link}>Get a key</a> : def.baseHint}
             >
               {config ? (
                 <>
-                  {def.models && <Button variant="secondary" disabled={busy === id} onClick={() => void load(id)}>{busy === id ? 'Loading…' : 'Load models'}</Button>}
+                  {def.models && <Button variant="secondary" disabled={busy === id} onClick={() => void load(id)}>Refresh models</Button>}
                   <Button variant="ghost" onClick={() => setProvider(id, null)}>Remove</Button>
                 </>
               ) : open ? (
@@ -271,10 +277,14 @@ function AiSettings() {
                   e.preventDefault()
                   const f = new FormData(e.currentTarget)
                   const c = { apiKey: String(f.get('apiKey') ?? '') || undefined, baseURL: String(f.get('baseURL') ?? '') || undefined }
-                  setProvider(id, c); setAdding(null); void load(id, c)
+                  setProvider(id, c); setAdding(null)
+                  const model = String(f.get('model') ?? '').trim()
+                  if (model) { setModels(id, [model]); setAi({ model: { provider: id, id: model } }) }
+                  else void load(id, c)
                 }}>
                   {def.needs.includes('baseURL') && <TextField label="Base URL" hideLabel name="baseURL" placeholder={def.baseHint} autoFocus />}
                   {(def.needs.includes('apiKey') || id === 'local') && <TextField label="API key" hideLabel name="apiKey" type="password" placeholder={id === 'local' ? 'API key (optional)' : def.keyHint ?? 'API key'} autoFocus={!def.needs.includes('baseURL')} autoComplete="off" />}
+                  {!def.models && <TextField label="Model" hideLabel name="model" placeholder={id === 'azure' ? 'Deployment name' : 'Model name'} required />}
                   <Button variant="primary" type="submit">Save</Button>
                 </form>
               ) : (

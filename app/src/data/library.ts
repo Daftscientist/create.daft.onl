@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from 'react'
 import { claimOwnership, ownInMemory, persistStorage, storage } from '../storage/client'
 import type { Mutation } from '../storage/protocol'
-import { blankSlide, sampleLibrary, sampleSlides } from './fixtures'
+import { blankSlide, SAMPLE_IDS, sampleLibrary, sampleSlides } from './fixtures'
 import { slideText as textOf } from '../slides/SlideView'
 import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideDoc } from './types'
 import { deviceId, noteLocalChange } from './sync'
@@ -42,15 +42,31 @@ function fromOpened(o: Awaited<ReturnType<typeof storage.open>>): LibraryState {
   return { entries, lastBackupAt: (o.meta.lastBackupAt as number | null) ?? null, tombstones: (o.meta.tombstones as Record<string, number> | undefined) ?? {}, settings: (o.meta.settings as LibraryState['settings']) ?? {} }
 }
 
-async function seed() {
-  const entries = sampleLibrary()
-  const lastBackupAt = Date.now() - 2 * 86_400_000
+/** A new library starts empty. `?demo` fills it with the sample decks (for trying the UI). */
+async function seed(demo: boolean) {
+  const entries = demo ? sampleLibrary() : {}
   await storage.apply([
     ...Object.values(entries).flatMap(toMutations),
-    { kind: 'meta', key: 'lastBackupAt', value: lastBackupAt },
     { kind: 'meta', key: 'seeded', value: true },
+    { kind: 'meta', key: 'samplesRemoved', value: true },
   ])
-  return { entries, lastBackupAt }
+  return { entries, lastBackupAt: null }
+}
+
+/** Earlier builds seeded demo decks into every library (and sync carried them to the cloud). Removes
+ *  them once, as ordinary deletions so the tombstones clear them from the cloud and other devices too.
+ *  A sample folder stays if it holds anything of the user's. */
+async function removeSeededSamples() {
+  const all = Object.values(state.entries)
+  const holdsUserWork = (folderId: string): boolean =>
+    all.some((e) => e.parentId === folderId && (!SAMPLE_IDS.has(e.id) || (e.type === 'folder' && holdsUserWork(e.id))))
+  const gone = all.filter((e) => SAMPLE_IDS.has(e.id) && !(e.type === 'folder' && holdsUserWork(e.id))).map((e) => e.id)
+  if (gone.length) {
+    const entries = { ...state.entries }
+    for (const id of gone) delete entries[id]
+    commit({ ...state, entries, lastBackupAt: null }, true)
+  }
+  await storage.apply([{ kind: 'meta', key: 'samplesRemoved', value: true }])
 }
 
 export function bootLibrary() {
@@ -63,13 +79,14 @@ export function bootLibrary() {
   claimOwnership(async () => {
     try {
       const params = new URLSearchParams(location.search)
-      if (params.has('reset') || params.has('empty')) {
+      const demo = params.has('demo')
+      if (params.has('reset') || params.has('empty') || demo) {
         await storage.wipe()
-        if (params.has('empty')) await storage.apply([{ kind: 'meta', key: 'seeded', value: true }])
         history.replaceState(null, '', location.pathname)
       }
       const opened = await storage.open()
-      state = opened.meta.seeded ? fromOpened(opened) : await seed()
+      state = opened.meta.seeded ? fromOpened(opened) : await seed(demo)
+      if (opened.meta.seeded && !opened.meta.samplesRemoved) await removeSeededSamples()
       setBoot('ready')
     } catch (e) {
       bootError = (e as Error).message

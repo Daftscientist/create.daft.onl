@@ -194,6 +194,9 @@ const folderSeeds: { id: string; name: string; parent: string | null; modified: 
 ]
 
 /** Design specs for scripts/dump-fixtures.ts (regenerating sample-slides.json). */
+/** Ids of the demo entries earlier builds seeded into every new library. */
+export const SAMPLE_IDS = new Set([...seeds.map((s) => s.id), ...folderSeeds.map((f) => f.id)])
+
 export const sampleSpecs = () => seeds.map((s) => ({ id: s.id, theme: s.theme, slides: s.slides }))
 
 export function sampleLibrary(now = Date.now()): Record<string, Entry> {

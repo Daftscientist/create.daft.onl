@@ -5,15 +5,15 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import type { ModelMessage } from 'ai'
 import { runAgent } from '../data/ai/agent'
-import { aiReady, useAi } from '../data/ai/settings'
-import { AI_PROVIDERS } from '../data/ai/providers'
+import { useActiveModel } from '../data/ai/settings'
 import { getLibrary, updateSlides } from '../data/library'
-import { navigate } from '../lib/router'
 import { toast } from '../data/toasts'
 import type { Deck, SlideDoc } from '../data/types'
+import { navigate } from '../lib/router'
 import { modKey } from '../lib/shell'
 import { IconButton } from '../ui/Button'
 import { DeckThumb } from './DeckThumb'
+import { ModelPicker } from './ModelPicker'
 import s from './AgentPanel.module.css'
 
 type Step = { label: string; ms: number }
@@ -43,8 +43,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   const thread = useRef<HTMLDivElement>(null)
   const atBottom = useRef(true)
   const running = turns.some((t) => t.state === 'running')
-  const ai = useAi()
-  const ready = aiReady(ai)
+  const ready = !!useActiveModel()
 
   useEffect(() => { input.current?.focus() }, [])
   useEffect(() => { try { localStorage.setItem(key(deck.id), JSON.stringify(turns.map((t) => (t.state === 'running' ? { ...t, state: 'stopped' } : t)))) } catch { /* ok */ } }, [turns, deck.id])
@@ -118,9 +117,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
     <aside className={s.panel} aria-label="Ask Ream">
       <header className={s.head}>
         <span className={s.model}><ChatCircleText size={15} /> Ask Ream</span>
-        <button type="button" className={s.chipModel} title={ai.model ? `${AI_PROVIDERS[ai.model.provider].name} · ${ai.model.id}. Change it in Settings → AI` : 'Choose a model in Settings → AI'} onClick={() => navigate({ name: 'settings', section: 'ai' })}>
-          {ai.model ? ai.model.id.split('/').pop() : 'Choose a model'}
-        </button>
+        <ModelPicker variant="chip" />
         <span className={s.headSpacer} />
         <IconButton label="New chat" size="sm" tone="plain" disabled={running || !turns.length} onClick={() => { const prev = turns; setTurns([]); toast({ message: 'Started a new chat', action: { label: 'Undo', run: () => setTurns(prev) } }) }}><NotePencil size={16} /></IconButton>
         <IconButton label="Close" hint={`${modKey}J`} size="sm" tone="plain" onClick={onClose}><X size={16} /></IconButton>

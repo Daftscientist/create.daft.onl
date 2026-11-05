@@ -24,3 +24,10 @@ Domain-aware structures built from `ui/` primitives. Shells (`desktop/`, `mobile
 | `MobileList` / `MobileSection` / `MobileRow` | Mobile lists (tap, long-press, swipe, select) | Every mobile screen |
 | `ContinueCard` | Resume-where-you-were hero | Mobile Recents |
 | `LibraryGate` | Startup states: opening, open in another tab, moved, storage unavailable | App root |
+
+Added for AI (2026-11-05):
+
+| Composition | Use for | Notes |
+|---|---|---|
+| `AiMark` | Every AI provider logo (settings rows, pickers, chips) | Tile like `ProviderMark`; `bare` for inline. Covers the browser's built-in model |
+| `ModelPicker` | Choosing the Ask Ream model, anywhere | `chip` (panel header) or `field` (settings). Lists the built-in model and every connected provider's models |

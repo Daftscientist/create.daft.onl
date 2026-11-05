@@ -11,7 +11,7 @@ writing any markup with its own styling; if what you need is missing, add it her
 | `BackButton` | Mobile back | Always visible alongside edge-swipe |
 | `Kbd` | Shortcut hints | |
 | `Tooltip` | Desktop hints on any control | 450ms delay, instant on keyboard focus, never on touch |
-| `Menu` | Context and ⋯ menus, sort menus, Move to… (desktop) | Glass; arrow keys, type-ahead, returns focus |
+| `Menu` | Context and ⋯ menus, sort menus, Move to…, pickers (desktop) | Glass; arrow keys, type-ahead, returns focus; `search` adds a filter field for long lists; items take `selected` (check) |
 | `Segmented` | 2–4 mutually exclusive options | Sliding thumb (`layoutId`) |
 | `Overlay` | Any modal surface | Smoke, focus trap, Esc, focus return |
 | `Sheet` / `SheetActions` / `SheetTitle` | Every mobile bottom sheet | Drag-to-dismiss from grabber, velocity-aware |

@@ -5,7 +5,6 @@
 .head { display: flex; align-items: center; gap: 4px; height: 48px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--hair); flex: none; }
 .model { display: inline-flex; white-space: nowrap; flex: none; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .model svg { color: var(--ink-3); }
-.chipModel { margin-left: 8px; min-width: 0; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; font-weight: 600; color: var(--ink-2); padding: 2px 8px; border-radius: var(--r-pill); background: var(--fill); }
 .headSpacer { flex: 1; }
 .thread { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 20px; }
 
@@ -48,4 +47,3 @@
 :global(html[data-motion="reduce"]) .dot { animation: none; }
 .thought { white-space: pre-wrap; margin: 6px 0 0; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
 .error { font-size: 13px; color: var(--danger); }
-button.chipModel:hover { background: var(--fill-2); color: var(--ink); }

@@ -7,8 +7,14 @@
   border-radius: var(--r-lg);
   display: flex;
   flex-direction: column;
+  max-height: min(440px, calc(100vh - 16px));
   outline: none;
 }
+.items { display: flex; flex-direction: column; overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.search { height: 32px; margin: 0 0 6px; padding: 0 10px; border-radius: var(--r-sm); background: var(--fill); font: inherit; font-size: 13px; color: var(--ink); border: 0; outline: none; flex: none; }
+.search::placeholder { color: var(--ink-3); }
+.search:focus-visible { box-shadow: 0 0 0 2px var(--select); }
+.check { color: var(--select); flex: none; }
 .item {
   display: flex;
   align-items: center;
