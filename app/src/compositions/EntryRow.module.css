@@ -1,0 +1,27 @@
+.row, .header {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 110px 90px 80px 60px 32px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+}
+.header { height: 32px; font-size: 12px; font-weight: 500; color: var(--ink-3); border-bottom: 1px solid var(--hair); margin-bottom: 4px; }
+.row { height: 48px; border-radius: var(--r-sm); user-select: none; }
+.row:hover { background: var(--fill); }
+.row[data-selected] { background: var(--select-soft); }
+.row[data-drop] { box-shadow: inset 0 0 0 2px var(--select); background: var(--select-soft); }
+.row:focus-visible { outline: 2px solid var(--select); outline-offset: -2px; }
+.thumb { width: 56px; --thumb-r: 4px; }
+.folder { display: grid; place-items: center; aspect-ratio: 16 / 9; border-radius: 4px; background: var(--fill); color: color-mix(in srgb, var(--ink) 35%, var(--paper)); }
+.name { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 540; }
+.text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.star { color: #f5b301; flex: none; }
+.col { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.marks { display: flex; gap: 2px; opacity: 0.62; }
+.row:hover .marks, .row[data-selected] .marks { opacity: 1; }
+.marks button { width: 26px; height: 24px; display: grid; place-items: center; border-radius: var(--r-xs); }
+.marks button:hover { background: var(--fill-2); }
+.more { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); opacity: 0; }
+.row:hover .more, .row[data-selected] .more, .row:focus-within .more { opacity: 1; }
+.more:hover { background: var(--fill-2); color: var(--ink); }
+.rename { width: 100%; height: 28px; padding: 0 8px; border: 0; border-radius: var(--r-xs); background: var(--paper); box-shadow: 0 0 0 2px var(--select); font-weight: 540; }

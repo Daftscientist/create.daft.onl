@@ -1,0 +1,16 @@
+.veil {
+  position: fixed;
+  z-index: 30;
+  top: 8px; right: 8px; bottom: 8px; left: var(--sidebar-w, 8px);
+  border-radius: var(--r-panel);
+  background: color-mix(in srgb, var(--select) 6%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--select) 55%, transparent);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 40px;
+  pointer-events: none;
+  transition: background-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+}
+.veil[data-folder] { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); }
+.card { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 22px 0 18px; border-radius: var(--r-pill); font-size: 14px; font-weight: 560; color: var(--ink); }

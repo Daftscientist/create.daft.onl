@@ -1,0 +1,36 @@
+.frame {
+  --sidebar-w: 240px;
+  --panel-center: calc(var(--sidebar-w) + (100vw - var(--sidebar-w) - 8px) / 2);
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  height: 100%;
+  background: var(--frame);
+}
+.panel {
+  position: relative;
+  margin: 8px 8px 8px 0;
+  border-radius: var(--r-panel);
+  background: var(--panel);
+  box-shadow: var(--shadow-panel), 0 0 0 1px var(--hair);
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  scrollbar-gutter: stable;
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 36px 14px;
+  background: linear-gradient(var(--panel) 70%, color-mix(in srgb, var(--panel) 0%, transparent));
+}
+.primary { display: flex; gap: 8px; flex: none; }
+.content { padding: 14px 36px 0; max-width: 1480px; }
+@media (max-width: 1080px) {
+  .frame { --sidebar-w: 216px; }
+  .topbar, .content { padding-left: 24px; padding-right: 24px; }
+}

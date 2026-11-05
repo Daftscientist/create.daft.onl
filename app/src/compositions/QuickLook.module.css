@@ -1,0 +1,11 @@
+.stage { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.slide {
+  width: min(calc(100vw - 96px), calc((100vh - 160px) * 16 / 9), 1280px);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px -20px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+.bar { display: flex; align-items: center; gap: 14px; height: 52px; padding: 0 8px 0 20px; border-radius: var(--r-pill); max-width: calc(100vw - 32px); }
+.name { font-weight: 600; font-size: 14px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pos { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.nav { display: flex; gap: 2px; }

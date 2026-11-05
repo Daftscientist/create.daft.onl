@@ -1,0 +1,25 @@
+.header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 28px; }
+.crumbs { display: flex; align-items: center; gap: 2px; font-size: 13px; color: var(--ink-3); min-height: 24px; flex-wrap: wrap; }
+.row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.title {
+  display: flex; align-items: baseline; gap: 10px; min-width: 0;
+  font-size: 26px; line-height: 32px; font-weight: 650; letter-spacing: -0.02em;
+}
+.count { font-size: 15px; font-weight: 500; letter-spacing: 0; color: var(--ink-3); white-space: nowrap; }
+.actions { display: flex; align-items: center; gap: 8px; flex: none; }
+
+.section { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; min-height: 32px; }
+.section h2 { font-size: 15px; line-height: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.sectionTools { display: flex; align-items: center; gap: 8px; }
+
+.empty {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
+  padding: 72px 24px; margin: 0 auto; max-width: 420px;
+}
+.emptyIcon {
+  width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; margin-bottom: 8px;
+  background: var(--paper); box-shadow: var(--shadow-tile); color: var(--ink-2);
+}
+.empty h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
+.empty p { font-size: 13.5px; line-height: 20px; color: var(--ink-2); text-wrap: balance; }
+.emptyActions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }

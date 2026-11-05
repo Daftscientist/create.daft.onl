@@ -1,0 +1,41 @@
+.region {
+  position: fixed;
+  z-index: 80;
+  left: var(--panel-center, 50%);
+  bottom: calc(var(--toast-base, 24px) + env(safe-area-inset-bottom, 0px));
+  translate: -50% 0;
+  width: min(420px, calc(100vw - 32px));
+  height: 0;
+  transition: bottom var(--dur-3) var(--ease-out);
+}
+.slot { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; }
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  max-width: 100%;
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--r-lg);
+  background: var(--paper);
+  box-shadow: var(--shadow-float), 0 0 0 1px var(--hair);
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 4px; }
+.action {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--select);
+}
+.action:hover { background: var(--select-soft); }
+.close { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-3); }
+.close:hover { background: var(--fill); color: var(--ink); }
+.ok { color: var(--ok); flex: none; }
+.spin { color: var(--ink-2); flex: none; animation: spin 0.9s linear infinite; }
+@keyframes spin { to { rotate: 360deg; } }
+.toast:not([data-front]) > * { visibility: hidden; }
+.region:hover .toast > *, .region:focus-within .toast > * { visibility: visible; }

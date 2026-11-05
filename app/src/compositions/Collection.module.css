@@ -1,0 +1,11 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 22px 18px;
+  outline: none;
+  padding-bottom: 96px; /* room for the selection bar */
+}
+.grid[data-size="lg"] { grid-template-columns: repeat(4, minmax(0, 1fr)); padding-bottom: 0; }
+@media (max-width: 1180px) { .grid[data-size="lg"] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.list { display: flex; flex-direction: column; outline: none; padding-bottom: 96px; }
+.menuTitle { font-size: 12px; font-weight: 600; color: var(--ink-3); }

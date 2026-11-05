@@ -1,0 +1,69 @@
+/* 1cqw = 1% of the slide's width. A 1280px slide → 12.8px per unit. */
+.slide {
+  container-type: inline-size;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+  position: relative;
+  font-family: var(--font);
+  font-variant-numeric: lining-nums tabular-nums;
+  user-select: none;
+}
+.serif { --slide-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
+.inner { position: absolute; inset: 0; padding: 7cqw 8cqw; display: flex; flex-direction: column; }
+.slide h1, .slide h2 { font-family: var(--slide-display, var(--font)); margin: 0; text-wrap: balance; }
+.slide p { margin: 0; }
+
+.eyebrow, .tag {
+  font-size: 1.45cqw; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
+}
+
+.title { margin: auto 0; display: flex; flex-direction: column; gap: 1.6cqw; max-width: 78%; }
+.title h1 { font-size: 5.4cqw; line-height: 1.05; font-weight: 650; letter-spacing: -0.03em; }
+.serif .title h1 { font-weight: 500; letter-spacing: -0.015em; }
+.title p { font-size: 1.9cqw; color: var(--muted); }
+.rule { position: absolute; left: 8cqw; bottom: 7cqw; width: 6cqw; height: 0.45cqw; background: var(--accent); border-radius: 1cqw; }
+
+.section { margin: auto 0; display: flex; flex-direction: column; gap: 1cqw; }
+.section span { font-size: 9cqw; font-weight: 300; line-height: 1; color: var(--accent); letter-spacing: -0.04em; }
+.section h1 { font-size: 4.6cqw; font-weight: 600; letter-spacing: -0.025em; }
+
+.bullets h2, .chart h2, .grid h2 { font-size: 3.2cqw; font-weight: 620; letter-spacing: -0.02em; line-height: 1.1; }
+.bullets ol { list-style: none; margin: 4.2cqw 0 0; padding: 0; display: grid; gap: 2.2cqw; counter-reset: b; }
+.bullets li {
+  counter-increment: b; display: grid; grid-template-columns: 5cqw 1fr; align-items: baseline;
+  font-size: 2.3cqw; line-height: 1.3; padding-bottom: 2.2cqw; border-bottom: 0.12cqw solid color-mix(in srgb, var(--fg) 12%, transparent);
+}
+.bullets li::before { content: counter(b, decimal-leading-zero); font-size: 1.5cqw; font-weight: 600; color: var(--accent); }
+.bullets li:last-child { border-bottom: 0; }
+
+.stat { margin: auto 0; display: flex; flex-direction: column; gap: 1.4cqw; }
+.stat strong { font-size: 15cqw; line-height: 0.9; font-weight: 640; letter-spacing: -0.05em; color: var(--accent); }
+.stat p { font-size: 2.7cqw; max-width: 60%; line-height: 1.2; letter-spacing: -0.01em; }
+.stat span { font-size: 1.6cqw; color: var(--muted); }
+
+.chart { flex: 1; display: flex; flex-direction: column; }
+.bars { flex: 1; display: flex; align-items: flex-end; gap: 2.4cqw; margin-top: 3.4cqw; }
+.bar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 0.9cqw; }
+.bar i { display: block; border-radius: 0.6cqw 0.6cqw 0.15cqw 0.15cqw; background: color-mix(in srgb, var(--fg) 14%, transparent); min-height: 0.5cqw; }
+.bar[data-hi] i { background: var(--accent); }
+.bar em { font-style: normal; font-size: 1.4cqw; color: var(--muted); text-align: center; }
+.bar[data-hi] em { color: var(--fg); font-weight: 600; }
+.bar span { font-size: 1.4cqw; color: var(--muted); text-align: center; }
+
+.quote { margin: auto 0; display: flex; flex-direction: column; gap: 2.4cqw; max-width: 82%; }
+.quote blockquote { margin: 0; font-family: var(--slide-display, var(--font)); font-size: 4.2cqw; line-height: 1.15; letter-spacing: -0.02em; font-weight: 500; text-wrap: balance; }
+.quote figcaption { font-size: 1.6cqw; color: var(--muted); }
+
+.split { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 6cqw; align-items: end; }
+.split > div { display: flex; flex-direction: column; gap: 1.6cqw; }
+.split h2 { font-size: 5cqw; line-height: 1; font-weight: 650; letter-spacing: -0.03em; }
+.split p { font-size: 2.2cqw; line-height: 1.4; color: var(--muted); padding: 2.4cqw; background: var(--surface); border-radius: 1.2cqw; }
+
+.grid { flex: 1; display: flex; flex-direction: column; }
+.grid dl { margin: auto 0 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.6cqw; }
+.grid dl > div { background: var(--surface); border-radius: 1.2cqw; padding: 2cqw 2.4cqw; display: flex; flex-direction: column; gap: 0.6cqw; }
+.grid dt { font-size: 1.4cqw; color: var(--muted); font-weight: 500; }
+.grid dd { margin: 0; font-size: 3.2cqw; font-weight: 620; letter-spacing: -0.02em; }

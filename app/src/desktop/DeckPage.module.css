@@ -1,0 +1,25 @@
+.page { height: 100%; display: flex; flex-direction: column; background: var(--frame); }
+.header { display: flex; align-items: center; gap: 14px; height: 60px; padding: 0 16px; flex: none; }
+.title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.title h1 { font-size: 15px; line-height: 20px; font-weight: 620; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title span { font-size: 12.5px; color: var(--ink-3); }
+.actions { display: flex; align-items: center; gap: 4px; }
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 8px; padding: 0 8px 8px; }
+.rail { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 6px 8px 12px 6px; }
+.railItem { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; padding: 4px; border-radius: var(--r-sm); }
+.num { font-size: 12px; color: var(--ink-3); text-align: right; padding-top: 2px; }
+.railItem[aria-current] .num { color: var(--ink); font-weight: 600; }
+.railThumb { --thumb-r: 6px; transition: box-shadow var(--dur-1) var(--ease-out); }
+.railItem:hover .railThumb { box-shadow: 0 0 0 2px var(--fill-2); }
+.railItem[aria-current] .railThumb { box-shadow: 0 0 0 2px var(--select); }
+.stageWrap {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  border-radius: var(--r-panel); background: var(--panel); box-shadow: 0 0 0 1px var(--hair); padding: 32px; min-height: 0;
+}
+.stage {
+  width: min(100%, calc((100vh - 200px) * 16 / 9)); border-radius: 8px; overflow: hidden;
+  box-shadow: 0 0 0 1px var(--hair), 0 18px 48px -18px rgb(0 0 0 / 0.25);
+}
+.stage:fullscreen { width: 100vw; border-radius: 0; display: grid; place-items: center; background: #000; }
+.pager { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-2); }
+.missing { height: 100%; display: grid; place-items: center; }

@@ -1,0 +1,6 @@
+.track { display: inline-flex; padding: 2px; border-radius: var(--r-pill); background: var(--fill); height: 32px; }
+.seg { position: relative; min-width: 34px; padding: 0 9px; border-radius: var(--r-pill); color: var(--ink-3); display: grid; place-items: center; }
+.seg:hover { color: var(--ink-2); }
+.seg[aria-checked="true"] { color: var(--ink); }
+.thumb { position: absolute; inset: 0; border-radius: inherit; background: var(--paper); box-shadow: var(--shadow-tile); }
+.label { position: relative; display: grid; place-items: center; }

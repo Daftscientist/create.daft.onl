@@ -1,0 +1,24 @@
+.thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: var(--thumb-r, calc(var(--r-md) - 4px));
+  overflow: hidden;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  isolation: isolate;
+}
+.thumb::after { /* hairline over the slide so white slides still read as objects */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--hair);
+  pointer-events: none;
+}
+.state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--ink-2); }
+.phase { font-size: 12px; font-weight: 500; }
+.track { width: 46%; height: 3px; border-radius: 2px; background: var(--fill-2); overflow: hidden; }
+.fill { display: block; height: 100%; background: var(--ink); border-radius: 2px; }
+.failed { color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, var(--paper)); }
+.failed .phase { color: var(--ink-2); }

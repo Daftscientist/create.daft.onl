@@ -1,6 +1,7 @@
 # Design vision: office.daft.onl
 
-Status: **draft v2, after adversarial review** (Claude subagent + Codex GPT 6.1 Sol `high`), 2026-11-05.
+Status: **v3**, after three adversarial rounds (Claude subagent; Codex GPT 6.1 Sol at `high` and `xhigh`), 2026-11-05.
+Concrete standards live in [`/DESIGN.md`](../../DESIGN.md); where they differ, DESIGN.md wins.
 Moodboard: [`moodboard/`](moodboard/README.md). Review triage: [`review-log.md`](review-log.md).
 
 There is no landing page. `office.daft.onl` opens straight into the app.
@@ -58,8 +59,8 @@ moving selection pill of the mobile tab bar, as a Chromium-only enhancement.
   Import progress is per phase (read → convert → save) until the worker emits real per-slide events.
 - **Storage is part of the UI.** The library footer reads "Stored in this browser · Backed up 2 days ago". Then:
   - **Back up** downloads a workspace archive (folders, decks, assets); **Restore** reads one back.
-  - On Chromium, offer **Sync to a folder** (File System Access), which mirrors every deck as .pptx into a folder you
-    choose: "Synced to ~/Decks · just now". This turns the eviction risk into "your files are real files".
+  - On Chromium, offer **Automatic PPTX copies** (File System Access): one-way copies of every deck into a folder you
+    choose, never overwriting a file changed outside the app, with pending/failed/permission states. Not called "sync".
   - Persistence denied, or Safari not installed to the Home Screen → a dismissable paper notice explaining the risk.
   - Quota exceeded → the write is refused cleanly, nothing is lost, and the notice offers Back up / Empty trash.
 - **One tab owns the library** (SQLite's OPFS pool is exclusive). Another tab shows "Open in another tab" with
@@ -67,7 +68,7 @@ moving selection pill of the mobile tab bar, as a Chromium-only enhancement.
 
 ## Information architecture
 
-- **Home** = recent work only, bounded (last 12 opened). Hidden "Jump back in" row when the library has < 8 files.
+- **Recents** = recent work only, bounded (last 12 opened). (Named "Recents" in both shells.) Hidden "Jump back in" row when the library has < 8 files.
 - **Files** = the authoritative folder browser: breadcrumbs, current location, New/Import go into the current folder.
 - **Starred**, **Trash** (30-day retention, Restore, Empty trash).
 - One name per thing everywhere ("Files", not "All decks" in one place and "All files" in another).
@@ -170,6 +171,14 @@ Two compositions, one set of semantics. Commands, navigation state and operation
 and density differ. The shell is chosen by available width with input as a hint (tablet + keyboard gets desktop).
 Switching shells on resize keeps the current location, selection and open sheet/menu equivalent. The full editor is
 reachable from both, but mobile treats it as a deliberate step.
+
+## Engine-phase contracts (from the xhigh review, not built in the UI phase)
+
+- **Storage full**: a persistent "Not saved · Browser storage full" state that keeps pending work and offers a rescue download; "Saved" only after persistence succeeds.
+- **Originals**: imported .pptx files are kept; "Download original" sits beside the generated exports, including on failed imports.
+- **Restore**: preview the result, keep both on conflict by default, replacing needs explicit approval, the current library survives any failure. Entry points: beside Back up, and on the empty first-run screen.
+- **Tabs**: a new tab opens a read-only viewer mediated by the owning tab; taking ownership is a separate, explicit action.
+- **Offline**: browsing works offline; import/export show "Connect once to enable import and export offline" until the engine is cached.
 
 ## Anti-references
 

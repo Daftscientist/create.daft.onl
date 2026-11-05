@@ -1,0 +1,7 @@
+.root { position: fixed; inset: 0; z-index: 70; display: grid; justify-items: center; pointer-events: none; }
+.root[data-align="center"] { align-items: center; }
+.root[data-align="top"] { align-items: start; padding-top: 16vh; }
+.root[data-align="bottom"] { align-items: end; }
+.smoke { position: absolute; inset: 0; background: var(--smoke); pointer-events: auto; }
+.content { position: relative; pointer-events: none; outline: none; }
+.content > * { pointer-events: auto; }

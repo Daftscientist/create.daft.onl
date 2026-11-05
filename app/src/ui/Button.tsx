@@ -1,0 +1,42 @@
+// Buttons (DESIGN.md §6 Button). The only place button styling lives.
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { Tooltip } from './Tooltip'
+import s from './Button.module.css'
+
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type Size = 'md' | 'lg'
+
+export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: Variant
+  size?: Size
+  icon?: ReactNode
+  trailing?: ReactNode
+}>(function Button({ variant = 'secondary', size = 'md', icon, trailing, children, className, type = 'button', ...rest }, ref) {
+  return (
+    <button ref={ref} type={type} className={`${s.btn} ${className ?? ''}`} data-variant={variant} data-size={size} {...rest}>
+      {icon && <span className={s.icon}>{icon}</span>}
+      {children && <span className={s.text}>{children}</span>}
+      {trailing}
+    </button>
+  )
+})
+
+export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & {
+  label: string
+  hint?: string
+  size?: 'sm' | 'md' | 'lg'
+  tone?: 'fill' | 'plain' | 'glass'
+  tooltip?: boolean
+  side?: 'bottom' | 'top' | 'right'
+}>(function IconButton({ label, hint, size = 'md', tone = 'fill', tooltip = true, side, children, className, type = 'button', ...rest }, ref) {
+  const btn = (
+    <button ref={ref} type={type} aria-label={label} className={`${s.icon_btn} ${tone === 'glass' ? 'glass' : ''} ${className ?? ''}`} data-size={size} data-tone={tone} {...rest}>
+      {children}
+    </button>
+  )
+  return tooltip ? <Tooltip label={label} hint={hint} side={side}>{btn}</Tooltip> : btn
+})
+
+export function Kbd({ children }: { children: ReactNode }) {
+  return <kbd className={s.kbd}>{children}</kbd>
+}
