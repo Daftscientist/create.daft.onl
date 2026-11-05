@@ -43,8 +43,15 @@ export function Tooltip({ label, hint, children, side = 'bottom' }: { label: Rea
     onBlur: (e: React.FocusEvent) => { children.props.onBlur?.(e); hide() },
   })
 
+  // Keep the tooltip inside the viewport (it was clipped at the left edge beside the Back button).
+  const clampX = (x: number) => Math.min(Math.max(x, 12), innerWidth - 12)
   let style: React.CSSProperties = {}
-  if (rect) {
+  if (rect && side !== 'right' && (rect.left + rect.width / 2 < 90 || rect.left + rect.width / 2 > innerWidth - 90)) {
+    const leftAligned = rect.left + rect.width / 2 < 90
+    style = leftAligned
+      ? { left: clampX(rect.left), top: side === 'top' ? rect.top - 8 : rect.bottom + 8, translate: side === 'top' ? '0 -100%' : '0 0' }
+      : { left: clampX(rect.right), top: side === 'top' ? rect.top - 8 : rect.bottom + 8, translate: side === 'top' ? '-100% -100%' : '-100% 0' }
+  } else if (rect) {
     if (side === 'right') style = { left: rect.right + 8, top: rect.top + rect.height / 2, translate: '0 -50%' }
     else if (side === 'top') style = { left: rect.left + rect.width / 2, top: rect.top - 8, translate: '-50% -100%' }
     else style = { left: rect.left + rect.width / 2, top: rect.bottom + 8, translate: '-50% 0' }

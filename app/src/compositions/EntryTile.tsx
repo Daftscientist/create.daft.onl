@@ -55,7 +55,16 @@ export function EntryTile({ entry, state, handlers, meta, layoutId }: {
     >
       <div className={s.media}>
         {entry.type === 'deck' ? <DeckThumb deck={entry} layoutId={layoutId} /> : <FolderArt folder={entry} />}
-        {state.selected && <span className={s.check} aria-hidden><Check size={12} weight="bold" /></span>}
+        <span
+          className={s.check}
+          data-select-toggle
+          data-on={state.selected || undefined}
+          role="checkbox"
+          aria-checked={state.selected}
+          aria-label={`Select ${entry.name}`}
+        >
+          {state.selected && <Check size={12} weight="bold" />}
+        </span>
         {entry.starred && <span className={s.star} aria-label="Starred"><Star size={12} weight="fill" /></span>}
         {state.dropTarget && entry.type === 'folder' && <span className={s.dropLabel}>Move to {entry.name}</span>}
       </div>

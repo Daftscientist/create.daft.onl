@@ -1,5 +1,5 @@
 // Desktop list-view row (DESIGN.md §6 List row). Same state and handlers as EntryTile.
-import { DotsThree, FolderSimple, Star } from '@phosphor-icons/react'
+import { Check, DotsThree, FolderSimple, Star } from '@phosphor-icons/react'
 import { deckCount, download, getLibrary } from '../data/library'
 import type { Entry } from '../data/types'
 import { bytes, count, relTime } from '../lib/format'
@@ -23,6 +23,9 @@ export function EntryRow({ entry, state, handlers }: { entry: Entry; state: Tile
       data-selected={state.selected || undefined}
       data-drop={state.dropTarget || undefined}
     >
+      <span className={s.check} data-select-toggle data-on={state.selected || undefined} role="checkbox" aria-checked={state.selected} aria-label={`Select ${entry.name}`}>
+        {state.selected && <Check size={11} weight="bold" />}
+      </span>
       <span className={s.thumb}>
         {isDeck ? <DeckThumb deck={entry} /> : <span className={s.folder}><FolderSimple size={18} weight="fill" /></span>}
       </span>
@@ -71,6 +74,7 @@ export function EntryRow({ entry, state, handlers }: { entry: Entry; state: Tile
 EntryRow.Header = function Header() {
   return (
     <div className={s.header} aria-hidden>
+      <span />
       <span />
       <span>Name</span>
       <span>Modified</span>

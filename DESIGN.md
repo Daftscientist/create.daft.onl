@@ -57,19 +57,20 @@ The user's hard rule: **every element, structure and composition is built once, 
 ### Colour (light / dark)
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| `--frame` | `#ECECEF` | `#0E0E10` | Window background behind sidebar and panel |
-| `--panel` | `#F8F8FA` | `#17171A` | Content panel |
-| `--paper` | `#FFFFFF` | `#1F1F23` | File tiles, menus' solid variant, inputs |
+| `--frame` | `#ECECEF` | `#08080A` | Window background behind sidebar and panel |
+| `--panel` | `#F8F8FA` | `#111114` | Content panel |
+| `--paper` | `#FFFFFF` | `#1A1A1E` | File tiles, menus' solid variant, inputs |
 | `--ink` | `#17171C` | `#EDEDF0` | Primary text, primary button fill |
 | `--ink-2` | `#5C5C66` | `#A3A3AD` | Secondary text |
-| `--ink-3` | `#8E8E99` | `#70707A` | Tertiary text, placeholders, disabled |
+| `--ink-3` | `#686872` | `#8D8D98` | Tertiary text, placeholders (≥ 4.5:1 on every solid surface) |
+| `--ink-4` | `#A0A0AA` | `#55555E` | Disabled and decorative only, never readable text |
 | `--hair` | `rgb(23 23 28 / .08)` | `rgb(255 255 255 / .08)` | 1px borders, dividers |
 | `--fill` | `rgb(23 23 28 / .05)` | `rgb(255 255 255 / .06)` | Hover fill, round icon buttons, segmented track |
 | `--fill-2` | `rgb(23 23 28 / .09)` | `rgb(255 255 255 / .10)` | Pressed fill, active nav item |
-| `--select` | `#2F6BFF` | `#5B8CFF` | Selection, focus ring, links. The one UI accent. |
+| `--select` | `#1D56E0` | `#5B8CFF` | Selection, focus ring, links. The one UI accent. |
 | `--select-soft` | `rgb(47 107 255 / .10)` | `rgb(91 140 255 / .16)` | Selected tile fill |
 | `--deck` | `#E8603C` | `#F07650` | Deck file type only |
-| `--danger` | `#D93A3A` | `#FF6B6B` | Destructive actions |
+| `--danger` | `#C42B2B` | `#FF6B6B` | Destructive actions |
 | `--ok` | `#1E9E62` | `#4CC38A` | Success states |
 
 The **file-type colour is never the UI accent.** Selection and focus are blue, so they never blend into coral Deck marks or slides.
@@ -120,7 +121,7 @@ Icon-only buttons always have an `aria-label` and a tooltip on desktop.
 |---|---|---|
 | Frame / Panel | Persistent chrome | Solid tokens. Never `backdrop-filter`. |
 | Paper | File tiles, slides | `--paper`, `--shadow-tile`. Slides keep their own colours in both themes. |
-| Glass | Selection bar, context menus, mobile tab bar (only where it floats over document previews) | `--glass` tint (light `rgb(250 250 252 / .84)`, dark `rgb(30 30 34 / .82)`), `blur(24px) saturate(1.4)`, 1px `--glass-edge` border, `--shadow-float`. |
+| Glass | Selection bar, context menus, mobile tab bar (only where it floats over document previews) | `--glass` tint (light `rgb(250 250 252 / .92)`, dark `rgb(28 28 32 / .92)`); text on glass only `--ink`, `--ink-2`, `--danger` (measured ≥ 4.5:1 over white, black, `#FFD400`, coral), `blur(24px) saturate(1.4)`, 1px `--glass-edge` border, `--shadow-float`. |
 | Smoke | Behind sheets, Quick Look, ⌘K | `rgb(10 10 14 / .32)` light, `.5` dark. No blur. |
 
 - At most two glass surfaces visible at once. Toasts, ⌘K and sheets are **solid** `--paper` with `--shadow-float` (budget rule, xhigh review).
@@ -175,9 +176,10 @@ right. Click or ⌘K opens the command palette in place (the field *is* the pale
   badge on thumbnail top-left) · dragging (0.9 opacity, follows pointer, others don't reflow) · drop-target (n/a) ·
   importing (thumbnail replaced by a phase label + thin progress bar) · failed (paper with reason + Try again / Remove) ·
   renaming (name becomes an input, Enter saves, Esc cancels, empty name rejected).
-- **Keyboard map (collection-scoped, suspended while typing or in a dialog):** click selects · ⇧-click range ·
-  ⌘/Ctrl-click toggles · double-click or **Enter opens** · **F2 renames** · **Space** Quick Look · ⌘/Ctrl-Space toggles
-  the focused item · arrows move focus · ⇧-arrows extend · ⌘/Ctrl-A selects all · ⌘/Ctrl-⌫ or Delete → Trash ·
+- **Click opens** (user decision, overriding the Finder model). Selection is explicit: the tile's checkbox (on hover,
+  always on touch), ⌘/Ctrl-click toggles, ⇧-click ranges, and **once anything is selected, plain clicks toggle**.
+- **Keyboard map (collection-scoped, suspended while typing or in a dialog):** arrows move focus · **Enter opens** · **F2 renames** · **Space** Quick Look · ⌘/Ctrl-Space toggles
+  the focused item · ⇧-arrows extend the selection · ⌘/Ctrl-A selects all · ⌘/Ctrl-⌫ or Delete → Trash ·
   ⌘/Ctrl-D duplicates · S stars/unstars · Esc clears selection · right-click opens the context menu · drag onto a folder moves.
 
 ### Folder tile (Files view)
@@ -249,6 +251,7 @@ Keyboard path · visible focus · `aria-*` roles (grid, menu, dialog, tablist) �
 3:1 icons/state · reduced motion · reduced transparency · screen-reader labels on icon buttons and file marks.
 
 ## 9. Changelog
+- 2026-11-05: v1.2, user feedback: click opens + explicit selection; deeper dark palette; contrast fixes measured (ink-3, select, danger, glass tint .92).
 - 2026-11-05: v1.1, xhigh review: keyboard map, names, destinations, solid toasts/⌘K, drops over cards, mobile Select mode, full names in sheets, originals, Restore.
 - 2026-11-05: v1, from VISION v2 and both review rounds; Proton/Superlist/Cosmos/mymind steer; blue selection
   accent split from Deck coral; Instrument Sans (has `tnum`; Inter and Geist avoided).

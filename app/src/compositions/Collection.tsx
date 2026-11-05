@@ -110,17 +110,19 @@ export function Collection(p: CollectionProps) {
   // ---------- pointer ----------
   const idFrom = (t: EventTarget) => (t as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id ?? null
 
+  // Click opens (user decision 2026-11-05). Selection is explicit: the tile checkbox, ⌘/Ctrl/⇧-click,
+  // and once anything is selected, plain clicks toggle (Google Photos convention).
   const onClick = (e: React.MouseEvent) => {
     const id = idFrom(e.target)
     if (!id) { if (!e.shiftKey && !e.metaKey && !e.ctrlKey) clear(); return }
+    const onCheckbox = !!(e.target as HTMLElement).closest('[data-select-toggle]')
     if (e.shiftKey) range(id, e.metaKey || e.ctrlKey)
-    else if (e.metaKey || e.ctrlKey) toggle(id)
-    else selectOnly(id)
-  }
-  const onDoubleClick = (e: React.MouseEvent) => {
-    const id = idFrom(e.target)
-    const entry = id ? getLibrary().entries[id] : null
-    if (entry && !(entry.type === 'deck' && entry.status !== 'ready')) activate(entry)
+    else if (e.metaKey || e.ctrlKey || onCheckbox || selected.size) toggle(id)
+    else {
+      const entry = getLibrary().entries[id]
+      setFocus(id)
+      if (entry && !(entry.type === 'deck' && entry.status !== 'ready')) activate(entry)
+    }
   }
   const onContextMenu = (e: React.MouseEvent) => {
     const id = idFrom(e.target)
@@ -165,8 +167,7 @@ export function Collection(p: CollectionProps) {
       e.preventDefault()
       const next = focus ? neighbour(cur, arrows[e.key]) : cur
       if (e.shiftKey) range(next)
-      else if (mod) setFocus(next)
-      else selectOnly(next)
+      else setFocus(next)
     } else if (e.key === 'Enter') {
       e.preventDefault()
       const entry = lib.entries[cur]
@@ -262,8 +263,8 @@ export function Collection(p: CollectionProps) {
         data-collection
         className={p.view === 'grid' ? s.grid : s.list}
         data-size={p.size ?? 'md'}
+        data-selecting={selected.size > 0 || undefined}
         onClick={onClick}
-        onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
         onKeyDown={onKeyDown}
         onFocus={(e) => { const id = idFrom(e.target); if (id && id !== focus) setFocus(id) }}

@@ -36,3 +36,8 @@ Deferred to the business-logic phase (recorded in VISION.md §Engine-phase contr
 "Automatic PPTX copies" contract instead of "sync" · restore preview/merge rules · read-only viewers for new tabs and
 explicit ownership transfer · offline engine readiness ("Connect once to enable import and export offline") ·
 mobile Edit entry once the editor exists.
+| 2026-11-05 | Built home UI (screenshots) | Codex gpt-6.1-sol | high | 21 | 21 | 21 | First post-build run. Found a data bug (folder trash not subtree-aware), contrast failures (--ink-3 3.2:1, select 3.8:1 on ground), a11y (aria-hidden slides, div rows), missing mobile Rename, unconfirmed permanent delete, drag dwell ending the drag, list-row overflow near breakpoint |
+
+## Triage of built UI (high)
+All 21 accepted. Fixed in this pass: 1–8, 10–12, 14–19, 20 (label), 21; 9 (scroll restore on return + Back exits Select mode); 13 (palette creation honours the current folder).
+Deferred: 9 (preserving selection/overlays across a shell switch), 13 (selected-file commands inside ⌘K), 20 (explanation panel for simplified slides needs real coverage data from the engine).

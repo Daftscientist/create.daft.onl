@@ -66,11 +66,15 @@
 .marks button:active { scale: 0.92; }
 
 .check {
-  position: absolute; top: 10px; left: 10px; width: 20px; height: 20px; border-radius: 50%;
-  display: grid; place-items: center; background: var(--select); color: #fff;
-  box-shadow: 0 0 0 2px var(--paper), 0 2px 6px rgb(0 0 0 / 0.2);
-  animation: pop var(--dur-3) cubic-bezier(0.3, 1.4, 0.5, 1);
+  position: absolute; top: 10px; left: 10px; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff;
+  background: rgb(255 255 255 / 0.92); box-shadow: inset 0 0 0 1.5px rgb(23 23 28 / 0.35), 0 1px 4px rgb(0 0 0 / 0.18);
+  opacity: 0; transition: opacity var(--dur-1) var(--ease-out), background-color var(--dur-1);
 }
+.check::after { content: ""; position: absolute; inset: -8px; } /* larger hit area */
+.tile:hover .check, .tile:focus-within .check, [data-selecting] .check, .check[data-on] { opacity: 1; }
+.check[data-on] { background: var(--select); box-shadow: 0 0 0 2px var(--paper), 0 2px 6px rgb(0 0 0 / 0.2); animation: pop var(--dur-3) cubic-bezier(0.3, 1.4, 0.5, 1); }
+@media (hover: none) { .check { opacity: 1; } }
 .star {
   position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 50%;
   display: grid; place-items: center; color: #f5b301; background: rgb(255 255 255 / 0.9);

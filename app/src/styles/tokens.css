@@ -7,18 +7,19 @@
   --paper: #ffffff;
   --ink: #17171c;
   --ink-2: #5c5c66;
-  --ink-3: #8e8e99;
+  --ink-3: #686872;
+  --ink-4: #a0a0aa; /* disabled and decorative only: never readable text */
   --hair: rgb(23 23 28 / 0.08);
   --fill: rgb(23 23 28 / 0.05);
   --fill-2: rgb(23 23 28 / 0.09);
-  --select: #2f6bff;
-  --select-soft: rgb(47 107 255 / 0.1);
+  --select: #1d56e0;
+  --select-soft: rgb(29 86 224 / 0.1);
   --deck: #e8603c;
-  --danger: #d93a3a;
+  --danger: #c42b2b;
   --ok: #1e9e62;
   --on-ink: #ffffff;
 
-  --glass: rgb(250 250 252 / 0.84);
+  --glass: rgb(250 250 252 / 0.92);
   --glass-edge: rgb(255 255 255 / 0.7);
   --glass-line: rgb(23 23 28 / 0.08);
   --smoke: rgb(10 10 14 / 0.32);
@@ -40,31 +41,33 @@
 }
 
 @media (prefers-color-scheme: dark) {
+  /* Deep, slightly cool neutrals with clear steps between layers (user: v1 dark looked washed out). */
   :root {
     color-scheme: dark;
-    --frame: #0e0e10;
-    --panel: #17171a;
-    --paper: #1f1f23;
-    --ink: #ededf0;
-    --ink-2: #a3a3ad;
-    --ink-3: #70707a;
-    --hair: rgb(255 255 255 / 0.08);
-    --fill: rgb(255 255 255 / 0.06);
+    --frame: #08080a;
+    --panel: #111114;
+    --paper: #1a1a1e;
+    --ink: #f2f2f5;
+    --ink-2: #a9a9b3;
+    --ink-3: #8d8d98;
+    --ink-4: #55555e;
+    --hair: rgb(255 255 255 / 0.075);
+    --fill: rgb(255 255 255 / 0.055);
     --fill-2: rgb(255 255 255 / 0.1);
     --select: #5b8cff;
-    --select-soft: rgb(91 140 255 / 0.16);
+    --select-soft: rgb(91 140 255 / 0.18);
     --deck: #f07650;
     --danger: #ff6b6b;
     --ok: #4cc38a;
-    --on-ink: #17171c;
-    --glass: rgb(30 30 34 / 0.82);
-    --glass-edge: rgb(255 255 255 / 0.08);
-    --glass-line: rgb(255 255 255 / 0.08);
-    --smoke: rgb(0 0 0 / 0.5);
-    --shadow-panel: 0 0 0 1px rgb(255 255 255 / 0.04);
-    --shadow-tile: 0 0 0 1px var(--hair), 0 1px 2px rgb(0 0 0 / 0.3);
-    --shadow-tile-hover: 0 0 0 1px rgb(255 255 255 / 0.12), 0 10px 28px -8px rgb(0 0 0 / 0.6);
-    --shadow-float: 0 16px 48px -8px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.06);
+    --on-ink: #111114;
+    --glass: rgb(28 28 32 / 0.92);
+    --glass-edge: rgb(255 255 255 / 0.07);
+    --glass-line: rgb(255 255 255 / 0.09);
+    --smoke: rgb(0 0 0 / 0.55);
+    --shadow-panel: 0 0 0 1px rgb(255 255 255 / 0.05);
+    --shadow-tile: 0 0 0 1px rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.5);
+    --shadow-tile-hover: 0 0 0 1px rgb(255 255 255 / 0.12), 0 12px 32px -10px rgb(0 0 0 / 0.8);
+    --shadow-float: 0 18px 50px -10px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(255 255 255 / 0.08);
   }
 }
 
