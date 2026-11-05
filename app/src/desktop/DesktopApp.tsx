@@ -11,6 +11,7 @@ import { toast } from '../data/toasts'
 import type { Entry } from '../data/types'
 import { navigate, useRoute } from '../lib/router'
 import { Button } from '../ui/Button'
+import { ConfirmHost } from '../ui/Dialog'
 import { SearchTrigger } from '../ui/SearchTrigger'
 import { Toaster } from '../ui/Toaster'
 import { Tooltip } from '../ui/Tooltip'
@@ -108,6 +109,7 @@ export function DesktopApp() {
         </AnimatePresence>
       </LayoutGroup>
       <AnimatePresence>{palette && <CommandPalette key="cp" onClose={() => setPalette(false)} />}</AnimatePresence>
+      <AnimatePresence><ConfirmHost /></AnimatePresence>
       <AnimatePresence><SyncFlowHost /></AnimatePresence>
     </ActionsContext.Provider>
   )

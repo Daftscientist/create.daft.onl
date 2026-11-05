@@ -15,6 +15,7 @@ export function ActionSheet({ ids, ctx, onClose }: { ids: string[]; ctx: Omit<Co
   const groups: SheetAction[][] = [[]]
   for (const it of commandsFor(ids, { ...ctx, touch: true })) {
     if (it.kind === 'sep') groups.push([])
+    else if (it.kind === 'note') groups[groups.length - 1].push({ label: it.text, disabled: true, run: () => {} })
     else if (!it.kind || it.kind === 'item') groups[groups.length - 1].push({ label: it.label, icon: it.icon, danger: it.danger, disabled: it.disabled, run: it.run })
   }
   const where = single ? (single.parentId ? pathTo(lib, single.parentId).map((f) => f.name).join(' / ') : 'Files') : ''

@@ -1,7 +1,7 @@
 // Desktop dialog: a paper card over Smoke (mobile uses Sheet). Confirm is the one way to ask before
 // an irreversible action: it names exactly what will happen.
 import { motion } from 'motion/react'
-import type { ReactNode } from 'react'
+import { useSyncExternalStore, type ReactNode } from 'react'
 import { gentle } from '../lib/motion'
 import { useShell } from '../lib/shell'
 import { Sheet, SheetTitle } from './Sheet'
@@ -42,7 +42,7 @@ export function Confirm({ title, body, confirmLabel, danger, onConfirm, onClose 
   onClose: () => void
 }) {
   return (
-    <Dialog
+    <Modal
       title={title}
       onClose={onClose}
       actions={
@@ -53,8 +53,22 @@ export function Confirm({ title, body, confirmLabel, danger, onConfirm, onClose 
       }
     >
       {body}
-    </Dialog>
+    </Modal>
   )
+}
+
+// ---------- confirm(): ask from anywhere, rendered by one ConfirmHost per shell ----------
+type Ask = { title: string; body: ReactNode; confirmLabel: string; danger?: boolean; resolve: (ok: boolean) => void }
+let asking: Ask | null = null
+const askListeners = new Set<() => void>()
+export function confirm(o: Omit<Ask, 'resolve'>): Promise<boolean> {
+  return new Promise((resolve) => { asking = { ...o, resolve }; askListeners.forEach((l) => l()) })
+}
+export function ConfirmHost() {
+  const a = useSyncExternalStore((l) => (askListeners.add(l), () => askListeners.delete(l)), () => asking)
+  if (!a) return null
+  const done = (ok: boolean) => { asking = null; askListeners.forEach((l) => l()); a.resolve(ok) }
+  return <Confirm title={a.title} body={a.body} confirmLabel={a.confirmLabel} danger={a.danger} onConfirm={() => done(true)} onClose={() => { if (asking === a) done(false) }} />
 }
 
 /** The one modal: a Dialog on desktop, a bottom Sheet on mobile. */

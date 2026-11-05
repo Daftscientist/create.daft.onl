@@ -28,6 +28,6 @@ Added for Settings and sync (2026-11-05):
 | Primitive | Use for | Notes |
 |---|---|---|
 | `Notice` | In-flow notices (reconnect, storage permission, storage full) | Paper, scrolls with content, ≤2 actions, optional dismiss |
-| `Dialog` / `Confirm` | Desktop modal decisions; every irreversible action | Confirm focuses Cancel; names exactly what happens |
+| `Dialog` / `Modal` / `Confirm` / `confirm()` | Modal decisions; every irreversible action | `Modal` = Dialog on desktop, Sheet on mobile. `await confirm({...})` from anywhere (one `ConfirmHost` per shell); focuses Cancel; names exactly what happens |
 | `Switch`, `TextField` | Settings controls | 44px+ on mobile |
 | `SettingGroup` / `SettingRow` | Every settings screen | Label + description left, control right; stacks on mobile |

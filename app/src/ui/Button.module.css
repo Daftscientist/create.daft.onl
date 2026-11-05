@@ -61,3 +61,9 @@
 .textBtn:disabled { color: var(--ink-3); }
 .backBtn { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px 0 4px; font-size: 16px; color: var(--select); }
 .backBtn:active { opacity: 0.6; }
+
+.keys { display: inline-flex; gap: 4px; }
+.cap {
+  font: inherit; font-size: 12px; font-weight: 560; min-width: 22px; height: 22px; padding: 0 6px; display: inline-grid; place-items: center;
+  border-radius: var(--r-xs); color: var(--ink-2); background: var(--paper); box-shadow: inset 0 0 0 1px var(--hair), inset 0 -1.5px 0 var(--hair);
+}

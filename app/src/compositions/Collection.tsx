@@ -4,7 +4,7 @@
 import { DownloadSimple, FolderSimple, Trash as TrashIcon, ArrowCounterClockwise, X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
-  deleteForever, download, duplicate, folders as allFolders, getLibrary, isWithin, move, pathTo, rename, restore,
+  askDeleteForever, deleteForever, download, duplicate, folders as allFolders, getLibrary, isWithin, move, pathTo, rename, restore,
   retryImport, toggleStar, trash, useLibrary,
 } from '../data/library'
 import type { Entry } from '../data/types'
@@ -64,6 +64,12 @@ export function Collection(p: CollectionProps) {
   useEffect(() => { if (active !== self) setSelected((prev) => (prev.size ? new Set() : prev)) }, [active, self])
   useEffect(() => { if (selected.size) setActiveCollection(self) }, [selected, self])
 
+  // One focus model for tiles and rows: DOM focus follows the focused id while focus is inside the collection.
+  useEffect(() => {
+    const el = focus ? root.current?.querySelector<HTMLElement>(`[data-id="${focus}"]`) : null
+    if (el && document.activeElement !== el && root.current?.contains(document.activeElement)) el.focus({ preventScroll: false })
+  }, [focus])
+
   const selectOnly = (id: string) => { setSelected(new Set([id])); setAnchor(id); setFocus(id) }
   const toggle = (id: string) => {
     setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -105,7 +111,7 @@ export function Collection(p: CollectionProps) {
 
   const openMenu = (forIds: string[], at: MenuAnchor) => setMenu({ anchor: at, items: commandsFor(forIds, ctx), label: 'Actions' })
 
-  const activate = (e: Entry) => (e.type === 'folder' ? p.onOpenFolder(e.id) : p.onOpen(e))
+  const activate = (e: Entry) => (e.type === 'folder' ? p.onOpenFolder(e.id) : e.status === 'ready' ? p.onOpen(e) : undefined)
 
   // ---------- pointer ----------
   const idFrom = (t: EventTarget) => (t as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id ?? null
@@ -172,6 +178,11 @@ export function Collection(p: CollectionProps) {
       e.preventDefault()
       const entry = lib.entries[cur]
       if (entry && !inTrash) activate(entry)
+    } else if ((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu') {
+      e.preventDefault()
+      const el = root.current?.querySelector<HTMLElement>(`[data-id="${cur}"]`)
+      const r = el?.getBoundingClientRect()
+      if (r) openMenu(selected.has(cur) ? [...selected] : [cur], { x: r.left + 24, y: r.top + 24 })
     } else if (e.key === 'F2' && !inTrash) {
       e.preventDefault(); setRenaming(cur)
     } else if (e.key === ' ') {
@@ -184,7 +195,7 @@ export function Collection(p: CollectionProps) {
       e.preventDefault(); setSelected(new Set(ids))
     } else if ((mod && e.key === 'Backspace') || e.key === 'Delete') {
       e.preventDefault()
-      if (inTrash) deleteForever(sel); else trash(sel)
+      if (inTrash) void askDeleteForever(sel); else trash(sel)
     } else if (!mod && e.key.toLowerCase() === 's' && !inTrash) {
       e.preventDefault(); toggleStar(sel)
     } else if (mod && e.key.toLowerCase() === 'd' && !inTrash) {
@@ -209,7 +220,7 @@ export function Collection(p: CollectionProps) {
       const valid = folder && drag.kind === 'internal' && !drag.ids.includes(folder) && !drag.ids.some((i) => isWithin(getLibrary(), folder, i))
       if (valid) { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }
       setOver(valid ? folder : null)
-      dwellOn(valid ? folder : null, (fid) => { endDrag(); p.onOpenFolder(fid) })
+      dwellOn(valid ? folder : null, (fid) => p.onOpenFolder(fid))
     } else if (hasFiles(e)) {
       setOver(folder)
       dwellOn(null, () => {})
@@ -242,7 +253,7 @@ export function Collection(p: CollectionProps) {
   const barActions = inTrash
     ? [
         { label: 'Restore', icon: <ArrowCounterClockwise size={16} />, run: () => { restore(selIds); clear() } },
-        { label: 'Delete', icon: <X size={16} />, danger: true, run: () => { deleteForever(selIds); clear() } },
+        { label: 'Delete permanently…', icon: <X size={16} />, danger: true, run: () => { void askDeleteForever(selIds) } },
       ]
     : [
         ...(selDecks.length ? [{ label: 'Download', icon: <DownloadSimple size={16} />, run: () => download(selDecks, 'pptx') }] : []),

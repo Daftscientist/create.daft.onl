@@ -1,6 +1,6 @@
 // The one sync status line (settings spec, review round 1). The line itself always opens Settings → Sync;
 // the action (Reconnect / Review / Unlock) is a separate control, so a click never does two different things.
-import { Cloud, CloudArrowUp, CloudCheck, CloudSlash, CloudWarning, HardDrives, Lock } from '@phosphor-icons/react'
+import { CloudArrowUp, CloudCheck, CloudSlash, CloudWarning, HardDrives, Lock } from '@phosphor-icons/react'
 import { reconnect, summary, useSync, type Summary } from '../data/sync'
 import { navigate } from '../lib/router'
 import { openSyncFlow } from './SyncFlows'
@@ -27,21 +27,24 @@ export function runSyncAction(a: NonNullable<Summary['action']>) {
   else navigate({ name: 'settings', section: 'sync' })
 }
 
-/** Sidebar footer / mobile storage card. */
-export function SyncStatus() {
+/** Sidebar footer / mobile Files card. Two lines that wrap rather than truncate; the action gets its own row. */
+export function SyncStatus({ sub, showAccount = true }: { sub?: string; showAccount?: boolean }) {
   const { sync, sum } = useSyncSummary()
+  const detail = sync.provider ? (showAccount ? sync.account ?? undefined : undefined) : sub
   return (
     <div className={s.status} data-tone={sum.tone}>
-      <span className={s.icon} aria-hidden>{sync.locked ? <Lock size={16} /> : sync.provider ? ICON[sum.tone] : <Cloud size={16} />}</span>
-      <button type="button" className={s.text} onClick={() => navigate({ name: 'settings', section: 'sync' })}>
-        <span className={s.line}>{sum.text}</span>
-        {!sync.provider && <span className={s.sub}>Connect a cloud to use other devices</span>}
-      </button>
-      {sum.action && (
-        <button type="button" className={s.action} onClick={() => runSyncAction(sum.action!)} disabled={sync.auth === 'reconnecting'}>
-          {ACTION_LABEL[sum.action]}
+      <span className={s.icon} aria-hidden>{sync.locked ? <Lock size={16} /> : sync.provider ? ICON[sum.tone] : <HardDrives size={16} />}</span>
+      <div className={s.body}>
+        <button type="button" className={s.text} onClick={() => navigate({ name: 'settings', section: sync.provider ? 'sync' : 'storage' })}>
+          <span className={s.line}>{sum.text}</span>
+          {detail && <span className={s.sub}>{detail}</span>}
         </button>
-      )}
+        {sum.action && (
+          <button type="button" className={s.action} onClick={() => runSyncAction(sum.action!)} disabled={sync.auth === 'reconnecting'}>
+            {ACTION_LABEL[sum.action]}
+          </button>
+        )}
+      </div>
     </div>
   )
 }

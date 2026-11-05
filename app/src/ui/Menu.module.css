@@ -29,3 +29,5 @@
 .hint { color: var(--ink-3); font-size: 12px; }
 .sep { height: 1px; background: var(--hair); margin: 4px 6px; }
 .header { padding: 8px 10px 8px; }
+.item:focus-visible { outline: none; background: var(--fill-2); }
+.note { font-size: 12.5px; line-height: 18px; color: var(--ink-2); padding: 6px 10px 8px; max-width: 280px; }

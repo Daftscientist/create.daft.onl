@@ -32,10 +32,6 @@ export function EntryTile({ entry, state, handlers, meta, layoutId }: {
   layoutId?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (state.focused && ref.current && document.activeElement !== ref.current && ref.current.closest('[data-collection]')?.contains(document.activeElement))
-      ref.current.focus({ preventScroll: false })
-  }, [state.focused])
 
   return (
     <div

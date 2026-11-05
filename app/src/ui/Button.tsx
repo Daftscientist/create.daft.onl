@@ -41,6 +41,11 @@ export function Kbd({ children }: { children: ReactNode }) {
   return <kbd className={s.kbd}>{children}</kbd>
 }
 
+/** A shortcut as separate key caps: <Keys keys={['Ctrl', 'K']} />. */
+export function Keys({ keys }: { keys: string[] }) {
+  return <span className={s.keys}>{keys.map((k, i) => <kbd key={i} className={s.cap}>{k}</kbd>)}</span>
+}
+
 /** iOS-style text action for mobile headers ("Select", "Done", "Empty"). */
 export function TextButton({ children, className, type = 'button', ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return <button type={type} className={`${s.textBtn} ${className ?? ''}`} {...rest}>{children}</button>

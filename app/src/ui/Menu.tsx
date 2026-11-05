@@ -9,6 +9,7 @@ export type MenuItem =
   | { kind?: 'item'; label: string; icon?: ReactNode; hint?: string; danger?: boolean; disabled?: boolean; run: () => void }
   | { kind: 'sep' }
   | { kind: 'header'; content: ReactNode }
+  | { kind: 'note'; text: string }
 
 export type MenuAnchor = { x: number; y: number; align?: 'start' | 'end' }
 
@@ -31,6 +32,9 @@ function MenuPanel({ anchor, items, onClose, label }: { anchor: MenuAnchor; item
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number; origin: string }>({ left: anchor.x, top: anchor.y, origin: 'top left' })
   const [active, setActive] = useState(-1)
+  useEffect(() => {
+    if (active >= 0) ref.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.focus({ preventScroll: true })
+  }, [active])
   const returnTo = useRef<Element | null>(document.activeElement)
   const typed = useRef({ text: '', at: 0 })
   const actionable = items.map((it, i) => (!it.kind || it.kind === 'item') && !it.disabled ? i : -1).filter((i) => i >= 0)
@@ -111,6 +115,7 @@ function MenuPanel({ anchor, items, onClose, label }: { anchor: MenuAnchor; item
       {items.map((it, i) => {
         if (it.kind === 'sep') return <div key={i} className={s.sep} role="separator" />
         if (it.kind === 'header') return <div key={i} className={s.header}>{it.content}</div>
+        if (it.kind === 'note') return <p key={i} className={s.note}>{it.text}</p>
         return (
           <button
             key={i}
@@ -119,10 +124,11 @@ function MenuPanel({ anchor, items, onClose, label }: { anchor: MenuAnchor; item
             tabIndex={-1}
             disabled={it.disabled}
             className={s.item}
+            data-index={i}
             data-active={active === i || undefined}
             data-danger={it.danger || undefined}
             onPointerMove={() => !it.disabled && setActive(i)}
-            onPointerLeave={() => setActive(-1)}
+            onPointerLeave={() => { setActive(-1); ref.current?.focus({ preventScroll: true }) }}
             onClick={() => run(i)}
           >
             <span className={s.icon}>{it.icon}</span>

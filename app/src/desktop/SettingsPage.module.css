@@ -1,1 +1,2 @@
-.content { max-width: 680px; padding-bottom: 64px; }
+.content { max-width: 720px; margin: 0 auto; padding-bottom: 64px; }
+.content[data-wide] { max-width: 960px; }

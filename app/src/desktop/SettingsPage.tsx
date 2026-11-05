@@ -21,7 +21,7 @@ export function SettingsSidebar({ section }: { section: string }) {
       <NavItem label="Library" icon={<ArrowLeft size={18} />} active={false} onClick={leaveSettings} />
       {groups.map((g) => (
         <div key={g} className={s.section}>
-          <div className={s.sectionHead}><span>{g === 'Ream' ? '' : g}</span></div>
+          {g !== 'Ream' && <div className={s.sectionHead}><span>{g}</span></div>}
           <nav className={s.nav}>
             {sections.filter((x) => x.group === g).map((x) => (
               <NavItem key={x.id} label={x.label} icon={x.icon} active={x.id === section} onClick={() => navigate({ name: 'settings', section: x.id }, { replace: true })} />
@@ -43,7 +43,7 @@ export function SettingsContent({ section }: { section: string }) {
     return () => removeEventListener('keydown', onKey)
   }, [])
   return (
-    <div className={p.content}>
+    <div className={p.content} data-wide={def.wide || undefined}>
       <PageHeader title={def.label} />
       {def.render()}
     </div>

@@ -12,6 +12,7 @@ import type { Entry } from '../data/types'
 import { back, navigate, useRoute } from '../lib/router'
 import { BackButton, IconButton, TextButton } from '../ui/Button'
 import { Sheet, SheetActions, SheetTitle } from '../ui/Sheet'
+import { ConfirmHost } from '../ui/Dialog'
 import { Toaster } from '../ui/Toaster'
 import { MobileViewer } from './Viewer'
 import { FilesScreen, RecentsScreen, StarredScreen, TrashScreen } from './screens'
@@ -114,6 +115,7 @@ export function MobileApp() {
       />
       <Toaster />
       <AnimatePresence><SyncFlowHost /></AnimatePresence>
+      <AnimatePresence><ConfirmHost /></AnimatePresence>
       <AnimatePresence>
         {sheet?.kind === 'actions' && <ActionSheet key="a" ids={sheet.ids} ctx={ctx} onClose={() => setSheet(null)} />}
         {sheet?.kind === 'move' && <FolderSheet key="m" ids={sheet.ids} onClose={() => { setSheet(null); setSelecting(false); setSelected(new Set()) }} />}

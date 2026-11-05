@@ -6,14 +6,14 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { backUp, decks, isLive, useLibrary } from '../data/library'
 import { setPrefs, useDevicePrefs } from '../data/prefs'
 import {
-  disconnect, PROVIDERS, reconnect, setDeviceName, setEncryption, setVisibleCopies, syncNow, useSync,
+  disconnect, PROVIDERS, setDeviceName, setEncryption, setVisibleCopies, syncNow, useSync,
 } from '../data/sync'
 import { toast } from '../data/toasts'
 import { bytes, count, relTimeInline } from '../lib/format'
 import { modKey } from '../lib/shell'
 import { persistStorage, storage } from '../storage/client'
 import { PRODUCT } from '../ui/Brand'
-import { Button } from '../ui/Button'
+import { Button, Keys } from '../ui/Button'
 import { Confirm } from '../ui/Dialog'
 import { SettingGroup, SettingRow, Switch, TextField } from '../ui/Field'
 import { Segmented } from '../ui/Segmented'
@@ -24,11 +24,11 @@ import { openSyncFlow } from './SyncFlows'
 import { SyncStatus } from './SyncStatus'
 import s from './settings.module.css'
 
-export type SectionDef = { id: string; label: string; group: 'This device' | 'Library' | 'Ream'; icon: ReactNode; render: () => ReactNode; preview?: boolean }
+export type SectionDef = { id: string; label: string; group: 'This device' | 'Library' | 'Ream'; icon: ReactNode; render: () => ReactNode; preview?: boolean; wide?: boolean }
 
 export const SECTIONS: SectionDef[] = [
   { id: 'appearance', label: 'Appearance', group: 'This device', icon: <Palette size={18} />, render: () => <Appearance /> },
-  { id: 'shortcuts', label: 'Keyboard shortcuts', group: 'This device', icon: <Keyboard size={18} />, render: () => <Shortcuts /> },
+  { id: 'shortcuts', label: 'Keyboard shortcuts', group: 'This device', icon: <Keyboard size={18} />, render: () => <Shortcuts />, wide: true },
   { id: 'storage', label: 'Storage', group: 'Library', icon: <Database size={18} />, render: () => <Storage /> },
   { id: 'sync', label: 'Sync', group: 'Library', icon: <Cloud size={18} />, render: () => <Sync /> },
   { id: 'encryption', label: 'Encryption', group: 'Library', icon: <Lock size={18} />, render: () => <Encryption /> },
@@ -64,17 +64,22 @@ function Appearance() {
   )
 }
 
-const KEYS: [string, string][] = [
-  [`${modKey}K`, 'Search decks, slides and actions'], ['↵', 'Open the focused deck or folder'], ['Space', 'Quick Look'],
-  ['F2', 'Rename'], [`${modKey}D`, 'Duplicate'], ['S', 'Star or unstar'], [`${modKey}⌫`, 'Move to Trash'],
-  [`${modKey}A`, 'Select all'], [`${modKey}Space`, 'Add or remove from selection'], ['⇧ + arrows', 'Extend the selection'],
-  ['Esc', 'Clear selection, close, or go back'], [`${modKey},`, 'Open Settings'],
+const mod = modKey === '⌘' ? '⌘' : 'Ctrl'
+const SHORTCUTS: { title: string; keys: [string[], string][] }[] = [
+  { title: 'General', keys: [[[mod, 'K'], 'Search decks, slides and actions'], [[mod, ','], 'Open Settings'], [['Esc'], 'Close or go back']] },
+  { title: 'Navigate', keys: [[['↑', '↓', '←', '→'], 'Move between items'], [['↵'], 'Open'], [['Space'], 'Quick Look'], [['←', '→'], 'Previous or next slide in Quick Look']] },
+  { title: 'Select', keys: [[[mod, 'A'], 'Select all'], [[mod, 'Space'], 'Add or remove the focused item'], [['⇧', '↑↓←→'], 'Extend the selection'], [['Esc'], 'Clear the selection']] },
+  { title: 'Organise', keys: [[['F2'], 'Rename'], [[mod, 'D'], 'Duplicate'], [['S'], 'Star or unstar'], [[mod, '⌫'], 'Move to Trash'], [['⇧', 'F10'], 'Open the actions menu']] },
 ]
 function Shortcuts() {
   return (
-    <SettingGroup title="Library">
-      {KEYS.map(([k, d]) => <SettingRow key={k} label={d}><kbd className={s.kbd}>{k}</kbd></SettingRow>)}
-    </SettingGroup>
+    <div className={s.shortcutGrid}>
+      {SHORTCUTS.map((g) => (
+        <SettingGroup key={g.title} title={g.title} dense>
+          {g.keys.map(([k, d]) => <SettingRow key={d} label={d}><Keys keys={k} /></SettingRow>)}
+        </SettingGroup>
+      ))}
+    </div>
   )
 }
 
@@ -176,15 +181,10 @@ function Sync() {
             <span className={s.providerMeta}>{sync.account} · stored in {p.folder}</span>
           </div>
         </div>
-        <div className={s.statusRow}><SyncStatus /></div>
+        <div className={s.statusRow}><SyncStatus showAccount={false} /></div>
         <SettingRow label="Sync now" description="Sync also runs a few seconds after each change and when you come back to this tab.">
           <Button variant="secondary" disabled={sync.auth !== 'ok' || !sync.online} onClick={() => void syncNow()}>Sync now</Button>
         </SettingRow>
-        {(sync.auth === 'expired' || sync.auth === 'revoked') && (
-          <SettingRow label="Sign in again" description={`${p.name} needs you to sign in again before it can sync.`}>
-            <Button variant="primary" onClick={() => void reconnect()}>Reconnect</Button>
-          </SettingRow>
-        )}
         {sync.provider === 'google' && (
           <SettingRow label="Also keep PowerPoint copies in My Drive" description="A visible “Ream” folder with a .pptx of every deck. Asks Google for one more permission.">
             <Switch label="Keep PowerPoint copies in My Drive" checked={sync.visibleCopies} onChange={setVisibleCopies} />

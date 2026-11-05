@@ -5,7 +5,7 @@ import {
 } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import {
-  deleteForever, download, duplicate, getLibrary, restore, toggleStar, trash,
+  askDeleteForever, deleteForever, download, retryImport, duplicate, getLibrary, restore, toggleStar, trash,
 } from '../data/library'
 import type { Entry } from '../data/types'
 import { modKey } from '../lib/shell'
@@ -31,11 +31,25 @@ export function commandsFor(ids: string[], ctx: CommandContext, header?: ReactNo
   const items: MenuItem[] = []
   if (header) items.push({ kind: 'header', content: header }, { kind: 'sep' })
 
+  // Decks that aren't ready only offer what makes sense for their state.
+  if (single?.type === 'deck' && single.status !== 'ready') {
+    if (single.status === 'failed') {
+      items.push(
+        { kind: 'note', text: single.error ?? 'This import failed.' },
+        { label: 'Try again', icon: <ArrowCounterClockwise size={16} />, run: () => retryImport(single.id) },
+        { label: 'Remove', icon: <X size={16} />, danger: true, run: () => deleteForever([single.id]) },
+      )
+    } else {
+      items.push({ label: 'Cancel import', icon: <X size={16} />, danger: true, run: () => deleteForever([single.id]) })
+    }
+    return items
+  }
+
   if (ctx.inTrash) {
     items.push(
       { label: 'Restore', icon: <ArrowCounterClockwise size={16} />, run: () => restore(ids) },
       { kind: 'sep' },
-      { label: 'Delete permanently', icon: <X size={16} />, danger: true, run: () => deleteForever(ids) },
+      { label: 'Delete permanently…', icon: <X size={16} />, danger: true, run: () => void askDeleteForever(ids) },
     )
     return items
   }

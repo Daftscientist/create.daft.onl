@@ -1,7 +1,7 @@
 // Search model shared by the desktop palette and the mobile search screen (one implementation).
-import { ArrowSquareOut, ClockCounterClockwise, FolderSimple, Plus, Star, Trash, UploadSimple } from '@phosphor-icons/react'
+import { ArrowSquareOut, ClockCounterClockwise, CloudArrowUp, FolderSimple, GearSix, Plus, Star, Trash, UploadSimple } from '@phosphor-icons/react'
 import { useMemo, type ReactNode } from 'react'
-import { decks, folders, getLibrary, isLive, newDeck, openDeck, pathTo, recents, slideText } from '../data/library'
+import { backUp, decks, folders, getLibrary, isLive, newDeck, openDeck, pathTo, recents, slideText } from '../data/library'
 import type { Deck } from '../data/types'
 import { count, relTimeInline } from '../lib/format'
 import { navigate } from '../lib/router'
@@ -27,6 +27,8 @@ export function useSearch(q: string, onDone: () => void, pickFiles: () => void):
     const actions: SearchItem[] = [
       { id: 'a-new', section: 'Actions', icon: <Plus size={16} />, title: 'New deck', run: go(() => { const id = newDeck(null); openDeck(id); navigate({ name: 'deck', deckId: id }) }) },
       { id: 'a-import', section: 'Actions', icon: <UploadSimple size={16} />, title: 'Import .pptx…', run: go(pickFiles) },
+      { id: 'a-backup', section: 'Actions', icon: <CloudArrowUp size={16} />, title: 'Back up now', run: go(() => void backUp()) },
+      { id: 'g-settings', section: 'Go to', icon: <GearSix size={16} />, title: 'Settings', run: go(() => navigate({ name: 'settings', section: null })) },
       { id: 'g-recents', section: 'Go to', icon: <ClockCounterClockwise size={16} />, title: 'Recents', run: go(() => navigate({ name: 'home' })) },
       { id: 'g-files', section: 'Go to', icon: <FolderSimple size={16} />, title: 'Files', run: go(() => navigate({ name: 'files', folderId: null })) },
       { id: 'g-starred', section: 'Go to', icon: <Star size={16} />, title: 'Starred', run: go(() => navigate({ name: 'starred' })) },

@@ -26,9 +26,9 @@ export const TextField = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLIn
   },
 )
 
-export function SettingGroup({ title, children, tone }: { title?: string; children: ReactNode; tone?: 'danger' }) {
+export function SettingGroup({ title, children, tone, dense }: { title?: string; children: ReactNode; tone?: 'danger'; dense?: boolean }) {
   return (
-    <section className={s.group} data-tone={tone}>
+    <section className={s.group} data-tone={tone} data-dense={dense || undefined}>
       {title && <h2 className={s.groupTitle}>{title}</h2>}
       <div className={s.rows}>{children}</div>
     </section>

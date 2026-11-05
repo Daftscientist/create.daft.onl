@@ -9,6 +9,7 @@ import { blankTheme, sampleLibrary } from './fixtures'
 import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideSpec } from './types'
 import { noteLocalChange } from './sync'
 import { toast } from './toasts'
+import { confirm } from '../ui/Dialog'
 
 const TRASH_DAYS = 30
 
@@ -337,9 +338,23 @@ export function deleteForever(ids: string[]) {
   toast({ message: `Deleted ${plural(ids.length, 'item')} permanently` })
 }
 
+/** Permanent deletion always asks first and names exactly what goes (review: it ran unconfirmed). */
+export async function askDeleteForever(ids: string[]) {
+  if (!ids.length) return
+  const all = Object.values(state.entries).filter((e) => ids.includes(e.trashedRoot ?? e.id) && e.trashedAt !== null)
+  const n = all.filter((e) => e.type === 'deck').length
+  const what = ids.length === 1 ? `“${state.entries[ids[0]]?.name}”` : plural(ids.length, 'item')
+  const ok = await confirm({
+    title: `Delete ${what} permanently?`,
+    body: `${n ? `${plural(n, 'deck')} will be deleted from this browser` : 'This will be deleted from this browser'} and can’t be restored.`,
+    confirmLabel: 'Delete permanently',
+    danger: true,
+  })
+  if (ok) deleteForever(ids)
+}
+
 export function emptyTrash() {
-  const roots = Object.values(state.entries).filter(isTrashRoot).map((e) => e.id)
-  if (roots.length) deleteForever(roots)
+  void askDeleteForever(Object.values(state.entries).filter(isTrashRoot).map((e) => e.id))
 }
 
 export const trashDaysLeft = (e: Entry) =>

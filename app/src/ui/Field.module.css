@@ -34,3 +34,7 @@
   .rowLabel { font-size: 16px; }
   .input { height: 44px; font-size: 16px; }
 }
+
+.group[data-dense] .row { min-height: 40px; padding: 8px 14px; }
+.group[data-dense] .rowLabel { font-weight: 450; font-size: 13.5px; }
+@media (max-width: 759px) { .group[data-dense] .row { flex-wrap: nowrap; } .group[data-dense] .control { width: auto; } .group[data-dense] .rowLabel { font-size: 15px; } }
