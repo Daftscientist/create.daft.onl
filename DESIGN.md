@@ -17,6 +17,11 @@ Instrument Sans Variable via Fontsource. Data layer: `app/src/data/library.ts` (
 simulated engine; the engine phase swaps in SQLite/OPFS + domOXML behind the same API).
 Dev server: `cd app && npx vite` → http://leovm.tail53f5e9.ts.net:5180 (tailnet only).
 
+## 0a. Identity
+**Ream** (a ream is 500 sheets: your whole library). Mark: a lowercase *r* whose arm ends in a coral sheet of paper,
+on an ink rounded square (inverts in dark mode). Wordmark: "Ream" in Instrument Sans 650. Never hard-code the name;
+use `PRODUCT` from `app/src/ui/Brand.tsx`. Chosen 2026-11-05 over Foolscap, Sheaf, Octavo.
+
 ## 0b. Hard rule: never reinvent
 
 The user's hard rule: **every element, structure and composition is built once, centrally, and reused.**

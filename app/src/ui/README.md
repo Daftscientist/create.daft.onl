@@ -19,6 +19,6 @@ writing any markup with its own styling; if what you need is missing, add it her
 | `SearchTrigger` | Desktop search pill | Opens the palette; not a second search |
 | `Toaster` | Toast region (one per shell) | Use `toast()` from `data/toasts`, never a custom banner |
 | `FileMarks` (`PptxMark`, `HtmlMark`, `DeckGlyph`) | Format marks | Faithful format badges |
-| `Brand` (`BrandLockup`, `BrandMark`, `useBrand`) | Product name and mark | Candidates previewable with `?brand=` until one is chosen |
+| `Brand` (`BrandLockup`, `BrandMark`, `PRODUCT`) | The product name (Ream) and mark | Never hard-code the name; use `PRODUCT` |
 
 Styling lives only in each primitive's `.module.css`, using tokens from `styles/tokens.css`.
