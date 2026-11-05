@@ -49,3 +49,40 @@ States per provider: `syncing` · `up to date` · `waiting (n changes)` · `need
 ## Naturalness references
 Linear and Raycast settings (full page, sectioned sidebar), iOS Settings (mobile grouped lists), Dropbox and Obsidian Sync
 (status line, conflict copies), 1Password (encryption warning language).
+
+## Review round 1 (Claude subagent, 24 findings): decisions now binding
+- **Banner on staleness, not token** (blocker): Google tokens last ~1h, so token-invalid is true on almost every load.
+  Show the first-load `Notice` only when local changes are waiting, or the last successful pull is >12h old and another
+  device has been active since. Copy is about staleness: "Last synced with Google Drive 2 days ago. Reconnect to bring in
+  changes from Laptop." After two "Not now", stay quiet until a new reason appears. Offline suppresses all prompts.
+- **Connect sheet** after OAuth, before first sync: "Merge with the library in Google Drive" (default; keeps both, marks
+  conflicts) · "Use only the library in Google Drive" (requires a backup first, inline Back up) · "Upload this library"
+  (only when the remote is empty). First upload shows phase + bytes.
+- **OAuth outcomes**: popup blocked (inline retry, a new gesture) · cancelled (silent, back to amber) · scope unticked
+  ("Ream needs access to its app folder") · **different account** (refuse: "That's ana@…, this library syncs with leo@…").
+  The linked account email shows on the provider card and in the notice.
+- **`SyncStatus` composition** used in the sidebar footer AND the deck header subtitle ("Edited just now · Not synced
+  · Reconnect"). The line opens Settings → Sync; "Reconnect" is a separate text button (the OAuth gesture).
+  Priority: locked > needs reconnect > error > conflict > offline > syncing > up to date. v1: one provider at a time.
+  When connected, the sync line replaces "Stored in this browser"; Back up moves into the ⋯ menu.
+- **`--warn` token** (ochre, distinct from Deck coral, ≥3:1 on frame/panel) and always paired with an icon
+  (CloudSlash/CloudWarning); colour is never the only cue.
+- **`Notice` primitive** in ui/ (paper, icon, message, ≤2 actions, dismiss) for reconnect, persistence-denied and
+  quota notices. Decided synchronously at first paint; scrolls with content; on mobile sits under the large title.
+- **Error table with copy**: revoked access → needs reconnect · provider full ("Google Drive is full · 3 changes
+  waiting [Open Google Drive]") · folder deleted remotely ("Ream's folder was deleted from Dropbox [Upload again]") ·
+  rate limited (silent retry with backoff) · local quota full during pull. Conflict footer: "2 conflicts · Review"
+  (filters Files). "Keep this one" moves the other copy to Trash with Undo. "Compare…" cut from v1.
+- **Locked state** for encrypted libraries: "Dropbox library is encrypted · Enter passphrase"; wrong passphrase stays
+  inline and never clears the field; enabling shows "Encrypting 214 files · 38%"; passphrase change re-wraps the key only.
+- **Folder visibility** only on the Google card: "Also keep PowerPoint copies in a visible “Ream” folder" (asks for
+  `drive.file` when switched on). Dropbox/OneDrive cards: "Stored in Apps/Ream [Open in Dropbox]".
+- **Connect sheet ranks providers honestly**: "Dropbox: stays connected" · "OneDrive: sign in about daily" ·
+  "Google Drive: reconnect about hourly when changes are waiting". Dropbox is the default recommendation, and on iPhone
+  Home Screen installs Google may not work (to be tested on a real phone).
+- **Mid-session toast**: "Google Drive paused · Reconnect", 10s, only when a change is actually waiting, deferred during Present.
+- **New device**: show the library as soon as the log arrives; covers fill in; footer "Bringing in 214 decks · 38%".
+- **Removed**: "Default download format" (contradicts always-visible format buttons). AI section only behind `?preview=ai`.
+- **Mobile**: gear IconButton (44px) in the Files header; storage/sync card above the entries under Starred/Trash.
+  Segmented gets `size="lg"` (44px). Settings returns to the route it was opened from; Esc leaves on desktop.
+  "Delete all local data" copy names what happens to the cloud copy.

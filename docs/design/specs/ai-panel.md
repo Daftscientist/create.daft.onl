@@ -38,3 +38,21 @@ Run collapse uses `gentle`.
 ## References
 Cursor and Claude agent panels (activity lines, collapsed step lists), Linear's AI, Raycast AI chat (composer), Figma
 Make (edits applied with undo).
+
+## Review round 1 (Claude subagent): decisions now binding
+- Behind `?preview=ai` (and ⌘J/"Ask" only then) until a real provider works: no dead UI in production.
+- Material: Mica (`--panel`), 1px `--hair` left edge, no blur; header height = deck header. Below 1100px the rail collapses
+  to numbers when the panel opens; below 900px the panel overlays from the right over Smoke.
+- Activity queue capped at 1 (after the hold, jump to the newest). Flush on answer streaming, Stop and error. Thinking
+  uses the same 1.6s minimum and reasoning under 1s isn't a separate step. `activity` is trimmed to 4 words; a missing
+  one falls back to a per-tool default label, never the tool name.
+- Agent turns go on the editor's undo stack as one named step ("Undo AI edit"). If a touched slide changed since, Undo
+  offers per-slide revert with a reason. While running, the slide being written shows an activity ring in the rail.
+- Context follows rail selection ("Slides 4–6"), plus "+" on the chip row and "@" in the composer. ⌘-click stays selection.
+- Keyboard: ⌘J opens and focuses the composer; ⌘J again or Esc from an empty composer returns to the stage. Esc never
+  leaves the deck while focus is in the panel. The splitter is `role="separator"` (←/→ 20px, double-click resets).
+  DeckPage key handling must ignore `input, textarea, [contenteditable]`.
+- Accessibility: the shimmer is a highlight sweep with its darkest stop at `--ink-2`; the run block is `role="status"` and
+  announces only start and finish; changing activity lines are aria-hidden; reduced motion = static text.
+- One thread per deck, stored locally; "New chat" clears with Undo; offline blocks only cloud providers; when the run
+  collapses, scroll anchors to the answer.
