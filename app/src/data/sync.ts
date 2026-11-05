@@ -111,23 +111,24 @@ export function noticeReason(s: SyncState): null | { kind: 'waiting' | 'stale' |
 }
 export function dismissNotice() { dismissedThisSession = true; set({ dismissals: state.dismissals + 1 }) }
 
-export type Summary = { tone: 'ok' | 'busy' | 'warn' | 'danger' | 'muted'; text: string; action?: 'reconnect' | 'review' | 'unlock' | 'open-provider' }
-/** One line for every status surface. Priority: locked > reconnect > error > conflict > offline > syncing > up to date. */
+export type Summary = { tone: 'ok' | 'busy' | 'warn' | 'danger' | 'muted'; title: string; detail?: string; text: string; action?: 'reconnect' | 'review' | 'unlock' | 'open-provider' }
+/** One wording for every status surface. Priority: locked > reconnect > error > conflict > offline > syncing > up to date. */
 export function summary(s: SyncState, now = Date.now()): Summary {
-  if (!s.provider) return { tone: 'muted', text: 'Saved in this browser' }
+  const make = (tone: Summary['tone'], title: string, detail?: string, action?: Summary['action']): Summary =>
+    ({ tone, title, detail, action, text: detail ? `${title} · ${detail}` : title })
+  if (!s.provider) return make('muted', 'Stored in this browser')
   const name = PROVIDERS[s.provider].name
-  const waiting = s.pending ? ` · ${s.pending} ${s.pending === 1 ? 'change' : 'changes'} waiting` : ''
-  if (s.locked) return { tone: 'warn', text: `${name} library is encrypted`, action: 'unlock' }
-  if (s.auth === 'reconnecting') return { tone: 'busy', text: `Reconnecting ${name}…` }
-  if (needsSignIn(s)) return { tone: 'warn', text: `${name} paused${waiting}`, action: 'reconnect' }
-  if (s.issue === 'provider-full') return { tone: 'danger', text: `${name} is full${waiting}`, action: 'open-provider' }
-  if (s.issue === 'folder-deleted') return { tone: 'danger', text: `Ream’s folder was deleted from ${name}` }
-  if (s.conflicts) return { tone: 'warn', text: `${s.conflicts} ${s.conflicts === 1 ? 'conflict' : 'conflicts'}`, action: 'review' }
-  if (!s.online) return { tone: 'muted', text: `Offline${waiting || ' · changes are saved here'}` }
-  if (s.transfer) return { tone: 'busy', text: `${s.transfer.label} · ${Math.round((s.transfer.done / Math.max(1, s.transfer.total)) * 100)}%` }
-  if (s.pending) return { tone: 'busy', text: `Syncing ${s.pending} ${s.pending === 1 ? 'change' : 'changes'}…` }
-  const ago = s.lastSyncAt ? relShort(now - s.lastSyncAt) : 'not yet'
-  return { tone: 'ok', text: `Synced with ${name} · ${ago}` }
+  const waiting = s.pending ? `${s.pending} ${s.pending === 1 ? 'change' : 'changes'} waiting` : undefined
+  if (s.locked) return make('warn', `${name} library is locked`, 'Enter your passphrase', 'unlock')
+  if (s.auth === 'reconnecting') return make('busy', `Reconnecting ${name}…`)
+  if (needsSignIn(s)) return make('warn', `${name} paused`, waiting ?? 'Sign in to sync', 'reconnect')
+  if (s.issue === 'provider-full') return make('danger', `${name} is full`, waiting, 'open-provider')
+  if (s.issue === 'folder-deleted') return make('danger', `Ream’s folder was deleted from ${name}`)
+  if (s.conflicts) return make('warn', `${s.conflicts} ${s.conflicts === 1 ? 'conflict' : 'conflicts'}`, 'Choose which copies to keep', 'review')
+  if (!s.online) return make('muted', 'Offline', waiting ?? 'Changes are saved here')
+  if (s.transfer) return make('busy', s.transfer.label, `${Math.round((s.transfer.done / Math.max(1, s.transfer.total)) * 100)}%`)
+  if (s.pending) return make('busy', `Syncing ${s.pending} ${s.pending === 1 ? 'change' : 'changes'}…`)
+  return make('ok', `Synced with ${name}`, s.lastSyncAt ? relShort(now - s.lastSyncAt) : undefined)
 }
 function relShort(ms: number) {
   if (ms < 60_000) return 'just now'

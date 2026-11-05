@@ -45,8 +45,8 @@ export function RecentsView() {
 
   return (
     <>
-      <SyncNotice />
       <PageHeader title="Recents" count={count(all.length, 'deck')} />
+      <SyncNotice />
       {showJump && (
         <section className={s.section} aria-label="Jump back in">
           <SectionHeader title="Jump back in" />

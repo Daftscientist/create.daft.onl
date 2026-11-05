@@ -1,7 +1,7 @@
 // Sync flows that any surface can start: connect (provider choice → sign-in → library choice → transfer),
 // unlock an encrypted library, and turn encryption on. One host per shell renders whichever is open.
 import { CircleNotch, Lock } from '@phosphor-icons/react'
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { decks, getLibrary, isLive, backUp } from '../data/library'
 import { cancelConnect, connect, finishConnect, PROVIDERS, setEncryption, unlock, useSync, type ProviderId } from '../data/sync'
 import { Button } from '../ui/Button'
@@ -12,6 +12,9 @@ import s from './SyncFlows.module.css'
 
 type Flow = null | 'connect' | 'unlock' | 'encrypt'
 let flow: Flow = null
+let pending: ProviderId | null = null
+/** Connect straight to one provider (the provider rows are the connect controls). */
+export function startConnect(id: ProviderId) { pending = id; openSyncFlow('connect') }
 const listeners = new Set<() => void>()
 export function openSyncFlow(f: Flow) { flow = f; listeners.forEach((l) => l()) }
 const useFlow = () => useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => flow)
@@ -29,7 +32,12 @@ const ORDER: ProviderId[] = ['dropbox', 'onedrive', 'google']
 
 function ConnectFlow({ onClose }: { onClose: () => void }) {
   const sync = useSync()
-  const [step, setStep] = useState<'pick' | 'signing' | 'choose'>('pick')
+  const [step, setStep] = useState<'pick' | 'signing' | 'choose'>(() => (pending ? 'signing' : 'pick'))
+  useEffect(() => {
+    const id = pending
+    pending = null
+    if (id) void connect(id).then(() => setStep('choose'))
+  }, [])
   const local = decks(getLibrary()).filter(isLive).length
 
   if (step === 'pick') {

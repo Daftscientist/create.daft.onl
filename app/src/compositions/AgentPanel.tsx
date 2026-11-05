@@ -1,6 +1,6 @@
 // AI co-editing panel (docs/design/specs/ai-panel.md + both review rounds). Preview only, with a
 // scripted "Demo agent". Activity lines hold ≥1.6s, queue at most one, and flush when the answer starts.
-import { ArrowUp, Check, NotePencil, Sparkle, Stop, X } from '@phosphor-icons/react'
+import { ArrowUp, ChatCircleText, Check, NotePencil, Stop, X } from '@phosphor-icons/react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { activityLabel, demoEdit, script } from '../data/agent'
@@ -95,7 +95,8 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   return (
     <aside className={s.panel} aria-label="Ask Ream">
       <header className={s.head}>
-        <span className={s.model}><Sparkle size={14} weight="fill" /> Demo agent</span>
+        <span className={s.model}><ChatCircleText size={15} /> Ask Ream</span>
+        <span className={s.chipModel} title="A scripted demo: no model is connected">Demo · scripted</span>
         <span className={s.headSpacer} />
         <IconButton label="New chat" size="sm" tone="plain" disabled={running || !turns.length} onClick={() => { const prev = turns; setTurns([]); toast({ message: 'Started a new chat', action: { label: 'Undo', run: () => setTurns(prev) } }) }}><NotePencil size={16} /></IconButton>
         <IconButton label="Close" hint={`${modKey}J`} size="sm" tone="plain" onClick={onClose}><X size={16} /></IconButton>

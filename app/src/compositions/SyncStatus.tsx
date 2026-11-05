@@ -1,7 +1,7 @@
 // The one sync status line (settings spec, review round 1). The line itself always opens Settings → Sync;
 // the action (Reconnect / Review / Unlock) is a separate control, so a click never does two different things.
 import { CloudArrowUp, CloudCheck, CloudSlash, CloudWarning, HardDrives, Lock } from '@phosphor-icons/react'
-import { reconnect, summary, useSync, type Summary } from '../data/sync'
+import { noticeReason, reconnect, summary, useSync, type Summary } from '../data/sync'
 import { navigate } from '../lib/router'
 import { openSyncFlow } from './SyncFlows'
 import s from './SyncStatus.module.css'
@@ -27,22 +27,23 @@ export function runSyncAction(a: NonNullable<Summary['action']>) {
   else navigate({ name: 'settings', section: 'sync' })
 }
 
-/** Sidebar footer / mobile Files card. Two lines that wrap rather than truncate; the action gets its own row. */
-export function SyncStatus({ sub, showAccount = true }: { sub?: string; showAccount?: boolean }) {
+/** Sidebar footer / mobile Files card: two quiet lines, no stacked buttons. The action is an inline text
+ *  link on the detail line; the rest of the block opens Settings. */
+export function SyncStatus({ sub, noticeShown = false }: { sub?: string; noticeShown?: boolean }) {
   const { sync, sum } = useSyncSummary()
-  const detail = sync.provider ? (showAccount ? sync.account ?? undefined : undefined) : sub
+  const detail = sum.detail ?? sub
+  // While the in-page notice offers the action, the footer only states the situation (no second button).
+  const action = noticeShown && noticeReason(sync) ? undefined : sum.action
   return (
     <div className={s.status} data-tone={sum.tone}>
       <span className={s.icon} aria-hidden>{sync.locked ? <Lock size={16} /> : sync.provider ? ICON[sum.tone] : <HardDrives size={16} />}</span>
       <div className={s.body}>
-        <button type="button" className={s.text} onClick={() => navigate({ name: 'settings', section: sync.provider ? 'sync' : 'storage' })}>
-          <span className={s.line}>{sum.text}</span>
-          {detail && <span className={s.sub}>{detail}</span>}
-        </button>
-        {sum.action && (
-          <button type="button" className={s.action} onClick={() => runSyncAction(sum.action!)} disabled={sync.auth === 'reconnecting'}>
-            {ACTION_LABEL[sum.action]}
-          </button>
+        <button type="button" className={s.line} onClick={() => navigate({ name: 'settings', section: sync.provider ? 'sync' : 'storage' })}>{sum.title}</button>
+        {(detail || action) && (
+          <span className={s.sub}>
+            {detail}
+            {action && <>{detail && ' · '}<button type="button" className={s.link} onClick={() => runSyncAction(action)} disabled={sync.auth === 'reconnecting'}>{ACTION_LABEL[action]}</button></>}
+          </span>
         )}
       </div>
     </div>
@@ -55,8 +56,9 @@ export function SyncInline() {
   if (!sync.provider || (sum.tone !== 'warn' && sum.tone !== 'danger' && sync.online)) return null
   return (
     <span className={s.inline} data-tone={sum.tone}>
+      <span className={s.sep} aria-hidden>·</span>
       <CloudSlash size={13} aria-hidden />
-      <span>{sync.online ? 'Not synced' : 'Offline'}</span>
+      <span>{sum.title}</span>
       {sum.action && <button type="button" className={s.inlineAction} onClick={() => runSyncAction(sum.action!)}>{ACTION_LABEL[sum.action]}</button>}
     </span>
   )

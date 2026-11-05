@@ -15,7 +15,7 @@ export function SyncNotice() {
   const name = PROVIDERS[sync.provider].name
   const busy = sync.auth === 'reconnecting'
   if (reason.kind === 'locked') {
-    return <Notice icon={<Lock size={16} />} title={`Your ${name} library is encrypted`} actions={<Button variant="primary" onClick={() => openSyncFlow('unlock')}>Unlock</Button>}>Enter your passphrase to bring in decks from your other devices.</Notice>
+    return <Notice icon={<Lock size={16} />} title={`Your ${name} library is encrypted`} actions={<Button variant="secondary" onClick={() => openSyncFlow('unlock')}>Unlock</Button>}>Enter your passphrase to bring in decks from your other devices.</Notice>
   }
   if (reason.kind === 'full') {
     return <Notice tone="danger" icon={<CloudWarning size={16} />} title={`${name} is full`} actions={<Button variant="secondary" onClick={() => navigate({ name: 'settings', section: 'sync' })}>Manage</Button>}>{sync.pending} changes are saved in this browser and will sync when there’s space.</Notice>
@@ -34,7 +34,7 @@ export function SyncNotice() {
       icon={<CloudSlash size={16} />}
       title={title}
       onDismiss={dismissNotice}
-      actions={<Button variant="primary" disabled={busy} onClick={() => void reconnect()}>{busy ? 'Reconnecting…' : 'Reconnect'}</Button>}
+      actions={<Button variant="secondary" disabled={busy} onClick={() => void reconnect()}>{busy ? 'Reconnecting…' : 'Reconnect'}</Button>}
     >
       {body}
     </Notice>

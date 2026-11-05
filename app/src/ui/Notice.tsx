@@ -1,7 +1,6 @@
 // In-flow notice (reconnect, storage permission, storage full). Paper, scrolls with content, never modal.
-import { X } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
-import { IconButton } from './Button'
+import { Button } from './Button'
 import s from './Notice.module.css'
 
 export function Notice({ icon, tone = 'warn', title, children, actions, onDismiss, dismissLabel = 'Not now' }: {
@@ -21,7 +20,7 @@ export function Notice({ icon, tone = 'warn', title, children, actions, onDismis
         {children && <p className={s.text}>{children}</p>}
       </div>
       {actions && <div className={s.actions}>{actions}</div>}
-      {onDismiss && <IconButton label={dismissLabel} size="sm" tone="plain" onClick={onDismiss}><X size={14} /></IconButton>}
+      {onDismiss && <Button variant="ghost" onClick={onDismiss}>{dismissLabel}</Button>}
     </div>
   )
 }

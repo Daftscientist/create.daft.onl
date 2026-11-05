@@ -61,7 +61,7 @@ export function Sidebar({ route }: { route: Route }) {
       </div>
 
       <div className={s.footer}>
-        <SyncStatus sub={lib.lastBackupAt ? `Backed up ${relTimeInline(lib.lastBackupAt)}` : 'Not backed up yet'} />
+        <SyncStatus noticeShown={route.name === 'home'} sub={lib.lastBackupAt ? `Backed up ${relTimeInline(lib.lastBackupAt)}` : 'Not backed up yet'} />
       </div>
     </aside>
   )

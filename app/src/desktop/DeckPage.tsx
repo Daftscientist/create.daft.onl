@@ -1,6 +1,6 @@
 // Opened deck, UI phase: a viewer (slide rail + stage). The editor replaces the stage later; the
 // frame, header and rail stay. Present goes full screen.
-import { ArrowLeft, CaretLeft, CaretRight, Play, Sparkle } from '@phosphor-icons/react'
+import { ArrowLeft, CaretLeft, CaretRight, ChatCircleText, Play } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 import { download, setLastSlide, useLibrary } from '../data/library'
 import { count, relTimeInline } from '../lib/format'
@@ -66,7 +66,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         <div className={s.actions}>
           <Tooltip label="Download PowerPoint (.pptx)"><Button variant="ghost" icon={<PptxMark />} onClick={() => download([deck.id], 'pptx')}>PowerPoint</Button></Tooltip>
           <Tooltip label="Download HTML"><Button variant="ghost" icon={<HtmlMark />} onClick={() => download([deck.id], 'html')}>HTML</Button></Tooltip>
-          {ai && <Tooltip label="Ask Ream to change this deck" hint={`${modKey}J`}><Button variant={ask ? 'secondary' : 'ghost'} aria-pressed={ask} icon={<Sparkle size={15} />} onClick={() => setAsk((a) => !a)}>Ask</Button></Tooltip>}
+          {ai && <Tooltip label="Ask Ream to change this deck" hint={`${modKey}J`}><Button variant={ask ? 'secondary' : 'ghost'} aria-pressed={ask} icon={<ChatCircleText size={15} />} onClick={() => setAsk((a) => !a)}>Ask</Button></Tooltip>}
           <Button variant="primary" icon={<Play size={14} weight="fill" />} onClick={() => stage.current?.requestFullscreen?.().catch(() => {})}>Present</Button>
         </div>
       </header>

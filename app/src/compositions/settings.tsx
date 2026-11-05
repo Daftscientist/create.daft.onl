@@ -1,6 +1,6 @@
 // Settings sections (docs/design/specs/settings.md). Both shells render these; they only frame them.
 import {
-  Cloud, Database, DownloadSimple, Info, Keyboard, Lock, Monitor, Moon, Palette, Sparkle, Sun, UploadSimple,
+  Archive, Cloud, Database, DownloadSimple, Info, Keyboard, Palette, Sparkle,
 } from '@phosphor-icons/react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { backUp, decks, isLive, useLibrary } from '../data/library'
@@ -10,7 +10,7 @@ import {
 } from '../data/sync'
 import { toast } from '../data/toasts'
 import { bytes, count, relTimeInline } from '../lib/format'
-import { modKey } from '../lib/shell'
+import { KEYMAP } from '../lib/keymap'
 import { persistStorage, storage } from '../storage/client'
 import { PRODUCT } from '../ui/Brand'
 import { Button, Keys } from '../ui/Button'
@@ -20,22 +20,23 @@ import { Segmented } from '../ui/Segmented'
 import { useShell } from '../lib/shell'
 import { isPreview } from '../lib/preview'
 import { ProviderMark } from './ProviderMark'
-import { openSyncFlow } from './SyncFlows'
-import { SyncStatus } from './SyncStatus'
+import { openSyncFlow, startConnect } from './SyncFlows'
+import { runSyncAction, useSyncSummary } from './SyncStatus'
 import s from './settings.module.css'
 
-export type SectionDef = { id: string; label: string; group: 'This device' | 'Library' | 'Ream'; icon: ReactNode; render: () => ReactNode; preview?: boolean; wide?: boolean }
+export type SectionDef = { id: string; label: string; group: 'This browser' | 'Library' | 'Ream'; icon: ReactNode; render: () => ReactNode; preview?: boolean; keyboardOnly?: boolean }
 
 export const SECTIONS: SectionDef[] = [
-  { id: 'appearance', label: 'Appearance', group: 'This device', icon: <Palette size={18} />, render: () => <Appearance /> },
-  { id: 'shortcuts', label: 'Keyboard shortcuts', group: 'This device', icon: <Keyboard size={18} />, render: () => <Shortcuts />, wide: true },
+  { id: 'appearance', label: 'Appearance', group: 'This browser', icon: <Palette size={18} />, render: () => <Appearance /> },
+  { id: 'shortcuts', label: 'Keyboard shortcuts', group: 'This browser', icon: <Keyboard size={18} />, render: () => <Shortcuts />, keyboardOnly: true },
   { id: 'storage', label: 'Storage', group: 'Library', icon: <Database size={18} />, render: () => <Storage /> },
   { id: 'sync', label: 'Sync', group: 'Library', icon: <Cloud size={18} />, render: () => <Sync /> },
-  { id: 'encryption', label: 'Encryption', group: 'Library', icon: <Lock size={18} />, render: () => <Encryption /> },
   { id: 'ai', label: 'AI', group: 'Library', icon: <Sparkle size={18} />, render: () => <AiPreview />, preview: true },
   { id: 'about', label: `About ${PRODUCT}`, group: 'Ream', icon: <Info size={18} />, render: () => <About /> },
 ]
-export const visibleSections = () => SECTIONS.filter((x) => !x.preview || isPreview('ai'))
+/** Shortcuts only where there is a keyboard (review: it was dead UI on phones). */
+export const visibleSections = () =>
+  SECTIONS.filter((x) => (!x.preview || isPreview('ai')) && (!x.keyboardOnly || matchMedia('(any-pointer: fine)').matches))
 
 // ---------- This device ----------
 
@@ -44,13 +45,12 @@ function Appearance() {
   const lg = useShell() === 'mobile' ? 'lg' : 'md'
   return (
     <>
-      <p className={s.scope}>These apply to this browser only.</p>
       <SettingGroup>
         <SettingRow label="Theme" description="Follow your device, or always use light or dark.">
           <Segmented size={lg} label="Theme" value={prefs.theme} onChange={(theme) => setPrefs({ theme })} options={[
-            { value: 'system', title: 'Match device', label: <span className={s.seg}><Monitor size={15} />System</span> },
-            { value: 'light', title: 'Light', label: <span className={s.seg}><Sun size={15} />Light</span> },
-            { value: 'dark', title: 'Dark', label: <span className={s.seg}><Moon size={15} />Dark</span> },
+            { value: 'system', title: 'Match device', label: 'System' },
+            { value: 'light', title: 'Light', label: 'Light' },
+            { value: 'dark', title: 'Dark', label: 'Dark' },
           ]} />
         </SettingRow>
         <SettingRow label="Motion" description="Reduce movement to simple fades. “System” follows your device’s accessibility setting.">
@@ -64,22 +64,21 @@ function Appearance() {
   )
 }
 
-const mod = modKey === '⌘' ? '⌘' : 'Ctrl'
-const SHORTCUTS: { title: string; keys: [string[], string][] }[] = [
-  { title: 'General', keys: [[[mod, 'K'], 'Search decks, slides and actions'], [[mod, ','], 'Open Settings'], [['Esc'], 'Close or go back']] },
-  { title: 'Navigate', keys: [[['↑', '↓', '←', '→'], 'Move between items'], [['↵'], 'Open'], [['Space'], 'Quick Look'], [['←', '→'], 'Previous or next slide in Quick Look']] },
-  { title: 'Select', keys: [[[mod, 'A'], 'Select all'], [[mod, 'Space'], 'Add or remove the focused item'], [['⇧', '↑↓←→'], 'Extend the selection'], [['Esc'], 'Clear the selection']] },
-  { title: 'Organise', keys: [[['F2'], 'Rename'], [[mod, 'D'], 'Duplicate'], [['S'], 'Star or unstar'], [[mod, '⌫'], 'Move to Trash'], [['⇧', 'F10'], 'Open the actions menu']] },
-]
 function Shortcuts() {
   return (
-    <div className={s.shortcutGrid}>
-      {SHORTCUTS.map((g) => (
+    <>
+      {KEYMAP.map((g) => (
         <SettingGroup key={g.title} title={g.title} dense>
-          {g.keys.map(([k, d]) => <SettingRow key={d} label={d}><Keys keys={k} /></SettingRow>)}
+          {g.items.map((it) => (
+            <SettingRow key={it.label} label={it.label}>
+              <span className={s.alts}>
+                {it.keys.map((k, i) => <span key={i} className={s.alt}>{i > 0 && it.keys.length === 2 && <span className={s.or}>or</span>}<Keys keys={k} /></span>)}
+              </span>
+            </SettingRow>
+          ))}
         </SettingGroup>
       ))}
-    </div>
+    </>
   )
 }
 
@@ -108,7 +107,7 @@ function Storage() {
     <>
       <SettingGroup title="This browser">
         <SettingRow label={`${count(n, 'deck')} · ${est ? bytes(est.usage) : '—'} used`} description={est ? `${bytes(est.quota)} available to ${PRODUCT} in this browser` : 'Storage size isn’t available in this browser'}>
-          <span className={s.meter} aria-hidden><i style={{ width: `${Math.max(1.5, pct)}%` }} /></span>
+          {pct >= 1 && <span className={s.meter} role="img" aria-label={`${Math.round(pct)}% of available space used`}><i style={{ width: `${pct}%` }} /></span>}
         </SettingRow>
         <SettingRow
           label="Keep my library"
@@ -119,7 +118,7 @@ function Storage() {
       </SettingGroup>
       <SettingGroup title="Backups">
         <SettingRow label="Back up now" description={lib.lastBackupAt ? `Last backup ${relTimeInline(lib.lastBackupAt)}. Saves every deck and folder to one file.` : 'Saves every deck and folder to one file.'}>
-          <Button variant="secondary" icon={<UploadSimple size={15} />} onClick={backUp}>Back up</Button>
+          <Button variant="secondary" icon={<Archive size={15} />} onClick={backUp}>Back up</Button>
         </SettingRow>
         <SettingRow label="Restore from a backup" description="You’ll see what’s inside before anything changes. Nothing here is deleted.">
           <Button variant="secondary" onClick={() => toast({ message: 'Restoring arrives with the storage engine. Nothing was changed.' })}>Choose file…</Button>
@@ -152,85 +151,65 @@ function Storage() {
   )
 }
 
+const ORDER = ['dropbox', 'onedrive', 'google'] as const
+
 function Sync() {
   const sync = useSync()
+  const [off, setOff] = useState(false)
+  const { sum } = useSyncSummary()
   if (!sync.provider) {
     return (
       <>
-        <SettingGroup>
-          <SettingRow label="Use your library on all your devices" description={`Connect your own cloud storage. Your decks go to a private folder in your account; ${PRODUCT} has no servers and never sees them.`}>
-            <Button variant="primary" icon={<Cloud size={15} />} onClick={() => openSyncFlow('connect')}>Connect…</Button>
-          </SettingRow>
-        </SettingGroup>
-        <SettingGroup title="How each provider behaves in a browser">
-          {(['dropbox', 'onedrive', 'google'] as const).map((id) => (
-            <SettingRow key={id} label={<><ProviderMark id={id} size={22} />{PROVIDERS[id].name}{PROVIDERS[id].recommended && <span className={s.badge}>Recommended</span>}</>} description={PROVIDERS[id].stays} />
+        <p className={s.lede}>Use your library on all your devices. Your decks go to a private folder in your own cloud account; {PRODUCT} has no servers and never sees them.</p>
+        <SettingGroup title="Connect a cloud">
+          {ORDER.map((id) => (
+            <SettingRow key={id} label={<><ProviderMark id={id} size={22} />{PROVIDERS[id].name}{PROVIDERS[id].recommended && <span className={s.badge}>Recommended</span>}</>} description={PROVIDERS[id].stays}>
+              <Button variant={PROVIDERS[id].recommended ? 'primary' : 'secondary'} onClick={() => startConnect(id)}>Connect</Button>
+            </SettingRow>
           ))}
         </SettingGroup>
       </>
     )
   }
   const p = PROVIDERS[sync.provider]
+  const paused = sync.auth === 'expired' || sync.auth === 'revoked'
   return (
     <>
-      <SettingGroup>
+      <SettingGroup title={p.name}>
         <div className={s.providerHead}>
-          <ProviderMark id={sync.provider} size={40} />
+          <ProviderMark id={sync.provider} size={36} />
           <div className={s.providerText}>
-            <span className={s.providerName}>{p.name}</span>
-            <span className={s.providerMeta}>{sync.account} · stored in {p.folder}</span>
+            <span className={s.providerName}>{sync.account}</span>
+            <span className={s.providerMeta}>Stored in {p.folder}</span>
           </div>
         </div>
-        <div className={s.statusRow}><SyncStatus showAccount={false} /></div>
-        <SettingRow label="Sync now" description="Sync also runs a few seconds after each change and when you come back to this tab.">
-          <Button variant="secondary" disabled={sync.auth !== 'ok' || !sync.online} onClick={() => void syncNow()}>Sync now</Button>
+        <SettingRow
+          label={sum.title}
+          description={paused ? `${p.name} needs you to sign in again. Your changes are saved in this browser until then.` : sync.lastSyncAt ? `Last synced ${relTimeInline(sync.lastSyncAt)}. Sync also runs after each change.` : 'Sync runs a few seconds after each change.'}
+        >
+          {sum.action ? <Button variant="primary" onClick={() => runSyncAction(sum.action!)} disabled={sync.auth === 'reconnecting'}>{sum.action === 'reconnect' ? 'Reconnect' : sum.action === 'unlock' ? 'Unlock' : 'Review'}</Button>
+            : <Button variant="secondary" disabled={!sync.online || !!sync.transfer} onClick={() => void syncNow()}>Sync now</Button>}
+        </SettingRow>
+        <SettingRow label="End-to-end encryption" description="Encrypt everything in this browser before it reaches your cloud, so your provider only stores unreadable data.">
+          <Switch label="End-to-end encryption" disabled={!!sync.transfer} checked={sync.encrypted} onChange={(v) => (v ? openSyncFlow('encrypt') : setOff(true))} />
         </SettingRow>
         {sync.provider === 'google' && (
           <SettingRow label="Also keep PowerPoint copies in My Drive" description="A visible “Ream” folder with a .pptx of every deck. Asks Google for one more permission.">
             <Switch label="Keep PowerPoint copies in My Drive" checked={sync.visibleCopies} onChange={setVisibleCopies} />
           </SettingRow>
         )}
-      </SettingGroup>
-      <SettingGroup title="This device">
-        <SettingRow label="Device name" description="Shown on your other devices, for example in conflict copies.">
-          <TextField label="Device name" hideLabel className={s.nameField} value={sync.deviceName} onChange={(e) => setDeviceName(e.target.value)} />
-        </SettingRow>
         <SettingRow label={`Disconnect ${p.name}`} description={`This browser keeps its library. Your ${p.name} copy is left as it is.`}>
           <Button variant="secondary" onClick={disconnect}>Disconnect</Button>
         </SettingRow>
       </SettingGroup>
-    </>
-  )
-}
-
-function Encryption() {
-  const sync = useSync()
-  const [off, setOff] = useState(false)
-  return (
-    <>
-      <SettingGroup>
-        <SettingRow
-          label="End-to-end encryption"
-          description={sync.provider
-            ? 'Encrypt everything in this browser before it reaches your cloud, so your provider only stores unreadable data.'
-            : 'Protects your cloud copy, so it needs sync. Connect a provider in Sync first.'}
-        >
-          <Switch label="End-to-end encryption" disabled={!sync.provider || !!sync.transfer} checked={sync.encrypted} onChange={(v) => (v ? openSyncFlow('encrypt') : setOff(true))} />
+      <SettingGroup title="This browser">
+        <SettingRow label="Device name" description="Shown on your other devices, for example in conflict copies.">
+          <TextField label="Device name" hideLabel className={s.nameField} value={sync.deviceName} onChange={(e) => setDeviceName(e.target.value)} />
         </SettingRow>
-        {sync.encrypted && (
-          <SettingRow label="Change passphrase" description="Other devices will ask for the new one next time they open your library.">
-            <Button variant="secondary" onClick={() => openSyncFlow('encrypt')}>Change…</Button>
-          </SettingRow>
-        )}
       </SettingGroup>
       {off && (
-        <Confirm
-          title="Turn off encryption?"
-          confirmLabel="Turn off"
-          onClose={() => setOff(false)}
-          onConfirm={() => void setEncryption(false)}
-          body={<p>Your cloud copy will be stored readable by your provider again. Your library itself doesn’t change.</p>}
-        />
+        <Confirm title="Turn off encryption?" confirmLabel="Turn off" onClose={() => setOff(false)} onConfirm={() => void setEncryption(false)}
+          body={<p>Your cloud copy will be stored readable by {p.name} again. Your library itself doesn’t change.</p>} />
       )}
     </>
   )

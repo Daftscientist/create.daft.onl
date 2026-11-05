@@ -25,7 +25,8 @@ export function relTimeInline(t: number, now = Date.now()): string {
 
 export function bytes(n: number): string {
   if (n < 1_000_000) return `${Math.max(1, Math.round(n / 1000))} KB`
-  return `${(n / 1_000_000).toFixed(n < 10_000_000 ? 1 : 0)} MB`
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(n < 10_000_000 ? 1 : 0)} MB`
+  return `${(n / 1_000_000_000).toFixed(1)} GB`
 }
 
 export const count = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`

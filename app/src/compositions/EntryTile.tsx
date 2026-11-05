@@ -62,6 +62,7 @@ export function EntryTile({ entry, state, handlers, meta, layoutId }: {
           {state.selected && <Check size={12} weight="bold" />}
         </span>
         {entry.starred && <span className={s.star} aria-label="Starred"><Star size={12} weight="fill" /></span>}
+        {entry.type === 'deck' && entry.simplified ? <span className={s.simplified} title="Some effects in these slides couldn’t be kept exactly and were simplified on import">{entry.simplified} {entry.simplified === 1 ? 'slide' : 'slides'} simplified</span> : null}
         {state.dropTarget && entry.type === 'folder' && <span className={s.dropLabel}>Move to {entry.name}</span>}
       </div>
       <div className={s.strip}>
@@ -105,7 +106,7 @@ function DeckMeta({ deck, meta, handlers }: { deck: Deck; meta?: string; handler
   if (deck.status === 'importing') return <span className={s.meta}>{bytes(deck.sizeBytes)} · Importing</span>
   return (
     <>
-      <span className={s.meta}>{meta ?? `${relTime(deck.modifiedAt)} · ${count(deck.slides.length, 'slide')}`}{deck.simplified ? <span className={s.badge} title={`${deck.simplified} slides use simplified effects`}>{deck.simplified} simplified</span> : null}</span>
+      <span className={s.meta}>{meta ?? `${relTime(deck.modifiedAt)} · ${count(deck.slides.length, 'slide')}`}</span>
       <span className={s.marks}>
         <Tooltip label="Download PowerPoint (.pptx)">
           <button type="button" tabIndex={-1} aria-label={`Download ${deck.name} as PowerPoint`} onClick={(e) => { e.stopPropagation(); download([deck.id], 'pptx') }} onDoubleClick={(e) => e.stopPropagation()}>

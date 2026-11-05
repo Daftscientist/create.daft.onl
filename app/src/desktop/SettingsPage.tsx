@@ -43,7 +43,7 @@ export function SettingsContent({ section }: { section: string }) {
     return () => removeEventListener('keydown', onKey)
   }, [])
   return (
-    <div className={p.content} data-wide={def.wide || undefined}>
+    <div className={p.content}>
       <PageHeader title={def.label} />
       {def.render()}
     </div>

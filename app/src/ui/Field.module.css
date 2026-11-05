@@ -19,7 +19,7 @@
 .error { color: var(--danger); }
 
 .group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; }
-.groupTitle { font-size: 13px; font-weight: 600; color: var(--ink-3); padding-left: 4px; }
+.groupTitle { font-size: 13px; font-weight: 600; color: var(--ink-3); padding-left: 16px; }
 .rows { display: flex; flex-direction: column; border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-tile); }
 .group[data-tone="danger"] .rowLabel { color: var(--danger); }
 .row { display: flex; align-items: center; gap: 20px; padding: 14px 16px; min-height: 60px; }
