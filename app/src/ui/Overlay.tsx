@@ -13,13 +13,19 @@ export function Overlay({ onClose, label, children, className, align = 'center' 
   align?: 'center' | 'top' | 'bottom'
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const close = useRef(onClose)
+  close.current = onClose
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null
     const root = ref.current
-    const first = root?.querySelector<HTMLElement>('[autofocus], input, button, [tabindex="0"]')
+    // Focus a text field if there is one, otherwise the dialog itself (no surprise focus ring on a button).
+    const first = root?.querySelector<HTMLElement>('[autofocus], input')
     ;(first ?? root)?.focus({ preventScroll: true })
+    // Lets floating chrome (selection bar, toasts) step aside while a modal is open.
+    const html = document.documentElement
+    html.dataset.overlay = String(Number(html.dataset.overlay ?? 0) + 1)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); onClose() }
+      if (e.key === 'Escape') { e.stopPropagation(); close.current() }
       if (e.key !== 'Tab' || !root) return
       const f = [...root.querySelectorAll<HTMLElement>('button:not(:disabled), input, [tabindex="0"], a[href]')]
       if (!f.length) return
@@ -32,10 +38,13 @@ export function Overlay({ onClose, label, children, className, align = 'center' 
     document.body.style.overflow = 'hidden'
     return () => {
       removeEventListener('keydown', onKey, true)
+      const n = Number(html.dataset.overlay ?? 1) - 1
+      if (n > 0) html.dataset.overlay = String(n)
+      else delete html.dataset.overlay
       document.body.style.overflow = prevOverflow
       if (opener && document.contains(opener)) opener.focus({ preventScroll: true })
     }
-  }, [onClose])
+  }, [])
 
   return createPortal(
     <div className={s.root} data-align={align}>

@@ -48,9 +48,11 @@ function MenuPanel({ anchor, items, onClose, label }: { anchor: MenuAnchor; item
     el.focus()
   }, [anchor])
 
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
   useEffect(() => {
-    const close = (e: Event) => { if (!ref.current?.contains(e.target as Node)) onClose() }
-    const onBlur = () => onClose()
+    const close = (e: Event) => { if (!ref.current?.contains(e.target as Node)) closeRef.current() }
+    const onBlur = () => closeRef.current()
     addEventListener('pointerdown', close, true)
     addEventListener('wheel', close, { capture: true, passive: true })
     addEventListener('resize', onBlur)
@@ -63,7 +65,7 @@ function MenuPanel({ anchor, items, onClose, label }: { anchor: MenuAnchor; item
       removeEventListener('blur', onBlur)
       if (el instanceof HTMLElement && document.contains(el)) el.focus({ preventScroll: true })
     }
-  }, [onClose])
+  }, [])
 
   const run = (i: number) => {
     const it = items[i]

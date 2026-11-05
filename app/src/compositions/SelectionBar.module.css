@@ -21,3 +21,4 @@
 .action:hover { background: var(--fill-2); }
 .action:active { scale: 0.97; }
 .action[data-danger] { color: var(--danger); }
+:global(html[data-overlay]) .bar { opacity: 0; pointer-events: none; transition: opacity var(--dur-2) var(--ease-out); }

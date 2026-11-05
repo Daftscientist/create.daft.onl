@@ -14,7 +14,10 @@ export function QuickLook({ deckId, slide, onSlide, onClose }: { deckId: string;
   const deck = getLibrary().entries[deckId]
   const n = deck?.type === 'deck' ? deck.slides.length : 0
   useEffect(() => {
+    // React may flush this effect inside the keydown that opened Quick Look; ignore that same event.
+    const since = performance.now()
     const onKey = (e: KeyboardEvent) => {
+      if (e.timeStamp <= since) return
       if (e.key === 'ArrowRight') { e.preventDefault(); onSlide(Math.min(n - 1, slide + 1)) }
       if (e.key === 'ArrowLeft') { e.preventDefault(); onSlide(Math.max(0, slide - 1)) }
       if (e.key === ' ') { e.preventDefault(); onClose() }
