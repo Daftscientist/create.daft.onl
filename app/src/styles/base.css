@@ -16,7 +16,7 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
 }
-button, input { font: inherit; color: inherit; }
+button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: default; background: none; border: 0; padding: 0; }
 img, svg { display: block; }
 h1, h2, h3, p { margin: 0; }

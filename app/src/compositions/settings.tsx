@@ -18,6 +18,7 @@ import { Confirm } from '../ui/Dialog'
 import { SettingGroup, SettingRow, Switch, TextField } from '../ui/Field'
 import { Segmented } from '../ui/Segmented'
 import { useShell } from '../lib/shell'
+import { isPreview } from '../lib/preview'
 import { ProviderMark } from './ProviderMark'
 import { openSyncFlow } from './SyncFlows'
 import { SyncStatus } from './SyncStatus'
@@ -34,8 +35,7 @@ export const SECTIONS: SectionDef[] = [
   { id: 'ai', label: 'AI', group: 'Library', icon: <Sparkle size={18} />, render: () => <AiPreview />, preview: true },
   { id: 'about', label: `About ${PRODUCT}`, group: 'Ream', icon: <Info size={18} />, render: () => <About /> },
 ]
-export const visibleSections = () =>
-  SECTIONS.filter((x) => !x.preview || new URLSearchParams(location.search).has('preview') || sessionStorage.getItem('ream.preview') === 'ai')
+export const visibleSections = () => SECTIONS.filter((x) => !x.preview || isPreview('ai'))
 
 // ---------- This device ----------
 

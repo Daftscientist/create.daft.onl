@@ -6,7 +6,7 @@ import { useSyncExternalStore } from 'react'
 import { claimOwnership, ownInMemory, persistStorage, storage } from '../storage/client'
 import type { Mutation } from '../storage/protocol'
 import { blankTheme, sampleLibrary } from './fixtures'
-import type { Deck, Entry, ExportFormat, Folder, LibraryState } from './types'
+import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideSpec } from './types'
 import { noteLocalChange } from './sync'
 import { toast } from './toasts'
 
@@ -208,6 +208,15 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 export function openDeck(deckId: string) {
   patch(deckId, { openedAt: Date.now() }, true)
+}
+
+/** Replaces one slide (agent edits, later the editor). A real edit: it prompts about paused sync. */
+export function updateSlide(deckId: string, index: number, spec: SlideSpec) {
+  const d = state.entries[deckId]
+  if (!d || d.type !== 'deck') return
+  const slides = d.slides.slice()
+  slides[index] = spec
+  patch(deckId, { slides, modifiedAt: Date.now() })
 }
 
 export function setLastSlide(deckId: string, index: number) {

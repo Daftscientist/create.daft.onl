@@ -36,7 +36,7 @@ export const storage = {
 // One tab owns the library at a time. Others show "Open in another tab" with "Use here", which steals the
 // lock; the previous owner learns it lost the lock and shows "Moved to another tab".
 
-export type Ownership = 'acquiring' | 'owner' | 'elsewhere' | 'lost' | 'unsupported'
+export type Ownership = 'acquiring' | 'owner' | 'elsewhere' | 'lost' | 'unsupported' | 'insecure'
 let ownership: Ownership = 'acquiring'
 const listeners = new Set<() => void>()
 const set = (o: Ownership) => { ownership = o; listeners.forEach((l) => l()) }
@@ -61,6 +61,8 @@ function hold(steal: boolean) {
 
 export function claimOwnership(whenOwned: () => void) {
   onOwned = whenOwned
+  // Private file storage and Web Locks only exist on secure origins (HTTPS or localhost).
+  if (!isSecureContext) return set('insecure')
   if (!('locks' in navigator) || !('storage' in navigator) || !('getDirectory' in navigator.storage)) return set('unsupported')
   hold(false)
 }

@@ -1,6 +1,6 @@
 // Everything that must be true before the library can be shown: this tab owns the store and the
 // store has opened. Each other state gets one calm, explained screen; nothing flashes for fast boots.
-import { ArrowsLeftRight, HardDrives, WarningCircle } from '@phosphor-icons/react'
+import { ArrowsLeftRight, HardDrives, Lock, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { bootLibrary, getBootError, useBoot } from '../data/library'
 import { takeOver, useOwnership } from '../storage/client'
@@ -35,6 +35,15 @@ export function LibraryGate({ children }: { children: ReactNode }) {
       <Screen>
         <EmptyState icon={<ArrowsLeftRight size={24} />} title="Moved to another tab" body="You opened your library in another tab. Everything you did here is saved.">
           <Button variant="secondary" onClick={() => location.reload()}>Use here instead</Button>
+        </EmptyState>
+      </Screen>
+    )
+  }
+  if (own === 'insecure') {
+    return (
+      <Screen>
+        <EmptyState icon={<Lock size={24} />} title={`Open ${PRODUCT} over a secure address`} body={`Browsers only allow private file storage on HTTPS pages, and this page was opened over plain HTTP (${location.host}). Open the HTTPS address for this site instead.`}>
+          <Button variant="ghost" onClick={() => { location.search = '?memory' }}>Try without saving</Button>
         </EmptyState>
       </Screen>
     )

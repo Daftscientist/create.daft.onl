@@ -74,7 +74,7 @@ Stop escalating when a level yields no new confirmed finding. Append one row per
 `docs/design/review-log.md`: date, surface, reviewer, effort, findings raised / confirmed / new vs previous level.
 
 ## 6. Show the user
-The dev server runs at http://leovm.tail53f5e9.ts.net:5180 (`cd app && npx vite`, hot reload). As each page
+The dev server runs at https://leovm.tail53f5e9.ts.net:5443 (`cd app && npx vite` on 5180, proxied over HTTPS by `tailscale serve --https=5443`; HTTPS is required for OPFS). Always send the https link. As each page
 becomes viewable, send the user direct links to it (and to interesting states: `?empty`, `?reset`, a specific
 folder or deck). Give the URL with a short note: what changed, which review
 findings you accepted or rejected, and any taste calls they need to make.

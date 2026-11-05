@@ -17,7 +17,9 @@ React 19 + TypeScript + Vite 8 in `app/`. Styling: CSS Modules driven by `app/sr
 framework). Motion (`motion/react`) for springs, layout and shared-element transitions. Phosphor icons (regular).
 Instrument Sans Variable via Fontsource. Data layer: `app/src/data/library.ts` (UI phase: fixtures + localStorage +
 simulated engine; the engine phase swaps in SQLite/OPFS + domOXML behind the same API).
-Dev server: `cd app && npx vite` → http://leovm.tail53f5e9.ts.net:5180 (tailnet only).
+Dev server: `cd app && npx vite` (port 5180), exposed over tailnet HTTPS with
+`tailscale serve --bg --https=5443 http://127.0.0.1:5180` → https://leovm.tail53f5e9.ts.net:5443. HTTPS is required:
+OPFS and Web Locks only exist in secure contexts, so the plain http://…:5180 address shows "Open Ream over a secure address".
 
 ## 0a. Identity
 **Ream** (a ream is 500 sheets: your whole library). Mark: a lowercase *r* whose arm ends in a coral sheet of paper,
