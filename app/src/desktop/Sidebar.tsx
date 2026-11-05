@@ -9,6 +9,7 @@ import { relTimeInline } from '../lib/format'
 import { toast } from '../data/toasts'
 import { navigate, type Route } from '../lib/router'
 import { dwellOn, endDrag, getDnd, hasFiles, hasIds, MIME, setOver, useDnd } from '../compositions/dnd'
+import { BrandLockup } from '../ui/Brand'
 import { Button, IconButton } from '../ui/Button'
 import { Menu, type MenuAnchor } from '../ui/Menu'
 import s from './Sidebar.module.css'
@@ -31,8 +32,7 @@ export function Sidebar({ route }: { route: Route }) {
   return (
     <aside className={s.sidebar} aria-label="Library">
       <div className={s.brand}>
-        <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden><rect width="32" height="32" rx="8" fill="var(--ink)" /><rect x="7" y="9" width="18" height="12" rx="2.5" fill="var(--paper)" /><rect x="10" y="12.5" width="8" height="2" rx="1" fill="var(--deck)" /></svg>
-        <span>Office</span>
+        <BrandLockup />
       </div>
 
       <nav className={s.nav}>
