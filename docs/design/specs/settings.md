@@ -86,3 +86,17 @@ Linear and Raycast settings (full page, sectioned sidebar), iOS Settings (mobile
 - **Mobile**: gear IconButton (44px) in the Files header; storage/sync card above the entries under Starred/Trash.
   Segmented gets `size="lg"` (44px). Settings returns to the route it was opened from; Esc leaves on desktop.
   "Delete all local data" copy names what happens to the cloud copy.
+
+## Review round 1b (Codex gpt-6.1-sol high, 24 findings): additional binding decisions
+- **IA: "This device" vs "Library"**. Settings sidebar groups: *This device* (Appearance, Motion, Keyboard shortcuts) and
+  *Library* (Storage, Sync, Encryption), then About. Every consequential action names its scope.
+- **"Remove data from this device"** replaces "Delete all local data": shows waiting changes and last backup, offers a
+  rescue archive, stops sync first; cloud deletion is a separate, explicitly scoped action (not in v1).
+- **Status is multi-dimensional**: per provider track authorization, connectivity, pending count, transfer progress and
+  conflicts separately; the line summarises ("Saved here · Google Drive paused · 3 waiting").
+- **Startup**: check authorization → try silent renewal where the provider supports it → connected / offline / action
+  needed. Notify once per interruption; reset after recovery. Success is announced only after catch-up completes.
+- **Reconnect states**: reconnecting (button disabled, no duplicate popups) · cancelled · popup blocked · denied ·
+  catching up · up to date. Focus returns to where the user was.
+- **"Open a cloud library…"** stays available in Settings → Sync after first run (not only in the empty state).
+- **Restore** = validate → preview (counts, conflicts) → merge or replace → progress → result; the current library survives failure.

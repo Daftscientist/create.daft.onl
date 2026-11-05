@@ -41,3 +41,5 @@ mobile Edit entry once the editor exists.
 ## Triage of built UI (high)
 All 21 accepted. Fixed in this pass: 1–8, 10–12, 14–19, 20 (label), 21; 9 (scroll restore on return + Back exits Select mode); 13 (palette creation honours the current folder).
 Deferred: 9 (preserving selection/overlays across a shell switch), 13 (selected-file commands inside ⌘K), 20 (explanation panel for simplified slides needs real coverage data from the engine).
+| 2026-11-05 | Specs: settings + AI panel | Claude subagent | — | 24 | 24 | 24 | Staleness-based prompting, connect/merge sheet, account mismatch, SyncStatus in deck header, --warn token, Notice primitive, provider honesty ranking |
+| 2026-11-05 | Specs: settings + AI panel | Codex gpt-6.1-sol | high | 24 | 24 | 7 | Overlapped Claude on 17. New: device-vs-library IA, scoped local data removal, multi-dimensional status, restore preview flow, no shimmer, Demo agent label, stable slide-ID context |

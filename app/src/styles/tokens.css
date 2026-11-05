@@ -16,6 +16,7 @@
   --select-soft: rgb(29 86 224 / 0.1);
   --deck: #e8603c;
   --danger: #c42b2b;
+  --warn: #9c6500; /* needs attention (sync paused): always paired with an icon */
   --ok: #1e9e62;
   --on-ink: #ffffff;
 
@@ -40,9 +41,9 @@
   --dur-1: 120ms; --dur-2: 180ms; --dur-3: 260ms;
 }
 
+/* Dark palette: follows the system unless Settings → Appearance forces light or dark (data-theme on <html>). */
 @media (prefers-color-scheme: dark) {
-  /* Deep, slightly cool neutrals with clear steps between layers (user: v1 dark looked washed out). */
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --frame: #08080a;
     --panel: #111114;
@@ -58,6 +59,7 @@
     --select-soft: rgb(91 140 255 / 0.18);
     --deck: #f07650;
     --danger: #ff6b6b;
+    --warn: #e3b341;
     --ok: #4cc38a;
     --on-ink: #111114;
     --glass: rgb(28 28 32 / 0.92);
@@ -70,6 +72,35 @@
     --shadow-float: 0 18px 50px -10px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(255 255 255 / 0.08);
   }
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --frame: #08080a;
+  --panel: #111114;
+  --paper: #1a1a1e;
+  --ink: #f2f2f5;
+  --ink-2: #a9a9b3;
+  --ink-3: #8d8d98;
+  --ink-4: #55555e;
+  --hair: rgb(255 255 255 / 0.075);
+  --fill: rgb(255 255 255 / 0.055);
+  --fill-2: rgb(255 255 255 / 0.1);
+  --select: #5b8cff;
+  --select-soft: rgb(91 140 255 / 0.18);
+  --deck: #f07650;
+  --danger: #ff6b6b;
+  --warn: #e3b341;
+  --ok: #4cc38a;
+  --on-ink: #111114;
+  --glass: rgb(28 28 32 / 0.92);
+  --glass-edge: rgb(255 255 255 / 0.07);
+  --glass-line: rgb(255 255 255 / 0.09);
+  --smoke: rgb(0 0 0 / 0.55);
+  --shadow-panel: 0 0 0 1px rgb(255 255 255 / 0.05);
+  --shadow-tile: 0 0 0 1px rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-tile-hover: 0 0 0 1px rgb(255 255 255 / 0.12), 0 12px 32px -10px rgb(0 0 0 / 0.8);
+  --shadow-float: 0 18px 50px -10px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(255 255 255 / 0.08);
+  }
+:root[data-theme="light"] { color-scheme: light; }
 
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   :root { --glass: var(--paper); }

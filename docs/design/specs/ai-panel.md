@@ -56,3 +56,12 @@ Make (edits applied with undo).
   announces only start and finish; changing activity lines are aria-hidden; reduced motion = static text.
 - One thread per deck, stored locally; "New chat" clears with Undo; offline blocks only cloud providers; when the run
   collapses, scroll anchors to the answer.
+
+## Review round 1b (Codex high): additional binding decisions
+- **No shimmer** (generic AI treatment): activity lines cross-fade with the shared fade token. Status uses a polite live region.
+- "Thought for Xs" only when the provider returns a reasoning summary; otherwise "Working".
+- The prototype carries a persistent **"Demo agent"** label while behind `?preview=ai`.
+- Agent edits are their own transaction; Undo reverses only those; overlapping later edits show affected slides instead of overwriting.
+- Context binds to stable slide IDs, frozen when sent. Stop → stopped; late tool results are rejected.
+- Auto-scroll follows only when the reader is at the bottom; otherwise a "New activity" pill.
+- Threads and drafts persist per deck across closing the panel and reloads.
