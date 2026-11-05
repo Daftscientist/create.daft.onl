@@ -22,3 +22,12 @@ writing any markup with its own styling; if what you need is missing, add it her
 | `Brand` (`BrandLockup`, `BrandMark`, `PRODUCT`) | The product name (Ream) and mark | Never hard-code the name; use `PRODUCT` |
 
 Styling lives only in each primitive's `.module.css`, using tokens from `styles/tokens.css`.
+
+Added for Settings and sync (2026-11-05):
+
+| Primitive | Use for | Notes |
+|---|---|---|
+| `Notice` | In-flow notices (reconnect, storage permission, storage full) | Paper, scrolls with content, ≤2 actions, optional dismiss |
+| `Dialog` / `Confirm` | Desktop modal decisions; every irreversible action | Confirm focuses Cancel; names exactly what happens |
+| `Switch`, `TextField` | Settings controls | 44px+ on mobile |
+| `SettingGroup` / `SettingRow` | Every settings screen | Label + description left, control right; stacks on mobile |

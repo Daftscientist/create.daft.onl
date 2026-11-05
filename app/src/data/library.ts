@@ -7,6 +7,7 @@ import { claimOwnership, ownInMemory, persistStorage, storage } from '../storage
 import type { Mutation } from '../storage/protocol'
 import { blankTheme, sampleLibrary } from './fixtures'
 import type { Deck, Entry, ExportFormat, Folder, LibraryState } from './types'
+import { noteLocalChange } from './sync'
 import { toast } from './toasts'
 
 const TRASH_DAYS = 30
@@ -92,12 +93,15 @@ function diff(prev: LibraryState, next: LibraryState): Mutation[] {
 
 let writing = Promise.resolve()
 let askedPersist = false
-function commit(next: LibraryState) {
+/** `quiet`: view state (last opened, last slide) still syncs but never prompts about paused sync. */
+function commit(next: LibraryState, quiet = false) {
   const prev = state
   state = next
   emit()
   const mutations = diff(prev, next)
-  if (!mutations.length || new URLSearchParams(location.search).has('memory')) return
+  if (!mutations.length) return
+  noteLocalChange(1, quiet)
+  if (new URLSearchParams(location.search).has('memory')) return
   if (!askedPersist) { askedPersist = true; void persistStorage() }
   writing = writing.then(async () => { await storage.apply(mutations) }).catch(async (e: Error) => {
     toast({ message: e.name === 'QuotaExceededError' ? 'Couldn’t save: browser storage is full. Free space in Settings → Storage.' : 'Couldn’t save that change. Your library was reloaded.', tone: 'danger' })
@@ -105,10 +109,10 @@ function commit(next: LibraryState) {
   })
 }
 
-function patch(id: string, update: Partial<Deck> | Partial<Folder>) {
+function patch(id: string, update: Partial<Deck> | Partial<Folder>, quiet = false) {
   const prev = state.entries[id]
   if (!prev) return
-  commit({ ...state, entries: { ...state.entries, [id]: { ...prev, ...update } as Entry } })
+  commit({ ...state, entries: { ...state.entries, [id]: { ...prev, ...update } as Entry } }, quiet)
 }
 
 export function useLibrary(): LibraryState {
@@ -203,11 +207,12 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 // ---------- actions (optimistic, with Undo) ----------
 
 export function openDeck(deckId: string) {
-  patch(deckId, { openedAt: Date.now() })
+  patch(deckId, { openedAt: Date.now() }, true)
 }
 
 export function setLastSlide(deckId: string, index: number) {
-  patch(deckId, { lastSlide: index })
+  if ((state.entries[deckId] as Deck | undefined)?.lastSlide === index) return
+  patch(deckId, { lastSlide: index }, true)
 }
 
 export function rename(entryId: string, name: string): boolean {

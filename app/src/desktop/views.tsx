@@ -4,6 +4,7 @@ import { Fragment, useMemo } from 'react'
 import { Collection } from '../compositions/Collection'
 import { EmptyState, PageHeader, SectionHeader } from '../compositions/PageHeader'
 import { ViewTools } from '../compositions/ViewTools'
+import { SyncNotice } from '../compositions/SyncNotice'
 import { childrenOf, emptyTrash, isLive, isTrashRoot, newDeck, newFolder, pathTo, recents, trashDaysLeft, useLibrary, decks } from '../data/library'
 import type { Entry } from '../data/types'
 import { count, relTimeInline } from '../lib/format'
@@ -44,6 +45,7 @@ export function RecentsView() {
 
   return (
     <>
+      <SyncNotice />
       <PageHeader title="Recents" count={count(all.length, 'deck')} />
       {showJump && (
         <section className={s.section} aria-label="Jump back in">

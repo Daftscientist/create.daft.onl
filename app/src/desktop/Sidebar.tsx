@@ -1,6 +1,6 @@
 // Desktop sidebar (DESIGN.md §6 Sidebar): sits on the frame, no panel, no glass.
 import {
-  CaretRight, ClockCounterClockwise, DotsThree, FolderSimple, Plus, Star, Trash, UploadSimple,
+  CaretRight, ClockCounterClockwise, DotsThree, FolderSimple, GearSix, Plus, Star, Trash, UploadSimple,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { backUp, childrenOf, folders, isLive, isTrashRoot, isWithin, move, newFolder, useLibrary, getLibrary, importFiles } from '../data/library'
@@ -10,7 +10,9 @@ import { toast } from '../data/toasts'
 import { navigate, type Route } from '../lib/router'
 import { dwellOn, endDrag, getDnd, hasFiles, hasIds, MIME, setOver, useDnd } from '../compositions/dnd'
 import { BrandLockup } from '../ui/Brand'
-import { Button, IconButton } from '../ui/Button'
+import { IconButton } from '../ui/Button'
+import { SyncStatus } from '../compositions/SyncStatus'
+import { modKey } from '../lib/shell'
 import { Menu, type MenuAnchor } from '../ui/Menu'
 import s from './Sidebar.module.css'
 
@@ -59,28 +61,30 @@ export function Sidebar({ route }: { route: Route }) {
       </div>
 
       <div className={s.footer}>
-        <div className={s.storage}>
-          <div className={s.storageText}>
-            <span className={s.storageTitle}>Stored in this browser</span>
-            <span className={s.storageMeta}>{lib.lastBackupAt ? `Backed up ${relTimeInline(lib.lastBackupAt)}` : 'Not backed up yet'}</span>
-          </div>
-          <IconButton label="Backup options" size="sm" tone="plain" side="top" onClick={(e) => {
+        <SyncStatus />
+        <div className={s.footRow}>
+          <p className={s.backupMeta}>{lib.lastBackupAt ? `Backed up ${relTimeInline(lib.lastBackupAt)}` : 'Not backed up yet'}</p>
+          <IconButton label="Library options" size="sm" tone="plain" side="top" onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect()
             setStorageMenu({ x: r.left, y: r.top - 8 })
           }}>
             <DotsThree size={16} weight="bold" />
           </IconButton>
+          <IconButton label="Settings" hint={`${modKey},`} size="sm" tone="plain" side="top" onClick={() => navigate({ name: 'settings', section: null })}>
+            <GearSix size={16} />
+          </IconButton>
         </div>
-        <Button variant="secondary" className={s.backup} onClick={backUp} icon={<UploadSimple size={15} />}>Back up</Button>
       </div>
       <Menu
         open={!!storageMenu}
-        anchor={storageMenu ? { ...storageMenu, y: storageMenu.y - 92 } : null}
+        anchor={storageMenu ? { ...storageMenu, y: storageMenu.y - 132 } : null}
         label="Backup options"
         onClose={() => setStorageMenu(null)}
         items={[
           { label: 'Back up now', icon: <UploadSimple size={16} />, run: backUp },
           { label: 'Restore from backup…', icon: <ClockCounterClockwise size={16} />, run: () => document.getElementById('restore-input')?.click() },
+          { kind: 'sep' },
+          { label: 'Storage settings', icon: <GearSix size={16} />, run: () => navigate({ name: 'settings', section: 'storage' }) },
         ]}
       />
       <input id="restore-input" type="file" accept=".zip" hidden onChange={(e) => {
@@ -98,7 +102,7 @@ function ancestors(id: string): string[] {
   return out
 }
 
-function NavItem({ label, icon, active, count, onClick, drop }: { label: string; icon: React.ReactNode; active: boolean; count?: number; onClick: () => void; drop?: string }) {
+export function NavItem({ label, icon, active, count, onClick, drop }: { label: string; icon: React.ReactNode; active: boolean; count?: number; onClick: () => void; drop?: string }) {
   const dnd = useDnd()
   const over = drop !== undefined && dnd.over === drop && dnd.drag.kind !== 'none'
   return (

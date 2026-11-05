@@ -8,6 +8,7 @@ export type Route =
   | { name: 'trash' }
   | { name: 'deck'; deckId: string; slide?: number }
   | { name: 'browse' }
+  | { name: 'settings'; section: string | null }
 
 export function parse(path: string): Route {
   const [, a, b, c] = path.split('/')
@@ -16,6 +17,7 @@ export function parse(path: string): Route {
     case 'starred': return { name: 'starred' }
     case 'trash': return { name: 'trash' }
     case 'browse': return { name: 'browse' }
+    case 'settings': return { name: 'settings', section: b || null }
     case 'deck': return b ? { name: 'deck', deckId: b, slide: c ? Number(c) - 1 : undefined } : { name: 'home' }
     default: return { name: 'home' }
   }
@@ -28,6 +30,7 @@ export function href(r: Route): string {
     case 'starred': return '/starred'
     case 'trash': return '/trash'
     case 'browse': return '/browse'
+    case 'settings': return r.section ? `/settings/${r.section}` : '/settings'
     case 'deck': return `/deck/${r.deckId}${r.slide !== undefined ? `/${r.slide + 1}` : ''}`
   }
 }

@@ -1,0 +1,16 @@
+.notice {
+  display: flex; align-items: center; gap: 14px; padding: 12px 12px 12px 16px; margin-bottom: 24px;
+  border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-tile);
+}
+.icon { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; }
+.notice[data-tone="warn"] .icon { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.notice[data-tone="danger"] .icon { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.notice[data-tone="info"] .icon { color: var(--select); background: var(--select-soft); }
+.body { flex: 1; min-width: 0; }
+.title { font-size: 14px; font-weight: 600; }
+.text { font-size: 13px; color: var(--ink-2); }
+.actions { display: flex; gap: 8px; flex: none; }
+@media (max-width: 759px) {
+  .notice { flex-wrap: wrap; align-items: flex-start; }
+  .actions { width: 100%; padding-left: 46px; }
+}

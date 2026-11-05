@@ -34,3 +34,4 @@
   .frame { --sidebar-w: 216px; }
   .topbar, .content { padding-left: 24px; padding-right: 24px; }
 }
+.settingsTop { height: 28px; }

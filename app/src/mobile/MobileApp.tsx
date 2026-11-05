@@ -1,5 +1,5 @@
 // Mobile composition (DESIGN.md §2, §6 Mobile). Composes shared compositions only.
-import { DownloadSimple, FolderSimple, FolderSimplePlus, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
+import { GearSix, DownloadSimple, FolderSimple, FolderSimplePlus, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
 import { AnimatePresence } from 'motion/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ActionSheet } from '../compositions/ActionSheet'
@@ -16,6 +16,8 @@ import { Toaster } from '../ui/Toaster'
 import { MobileViewer } from './Viewer'
 import { FilesScreen, RecentsScreen, StarredScreen, TrashScreen } from './screens'
 import { SearchSheet } from './SearchSheet'
+import { SettingsScreen } from './SettingsScreen'
+import { SyncFlowHost } from '../compositions/SyncFlows'
 import { TabBar } from './TabBar'
 import s from './MobileApp.module.css'
 
@@ -30,6 +32,11 @@ export function MobileApp() {
   const routeKey = JSON.stringify(route)
 
   useEffect(() => { setSelecting(false); setSelected(new Set()); scrollTo({ top: 0 }) }, [routeKey])
+  // Toasts sit above the floating tab bar (review: they covered navigation).
+  useEffect(() => {
+    document.documentElement.style.setProperty('--toast-base', '96px')
+    return () => document.documentElement.style.setProperty('--toast-base', '24px')
+  }, [])
 
   const destination = route.name === 'files' ? route.folderId : null
   const destName = destination ? getLibrary().entries[destination]?.name ?? 'Files' : 'Files'
@@ -58,12 +65,13 @@ export function MobileApp() {
     onActions: (id: string) => setSheet({ kind: 'actions', ids: [id] }),
     reportIds: setListIds,
     header: {
-      trailing: route.name === 'trash' ? null : selecting ? (
+      trailing: route.name === 'trash' || route.name === 'settings' ? null : selecting ? (
         <TextButton onClick={() => { setSelecting(false); setSelected(new Set()) }}>Done</TextButton>
       ) : (
         <>
           <TextButton onClick={() => setSelecting(true)}>Select</TextButton>
           <IconButton label={`New in ${destName}`} size="lg" tone="plain" tooltip={false} onClick={() => setSheet({ kind: 'create' })}><Plus size={22} /></IconButton>
+          {route.name === 'files' && !route.folderId && <IconButton label="Settings" size="lg" tone="plain" tooltip={false} onClick={() => navigate({ name: 'settings', section: null })}><GearSix size={22} /></IconButton>}
         </>
       ),
       leading: selecting ? (
@@ -95,14 +103,17 @@ export function MobileApp() {
         {route.name === 'files' && <FilesScreen {...screen} folderId={route.folderId} />}
         {route.name === 'starred' && <StarredScreen {...screen} />}
         {route.name === 'trash' && <TrashScreen {...screen} />}
+        {route.name === 'settings' && <SettingsScreen section={route.section} />}
       </main>
       <TabBar
         tab={route.name === 'home' ? 'recents' : 'files'}
+        hidden={route.name === 'settings'}
         onTab={(t) => navigate(t === 'recents' ? { name: 'home' } : { name: 'files', folderId: null })}
         onSearch={() => setSheet({ kind: 'search' })}
         batch={batch}
       />
       <Toaster />
+      <AnimatePresence><SyncFlowHost /></AnimatePresence>
       <AnimatePresence>
         {sheet?.kind === 'actions' && <ActionSheet key="a" ids={sheet.ids} ctx={ctx} onClose={() => setSheet(null)} />}
         {sheet?.kind === 'move' && <FolderSheet key="m" ids={sheet.ids} onClose={() => { setSheet(null); setSelecting(false); setSelected(new Set()) }} />}

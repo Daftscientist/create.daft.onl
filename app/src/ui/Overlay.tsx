@@ -19,7 +19,7 @@ export function Overlay({ onClose, label, children, className, align = 'center' 
     const opener = document.activeElement as HTMLElement | null
     const root = ref.current
     // Focus a text field if there is one, otherwise the dialog itself (no surprise focus ring on a button).
-    const first = root?.querySelector<HTMLElement>('[autofocus], input')
+    const first = root?.querySelector<HTMLElement>('[data-autofocus], input')
     ;(first ?? root)?.focus({ preventScroll: true })
     // Lets floating chrome (selection bar, toasts) step aside while a modal is open.
     const html = document.documentElement

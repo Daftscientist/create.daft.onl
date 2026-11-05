@@ -17,6 +17,8 @@ import { Tooltip } from '../ui/Tooltip'
 import { ActionsContext, type DesktopActions } from './actions'
 import { DeckPage } from './DeckPage'
 import { Sidebar } from './Sidebar'
+import { rememberLibraryRoute, SettingsContent, SettingsSidebar } from './SettingsPage'
+import { SyncFlowHost } from '../compositions/SyncFlows'
 import { FilesView, RecentsView, StarredView, TrashView } from './views'
 import s from './DesktopApp.module.css'
 
@@ -53,6 +55,7 @@ export function DesktopApp() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette((p) => !p) }
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); navigate({ name: 'settings', section: null }) }
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
@@ -60,12 +63,13 @@ export function DesktopApp() {
 
   // Scroll to top on navigation, keep scroll on in-place updates.
   const routeKey = JSON.stringify(route)
-  useEffect(() => { panel.current?.scrollTo({ top: 0 }) }, [routeKey])
+  useEffect(() => { panel.current?.scrollTo({ top: 0 }); rememberLibraryRoute(route) }, [routeKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (route.name === 'deck') {
     return (
       <ActionsContext.Provider value={actions}>
         <DeckPage deckId={route.deckId} slide={route.slide} />
+        <AnimatePresence><SyncFlowHost /></AnimatePresence>
       </ActionsContext.Provider>
     )
   }
@@ -74,8 +78,9 @@ export function DesktopApp() {
     <ActionsContext.Provider value={actions}>
       <LayoutGroup>
         <div className={s.frame}>
-          <Sidebar route={route} />
+          {route.name === 'settings' ? <SettingsSidebar section={route.section ?? 'appearance'} /> : <Sidebar route={route} />}
           <main ref={panel} className={s.panel} aria-label="Content">
+            {route.name === 'settings' ? <div className={s.content}><div className={s.settingsTop} /><SettingsContent section={route.section ?? 'appearance'} /></div> : <>
             <div className={s.topbar}>
               <SearchTrigger onOpen={() => setPalette(true)} />
               <div className={s.primary}>
@@ -93,6 +98,7 @@ export function DesktopApp() {
               {route.name === 'starred' && <StarredView />}
               {route.name === 'trash' && <TrashView />}
             </div>
+            </>}
             <DropVeil destination={destination} destinationName={destName} />
           </main>
           <Toaster />
@@ -102,6 +108,7 @@ export function DesktopApp() {
         </AnimatePresence>
       </LayoutGroup>
       <AnimatePresence>{palette && <CommandPalette key="cp" onClose={() => setPalette(false)} />}</AnimatePresence>
+      <AnimatePresence><SyncFlowHost /></AnimatePresence>
     </ActionsContext.Provider>
   )
 }

@@ -3,15 +3,16 @@ import { useId, type ReactNode } from 'react'
 import { snappy } from '../lib/motion'
 import s from './Segmented.module.css'
 
-export function Segmented<T extends string>({ value, options, onChange, label }: {
+export function Segmented<T extends string>({ value, options, onChange, label, size = 'md' }: {
   value: T
   options: { value: T; label: ReactNode; title: string }[]
   onChange: (v: T) => void
   label: string
+  size?: 'md' | 'lg'
 }) {
   const id = useId()
   return (
-    <div className={s.track} role="radiogroup" aria-label={label}>
+    <div className={s.track} role="radiogroup" aria-label={label} data-size={size}>
       {options.map((o) => (
         <button
           key={o.value}

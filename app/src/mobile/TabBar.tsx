@@ -6,12 +6,14 @@ import type { ReactNode } from 'react'
 import { gentle, snappy } from '../lib/motion'
 import s from './TabBar.module.css'
 
-export function TabBar({ tab, onTab, onSearch, batch }: {
+export function TabBar({ tab, onTab, onSearch, batch, hidden }: {
   tab: 'recents' | 'files' | null
   onTab: (t: 'recents' | 'files') => void
   onSearch: () => void
   batch?: ReactNode
+  hidden?: boolean
 }) {
+  if (hidden) return null
   const tabs = [
     { id: 'recents' as const, label: 'Recents', icon: <ClockCounterClockwise size={22} weight={tab === 'recents' ? 'bold' : 'regular'} /> },
     { id: 'files' as const, label: 'Files', icon: <FolderSimple size={22} weight={tab === 'files' ? 'fill' : 'regular'} /> },

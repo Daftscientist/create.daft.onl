@@ -4,3 +4,5 @@
 .seg[aria-checked="true"] { color: var(--ink); }
 .thumb { position: absolute; inset: 0; border-radius: inherit; background: var(--paper); box-shadow: var(--shadow-tile); }
 .label { position: relative; display: grid; place-items: center; }
+.track[data-size="lg"] { height: 44px; padding: 3px; }
+.track[data-size="lg"] .seg { padding: 0 14px; font-size: 15px; }

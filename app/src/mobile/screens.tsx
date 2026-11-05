@@ -1,17 +1,20 @@
 // Mobile screens: LargeTitle + MobileList (+ ContinueCard on Recents). No bespoke layout.
-import { CaretRight, ClockCounterClockwise, FolderSimplePlus, Star, Trash, UploadSimple } from '@phosphor-icons/react'
+import { ClockCounterClockwise, FolderSimplePlus, Star, Trash, UploadSimple } from '@phosphor-icons/react'
 import { useEffect, useMemo, type ReactNode } from 'react'
 import { ContinueCard } from '../compositions/ContinueCard'
+import { SyncNotice } from '../compositions/SyncNotice'
 import { pickPptx } from '../compositions/importPicker'
 import { MobileList, MobileSection, type MobileSelect } from '../compositions/MobileList'
 import { EmptyState } from '../compositions/PageHeader'
-import { backUp, childrenOf, emptyTrash, isLive, isTrashRoot, recents, trashDaysLeft, useLibrary } from '../data/library'
+import { childrenOf, emptyTrash, isLive, isTrashRoot, recents, trashDaysLeft, useLibrary } from '../data/library'
 import type { Deck, Entry } from '../data/types'
 import { count, relTimeInline } from '../lib/format'
 import { sortEntries } from '../lib/prefs'
 import { navigate } from '../lib/router'
 import { Button, TextButton } from '../ui/Button'
 import { LargeTitle } from '../ui/LargeTitle'
+import { ListGroup, ListRow } from '../ui/List'
+import { SyncStatus } from '../compositions/SyncStatus'
 import s from './screens.module.css'
 
 type ScreenProps = {
@@ -35,6 +38,7 @@ export function RecentsScreen(p: ScreenProps) {
   useReport(list, p.reportIds)
   return (
     <LargeTitle title="Recents" leading={p.header.leading} trailing={p.header.trailing}>
+      <SyncNotice />
       {!all.length ? (
         <EmptyState icon={<ClockCounterClockwise size={24} />} title="Your decks will show up here" body="Import a PowerPoint file from your phone. Everything stays in this browser, on this device.">
           <Button variant="primary" size="lg" icon={<UploadSimple size={18} />} onClick={() => pickPptx(null)}>Import .pptx</Button>
@@ -67,17 +71,19 @@ export function FilesScreen(p: ScreenProps & { folderId: string | null }) {
   return (
     <LargeTitle title={folder ? folder.name : 'Files'} leading={p.header.leading} trailing={p.header.trailing}>
       {!p.folderId && !p.select.active && (
-        <div className={s.places}>
-          <PlaceRow icon={<Star size={20} />} label="Starred" count={starred} onClick={() => navigate({ name: 'starred' })} />
-          <PlaceRow icon={<Trash size={20} />} label="Trash" count={trashed} onClick={() => navigate({ name: 'trash' })} />
-        </div>
+        <>
+          <ListGroup>
+            <ListRow icon={<Star size={20} />} label="Starred" value={starred || undefined} onClick={() => navigate({ name: 'starred' })} />
+            <ListRow icon={<Trash size={20} />} label="Trash" value={trashed || undefined} onClick={() => navigate({ name: 'trash' })} />
+          </ListGroup>
+          <div className={s.storage}><SyncStatus /></div>
+        </>
       )}
       {entries.length ? (
         <MobileList entries={entries} select={p.select} onOpen={p.onOpen} onActions={p.onActions} />
       ) : (
         <EmptyState icon={<FolderSimplePlus size={24} />} title={folder ? `${folder.name} is empty` : 'No files yet'} body="Tap + to import a deck or make a new one here." />
       )}
-      {!p.folderId && !p.select.active && <StorageCard />}
     </LargeTitle>
   )
 }
@@ -115,26 +121,3 @@ export function TrashScreen(p: ScreenProps) {
   )
 }
 
-function PlaceRow({ icon, label, count: n, onClick }: { icon: ReactNode; label: string; count: number; onClick: () => void }) {
-  return (
-    <button type="button" className={s.place} onClick={onClick}>
-      <span className={s.placeIcon}>{icon}</span>
-      <span className={s.placeLabel}>{label}</span>
-      {n > 0 && <span className={s.placeCount}>{n}</span>}
-      <CaretRight size={14} className={s.chev} />
-    </button>
-  )
-}
-
-function StorageCard() {
-  const lib = useLibrary()
-  return (
-    <div className={s.storage}>
-      <div>
-        <p className={s.storageTitle}>Stored in this browser</p>
-        <p className={s.storageMeta}>{lib.lastBackupAt ? `Backed up ${relTimeInline(lib.lastBackupAt)}` : 'Not backed up yet'}</p>
-      </div>
-      <Button variant="secondary" onClick={backUp}>Back up</Button>
-    </div>
-  )
-}

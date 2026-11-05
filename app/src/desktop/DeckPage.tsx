@@ -11,6 +11,7 @@ import { HtmlMark, PptxMark } from '../ui/FileMarks'
 import { Tooltip } from '../ui/Tooltip'
 import { DeckThumb } from '../compositions/DeckThumb'
 import { EmptyState } from '../compositions/PageHeader'
+import { SyncInline } from '../compositions/SyncStatus'
 import { Toaster } from '../ui/Toaster'
 import s from './DeckPage.module.css'
 
@@ -26,7 +27,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   useEffect(() => { rail.current?.querySelector(`[data-i="${index}"]`)?.scrollIntoView({ block: 'nearest' }) }, [index])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).matches('input')) return
+      if ((e.target as HTMLElement).matches('input, textarea, [contenteditable]') || document.documentElement.dataset.overlay) return
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); setIndex((i) => Math.min(n - 1, i + 1)) }
       if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); setIndex((i) => Math.max(0, i - 1)) }
       if (e.key === 'Escape' && !document.fullscreenElement) leave()
@@ -53,7 +54,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         <IconButton label="Back to library" hint="Esc" onClick={leave}><ArrowLeft size={16} /></IconButton>
         <div className={s.title}>
           <h1>{deck.name}</h1>
-          <span>{count(n, 'slide')} · Edited {relTimeInline(deck.modifiedAt)}</span>
+          <span>{count(n, 'slide')} · Edited {relTimeInline(deck.modifiedAt)} <SyncInline /></span>
         </div>
         <div className={s.actions}>
           <Tooltip label="Download PowerPoint (.pptx)"><Button variant="ghost" icon={<PptxMark />} onClick={() => download([deck.id], 'pptx')}>PowerPoint</Button></Tooltip>

@@ -12,6 +12,7 @@ plan.json is a list of shots:
    "theme": "light" | "dark",                 # prefers-color-scheme
    "reduced_motion": false,
    "element": "css selector",                 # optional: clip to one element
+   "ready": "css selector",                   # optional: wait for this before steps (e.g. "aside", "main")
    "steps": [["wait", 800], ["hover", "sel"], ["click", "sel"], ["press", "Meta+K"],
              ["scroll", 600], ["drag", "from-sel", "to-sel"], ["longpress", "sel"],
              ["eval", "js"]]}
@@ -77,6 +78,8 @@ async def shoot(browser, shot: dict, out: Path, sem: asyncio.Semaphore) -> None:
         page = await ctx.new_page()
         try:
             await page.goto(shot["url"], wait_until="networkidle", timeout=30000)
+            if ready := shot.get("ready"):
+                await page.wait_for_selector(ready, timeout=20000)
             await page.wait_for_timeout(600)
             for s in shot.get("steps", []):
                 await step(page, s)
