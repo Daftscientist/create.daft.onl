@@ -339,3 +339,79 @@ Deferred or rejected:
 - **Bolder: formatting dock above the stage while Ask is open (X) → rejected.** It duplicates the floating text bar and
   the Format column. A third formatting surface breaks "one place for each thing".
 - **Bolder: duplicate-and-repeat (X) → phase 2.**
+
+## v3 layout: the contextual bar (2026-11-06, replaces the Format column and the floating text bar)
+
+User feedback on v2: the right-hand Format column of collapsible sections was confusing and felt unnatural ("I
+HATE the side panel"); slide settings (background, transition, design, notes, comments, accessibility, history)
+were a wall of accordions; shapes, tables and charts were hard to find and add; PowerPoint and HTML sat in the
+header as two permanent buttons. A ribbon was considered and rejected by the user. Chosen direction (user picked
+from three): **one contextual bar above the slide** + **visual insert galleries** + **a notes drawer**.
+
+```
+┌ Mica header ──────────────────────────────────────────────────────────────────────────────────┐
+│ ← Q3 review   [T Text][◇ Shapes ▾][▢ Picture][▦ Table ▾][▥ Chart ▾]  ↶ ↷   [Ask] [⤓ Download ▾] [▶ Present ▾] │
+├ rail ┬───────────────────────────────────────────────────────────────────────────────────────┤
+│ 1 ▭  │ [Text box ▾] │ Instrument Sans ▾  24  ■  B I U  ≡▾  •  1.  Aa▾ │ Fill ▾  Arrange ▾  Animate ▾  ⋯ │  ← context bar
+│ 2 ▭  │                                                                                      │
+│ 3 ▭  │                ┌──────────── paper slide ────────────┐                               │
+│      │                └──────────────────────────────────────┘                    [− Fit +]  │
+│      ├──────────────────────────────────────────────────────────────────────────────────────┤
+│      │ ▴ Notes   (click to open a 160px notes pane under the slide)                          │
+└──────┴──────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Context bar
+- *Presentation*: Mica strip (solid, not glass: it's persistent chrome), 44px tall, full stage width, hairline
+  below. Controls are 30px; groups separated by 1px hairlines. Buttons that open more show a ▾ and open a
+  **paper popover** (solid, `--shadow-float`, 280px wide, max 70vh with its own scroll) under the button.
+- *Placement*: above the slide, below the header, spanning the stage only (not the rail). Why not floating near the
+  selection: it covered slide text (Codex v2 finding 15) and jumped around. Why not a side column: user rejected it.
+  The bar never covers the slide and never moves.
+- *Leading chip*: names what the bar is acting on, "Slide 3", "Text box", "Picture", "3 objects", and opens the
+  **Objects** popover (PowerPoint's Selection Pane: every object with hide/lock, drag to reorder, click to select).
+- *Contents by selection* (each ▾ is a popover reusing the v2 section, laid flat without accordions):
+  - **Nothing selected (slide)**: Background (colour well, Apply to all) · Transition ▾ · Design ▾ (deck fonts,
+    colours, slide size) · Review ▾ (comments on this slide, accessibility check, version history). Missing-font
+    notes appear in Design.
+  - **Text box / any selection with text, or while editing text**: Font ▾ (searchable, each name in its face) · size
+    (pt) · colour · B I U · Align ▾ (left/centre/right/justify, top/middle/bottom) · Bullets · Numbering ·
+    Spacing ▾ (line spacing, before/after, indent) · then the object groups below.
+  - **Shape**: Fill ▾ (fill, gradient, border, corners) · Effects ▾ (opacity, shadow) · [text controls if it has
+    text] · Arrange ▾ · Animate ▾ · ⋯ (alt text, comments).
+  - **Picture**: Picture ▾ (replace, fit/crop, focus) · Border ▾ · Effects ▾ · Arrange ▾ · Animate ▾ · ⋯.
+  - **Table**: Table ▾ (rows, columns, fills, borders) · text controls · Arrange ▾ · ⋯.
+  - **Chart**: Edit data… (dialog) · Chart ▾ (type, colours) · Arrange ▾ · Animate ▾ · ⋯.
+  - **Line**: Line ▾ (colour, width, dash, arrowheads) · Arrange ▾ · Animate ▾ · ⋯.
+  - **Kept PowerPoint object**: "Kept exactly as in PowerPoint" · Arrange ▾.
+  - **Several objects**: Align ▾ (align, distribute, group) · Fill ▾ (if all styleable; mixed states) · Arrange ▾ ·
+    Animate ▾.
+- *Reaction*: text controls never take focus from text being edited (mousedown prevented; size field and colour
+  keep a selection bookmark and return to it). ⌥F10 or ⌥⌘I moves focus into the bar; arrows move between controls;
+  Esc returns to the text or the stage. Popovers: Esc closes and returns focus to their button; clicking outside
+  closes; changes apply live (one undo step per completed change, as v2). Selection changes close an open popover
+  only if the new selection doesn't offer it.
+- *Narrow*: below ~1100px of stage width, labels collapse to icons with tooltips; the text group keeps font, size,
+  B I U and moves the rest into Aa ▾.
+- *Read-only viewer*: no bar.
+
+### Insert galleries (header)
+- Text and Picture insert directly. **Shapes ▾** opens a grid of real shape previews (rectangle, rounded, ellipse,
+  triangle, diamond, pentagon, hexagon, star, arrow, line, connector arrow…), each tile labelled for screen
+  readers and tooltip. **Table ▾** opens a 10×8 hover grid ("4 × 3 table"), arrow keys move the size, Enter
+  inserts. **Chart ▾** opens four thumbnails (column, bar, line, pie).
+- Click inserts centred in the visible slide and selects it; any tile can be dragged onto the slide to place it.
+- Galleries are paper popovers (like the colour popover), not glass menus: they show previews.
+
+### Download
+- One **Download ▾** button replaces the PowerPoint and HTML buttons: "PowerPoint (.pptx)" (opens in PowerPoint,
+  Keynote, Google Slides) and "Web page (.html)" (one file, any browser). The deck's save failure link keeps its
+  direct "Download a copy".
+
+### Notes drawer
+- A 32px strip under the stage, "Notes" with a caret and the first line of the slide's notes; click (or ⌥⌘N) opens a
+  160px pane with the notes field (PowerPoint's notes pane). Open/closed is remembered. Typing saves on blur and
+  after 600ms idle.
+
+### Ask
+- The AI column stays (Ask button in the header, ⌘J). Format | Ask segmented control is gone.

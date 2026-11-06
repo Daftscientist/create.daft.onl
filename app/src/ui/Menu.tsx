@@ -1,6 +1,6 @@
 // Context menu / ⋯ menu (DESIGN.md §6 Menu). Glass, keyboard-driven, returns focus to its trigger.
 import { Check } from '@phosphor-icons/react'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, motion, useIsPresent } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { snappy } from '../lib/motion'
@@ -56,11 +56,15 @@ function MenuPanel({ anchor, items: all, onClose, label, search }: { anchor: Men
   const items = search ? filterItems(all, query) : all
   const [pos, setPos] = useState<{ left: number; top: number; origin: string }>({ left: anchor.x, top: anchor.y, origin: 'top left' })
   const [active, setActive] = useState(-1)
+  // While the menu fades out after a choice, it takes no focus: the action may have put focus somewhere
+  // (a rename field) and the fading menu mustn't take it back.
+  const present = useIsPresent()
   useEffect(() => {
+    if (!present) return
     const el = active >= 0 ? ref.current?.querySelector<HTMLElement>(`[data-index="${active}"]`) : null
     if (search) el?.scrollIntoView({ block: 'nearest' })
     else el?.focus({ preventScroll: true })
-  }, [active, search])
+  }, [active, search, present])
   const returnTo = useRef<Element | null>(document.activeElement)
   const typed = useRef({ text: '', at: 0 })
   const actionable = items.map((it, i) => (!it.kind || it.kind === 'item') && !it.disabled ? i : -1).filter((i) => i >= 0)
@@ -89,12 +93,17 @@ function MenuPanel({ anchor, items: all, onClose, label, search }: { anchor: Men
     addEventListener('resize', onBlur)
     addEventListener('blur', onBlur)
     const el = returnTo.current
+    const panel = ref.current
     return () => {
       removeEventListener('pointerdown', close, true)
       removeEventListener('wheel', close, true)
       removeEventListener('resize', onBlur)
       removeEventListener('blur', onBlur)
-      if (el instanceof HTMLElement && document.contains(el)) el.focus({ preventScroll: true })
+      // Focus goes back to the trigger only if the chosen action didn't put it somewhere (a rename field,
+      // a dialog): the menu unmounts after its exit animation, after the action has run.
+      const a = document.activeElement
+      const stray = !a || a === document.body || (panel?.contains(a) ?? false)
+      if (stray && el instanceof HTMLElement && document.contains(el)) el.focus({ preventScroll: true })
     }
   }, [])
 
@@ -132,7 +141,7 @@ function MenuPanel({ anchor, items: all, onClose, label, search }: { anchor: Men
       aria-label={label}
       tabIndex={-1}
       className={`${s.menu} glass`}
-      style={{ left: pos.left, top: pos.top, transformOrigin: pos.origin }}
+      style={{ left: pos.left, top: pos.top, transformOrigin: pos.origin, pointerEvents: present ? undefined : 'none' }}
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1, transition: snappy }}
       exit={{ opacity: 0, transition: { duration: 0.12 } }}
@@ -169,7 +178,7 @@ function MenuPanel({ anchor, items: all, onClose, label, search }: { anchor: Men
             data-active={active === i || undefined}
             data-danger={it.danger || undefined}
             onPointerMove={() => !it.disabled && setActive(i)}
-            onPointerLeave={() => { setActive(-1); if (!search) ref.current?.focus({ preventScroll: true }) }}
+            onPointerLeave={() => { setActive(-1); if (!search && present) ref.current?.focus({ preventScroll: true }) }}
             onClick={() => run(i)}
           >
             <span className={s.icon}>{it.icon}</span>
