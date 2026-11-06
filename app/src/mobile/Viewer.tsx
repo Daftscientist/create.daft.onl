@@ -1,6 +1,7 @@
 // Mobile viewer (VISION: view first, present easily). Swipe through slides, tap toggles controls,
-// labelled Present, resumes at your last slide.
-import { CaretLeft, DotsThree, Play } from '@phosphor-icons/react'
+// labelled Present, resumes at your last slide. Ask (typing or voice) changes the deck from the phone; its edits
+// land in the slides behind the sheet.
+import { CaretLeft, ChatCircleText, DotsThree, Play } from '@phosphor-icons/react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { ActionSheet } from '../compositions/ActionSheet'
@@ -11,6 +12,9 @@ import { SlideView } from '../slides/SlideView'
 import { Present } from '../editor/Present'
 import { Button, IconButton } from '../ui/Button'
 import { EmptyState } from '../compositions/PageHeader'
+import { AgentPanel } from '../compositions/AgentPanel'
+import { useActiveModel } from '../data/ai/settings'
+import { Sheet } from '../ui/Sheet'
 import s from './Viewer.module.css'
 
 export function MobileViewer({ deckId, slide }: { deckId: string; slide?: number }) {
@@ -21,7 +25,8 @@ export function MobileViewer({ deckId, slide }: { deckId: string; slide?: number
   const [presenting, setPresenting] = useState(false)
   const [index, setIndex] = useState(() => slide ?? (deck?.type === 'deck' ? deck.lastSlide : 0))
   const [chrome, setChrome] = useState(true)
-  const [sheet, setSheet] = useState<'actions' | 'move' | null>(null)
+  const [sheet, setSheet] = useState<'actions' | 'move' | 'ask' | null>(null)
+  const ai = !!useActiveModel()
 
   useEffect(() => {
     const el = strip.current
@@ -76,13 +81,17 @@ export function MobileViewer({ deckId, slide }: { deckId: string; slide?: number
             <div className={s.dots} aria-hidden>
               {deck.slides.map((_, i) => <i key={i} data-on={i === index || undefined} />)}
             </div>
-            <Button variant="primary" size="lg" icon={<Play size={16} weight="fill" />} onClick={() => setPresenting(true)}>Present</Button>
+            <div className={s.actions}>
+              {ai && <Button variant="secondary" size="lg" icon={<ChatCircleText size={16} />} onClick={() => setSheet('ask')}>Ask</Button>}
+              <Button variant="primary" size="lg" icon={<Play size={16} weight="fill" />} onClick={() => setPresenting(true)}>Present</Button>
+            </div>
           </motion.footer>
         )}
       </AnimatePresence>
       <AnimatePresence>
         {sheet === 'actions' && <ActionSheet ids={[deck.id]} ctx={{ open: () => setSheet(null), pickFolder: () => setSheet('move'), inTrash: false }} onClose={() => setSheet((x) => (x === 'actions' ? null : x))} />}
         {sheet === 'move' && <FolderSheet ids={[deck.id]} onClose={() => setSheet(null)} />}
+        {sheet === 'ask' && <Sheet label="Ask Ream" full onClose={() => setSheet(null)}><div className={s.askSheet}><AgentPanel deck={deck} slide={index} onClose={() => setSheet(null)} /></div></Sheet>}
         {presenting && <Present deck={deck} start={index} onExit={(i) => { setPresenting(false); setIndex(i) }} />}
       </AnimatePresence>
     </div>

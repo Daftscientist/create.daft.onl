@@ -21,3 +21,6 @@
 .dots { display: flex; gap: 5px; flex-wrap: wrap; max-width: 55%; }
 .dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--fill-2); transition: width var(--dur-2) var(--ease-out), background-color var(--dur-2); }
 .dots i[data-on] { width: 18px; background: var(--ink); }
+.actions { display: flex; gap: 8px; }
+.askSheet { display: flex; flex-direction: column; height: min(86dvh, 760px); min-height: 0; }
+.askSheet > * { flex: 1; min-height: 0; }
