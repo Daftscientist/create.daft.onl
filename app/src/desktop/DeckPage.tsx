@@ -1,17 +1,20 @@
-// The deck editor (docs/design/specs/editor.md). Mica header with the insert bar, undo/redo, honest save
-// status, Download, Format|Ask and Present; the slide rail; the canvas; one shared, resizable column for
-// Format or Ask. Coarse pointers (tablets in the desktop shell) get the viewer.
-import { ArrowArcLeft, ArrowArcRight, ArrowLeft, CaretDown, ChartBar, Table, ChatCircleText, DownloadSimple, Image as ImageIcon, Minus, Play, Plus, Shapes, SlidersHorizontal, TextT } from '@phosphor-icons/react'
+// The deck editor (docs/design/specs/editor.md, v3 layout). Mica header: title with the deck menu, insert
+// galleries, undo/redo, honest save status, Ask, Download and Present. Below: the slide rail, then the stage
+// column (context bar, canvas, notes drawer), and the Ask column when open. Coarse pointers get the viewer.
+import { ArrowArcLeft, ArrowArcRight, ArrowLeft, CaretDown, ChartBar, Table, ChatCircleText, DownloadSimple, Image as ImageIcon, Minus, Play, Plus, Shapes, TextT } from '@phosphor-icons/react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { download, openDeck as touchDeck, retrySave, setLastSlide, useLibrary, useSaveState } from '../data/library'
 import { useActiveModel } from '../data/ai/settings'
+import type { Deck } from '../data/types'
 import { count } from '../lib/format'
 import { back, navigate } from '../lib/router'
 import { modKey } from '../lib/shell'
 import { Button, IconButton } from '../ui/Button'
 import { HtmlMark, PptxMark } from '../ui/FileMarks'
 import { Menu, type MenuAnchor, type MenuItem } from '../ui/Menu'
-import { Segmented } from '../ui/Segmented'
+import { Popover } from '../ui/Popover'
+import { Dialog } from '../ui/Dialog'
+import { FlatSections } from '../ui/Inspector'
 import { Tooltip } from '../ui/Tooltip'
 import { Toaster } from '../ui/Toaster'
 import { EmptyState } from '../compositions/PageHeader'
@@ -19,10 +22,14 @@ import { SyncInline } from '../compositions/SyncStatus'
 import { AgentPanel } from '../compositions/AgentPanel'
 import { Canvas, clampZoom, currentFit, slidePoint, visibleCentre } from '../editor/Canvas'
 import { copySelection, onClipboardEvent, pasteFromMenu } from '../editor/clipboard'
-import { FormatPanel } from '../editor/FormatPanel'
+import { ContextBar } from '../editor/ContextBar'
+import { NotesDrawer } from '../editor/NotesDrawer'
+import { ChartGallery, ShapesGallery, TableGallery } from '../editor/InsertGallery'
+import { DesignSection, FLAT, colorsOf, useMissingFonts } from '../editor/Sections'
+import { AccessibilitySection, VersionsDialog } from '../editor/Review'
 import { useHistory } from '../editor/history'
-import { insertPicture, insertShape, insertText, pickPicture, SHAPES, type ShapeKind } from '../editor/insert'
-import { CHART_TYPES, insertChart } from '../editor/chart'
+import { insertPicture, insertShape, insertText, pickPicture, type ShapeKind } from '../editor/insert'
+import { insertChart, type ChartType } from '../editor/chart'
 import { insertTable } from '../editor/table'
 import { applyUndo, regionOf, useEditorKeys } from '../editor/keys'
 import { duplicateObjects, group, newSlide, removeObjects, reorder, toggleAttr, ungroup } from '../editor/ops'
@@ -32,7 +39,6 @@ import { maybeKeep } from '../editor/versions'
 import { copyFormat, hasFormat, pasteFormat } from '../editor/painter'
 import { Rail } from '../editor/Rail'
 import { getEditor, setEditor, useEditor, type Column } from '../editor/session'
-import { TextBar } from '../editor/TextBar'
 import { endEdit, onTextChange, textHistory } from '../editor/textctl'
 import s from './DeckPage.module.css'
 
@@ -40,6 +46,7 @@ const kept = new Map<string, { slideId: string | null; sel: string[]; scope: str
 const COL_KEY = 'ream.editor.column'
 const WIDTH_KEY = 'ream.editor.columnWidth'
 const coarse = matchMedia('(pointer: coarse)')
+type Gallery = { kind: 'shapes' | 'table' | 'chart'; anchor: HTMLElement }
 const useCoarse = () => useSyncExternalStore((l) => (coarse.addEventListener('change', l), () => coarse.removeEventListener('change', l)), () => coarse.matches)
 function useWidth() {
   const [w, setW] = useState(innerWidth)
@@ -68,6 +75,9 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const [askMounted, setAskMounted] = useState(false)
   const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuItem[]; label: string } | null>(null)
   const [find, setFind] = useState<{ replace: boolean } | null>(null)
+  const [gallery, setGallery] = useState<Gallery | null>(null)
+  const [galleryAside, setGalleryAside] = useState(false)
+  const [deckDialog, setDeckDialog] = useState<'design' | 'a11y' | 'versions' | null>(null)
   const page = useRef<HTMLDivElement>(null)
 
   // Open the editor session on this deck.
@@ -76,7 +86,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     const d = deck
     const start = d.slides[Math.min(slide ?? d.lastSlide ?? 0, d.slides.length - 1)]?.id ?? null
     const saved = read(COL_KEY) as Column | 'none' | null
-    const col: Column = saved === 'none' ? null : saved === 'ask' || saved === 'format' ? saved : innerWidth >= 1100 ? 'format' : null
+    const col: Column = saved === 'ask' ? 'ask' : null
     // Coming back (a resize across the phone layout, browser zoom): the same slide, selection and zoom.
     const back = kept.get(deckId)
     const slideOk = back && d.slides.some((x) => x.id === back.slideId)
@@ -119,7 +129,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     readOnly: viewer, deckId, slides: d?.slides.map((x) => x.id) ?? [],
     onPresent: present,
     onAsk: () => setColumn(getEditor().column === 'ask' ? null : 'ask'),
-    onFormat: () => setColumn(getEditor().column === 'format' ? null : 'format'),
+    onFormat: () => dispatchEvent(new Event('ream:focus-bar')),
     onLeave: leave, onFind: (replace: boolean) => setFind({ replace }), fitZoom: currentFit,
   }), [deckId, d?.slides, present, viewer]) // eslint-disable-line react-hooks/exhaustive-deps
   useEditorKeys(keyOpts)
@@ -174,7 +184,6 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
       ] : [
         { label: 'Paste', hint: `${modKey}V`, run: () => void pasteFromMenu(at, size) },
         { label: 'New slide', hint: `${modKey}↵`, run: () => newSlide() },
-        { label: 'Format slide', run: () => setColumn('format') },
       ]
       setMenu({ anchor: { x, y }, items, label: 'Object' })
     }
@@ -203,30 +212,19 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
 
   const size = d.size ?? { w: 1280, h: 720 }
   const iconOnly = width < 1280
-  // The column docks only while the stage keeps room for a 640px slide plus handle clearance.
+  // Ask docks only while the stage keeps room for a 640px slide plus handle clearance; otherwise it overlays.
   const overlay = width - 216 - colW < 640 + 96
   const compactRail = false
-  const showColumn = !viewer && !!column
-  const askOn = ai && column === 'ask'
+  const askOn = !viewer && ai && column === 'ask'
+  const showColumn = askOn
 
-  const insertMenu = (e: React.MouseEvent) => {
-    const r = e.currentTarget.getBoundingClientRect()
-    setMenu({ anchor: { x: r.left, y: r.bottom + 6 }, label: 'Shape', items: SHAPES.map((x) => ({ label: x.label, run: () => insertShape(x.kind, visibleCentre()) })) })
-  }
-  const tableMenu = (e: React.MouseEvent) => {
-    const r = e.currentTarget.getBoundingClientRect()
-    const sizes: [number, number][] = [[2, 2], [3, 3], [4, 3], [5, 4], [6, 5], [8, 6]]
-    setMenu({ anchor: { x: r.left, y: r.bottom + 6 }, label: 'Table', items: sizes.map(([rw, c]) => ({ label: `${c} columns × ${rw} rows`, run: () => insertTable(rw, c, visibleCentre()) })) })
-  }
-  const chartMenu = (e: React.MouseEvent) => {
-    const r = e.currentTarget.getBoundingClientRect()
-    setMenu({ anchor: { x: r.left, y: r.bottom + 6 }, label: 'Chart', items: CHART_TYPES.map((t) => ({ label: t.label, run: () => insertChart(t.type, visibleCentre()) })) })
-  }
+  const openGallery = (kind: Gallery['kind']) => (e: React.MouseEvent<HTMLElement>) => { const a = e.currentTarget; setGallery((g) => (g?.kind === kind ? null : { kind, anchor: a })) }
+  const picked = (run: () => void) => { setGallery(null); run() }
   const downloadMenu = (e: React.MouseEvent) => {
     const r = e.currentTarget.getBoundingClientRect()
     setMenu({ anchor: { x: r.right, y: r.bottom + 6, align: 'end' }, label: 'Download', items: [
       { label: 'PowerPoint (.pptx)', icon: <PptxMark />, run: () => { endEdit(); download([d.id], 'pptx') } },
-      { label: 'HTML', icon: <HtmlMark />, run: () => { endEdit(); download([d.id], 'html') } },
+      { label: 'Web page (.html)', icon: <HtmlMark />, run: () => { endEdit(); download([d.id], 'html') } },
     ] })
   }
   const pic = async (at?: { x: number; y: number }) => { const f = await pickPicture(); if (f) await insertPicture(f, at ?? visibleCentre(), size) }
@@ -240,7 +238,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
       if (kind === 'text') insertText(at)
       else if (kind === 'picture') void pic(at)
       else if (kind === 'table') insertTable(3, 3, at)
-      else if (kind === 'chart') insertChart('column', at)
+      else if (kind.startsWith('chart')) insertChart((kind.split(':')[1] ?? 'column') as ChartType, at)
       else insertShape(kind as ShapeKind, at)
       return
     }
@@ -255,7 +253,16 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
       <header className={s.header} data-region="header">
         <IconButton label="Back to library" hint={`${modKey}[`} onClick={leave}><ArrowLeft size={16} /></IconButton>
         <div className={s.title}>
-          <h1 title={d.name}>{d.name}</h1>
+          <span className={s.titleRow}>
+            <h1 title={d.name}>{d.name}</h1>
+            {!viewer && <IconButton label="Deck options" size="sm" tone="plain" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ anchor: { x: r.left, y: r.bottom + 6 }, label: 'Deck', items: [
+              { label: 'Find and replace', hint: `${modKey}H`, run: () => setFind({ replace: true }) },
+              { kind: 'sep' },
+              { label: 'Design: fonts, colours, slide size…', run: () => setDeckDialog('design') },
+              { label: 'Check accessibility…', run: () => setDeckDialog('a11y') },
+              { label: 'Version history…', run: () => setDeckDialog('versions') },
+            ] }) }}><CaretDown size={12} weight="bold" /></IconButton>}
+          </span>
           <span>
             {count(d.slides.length, 'slide')} · {status ?? <><button type="button" className={s.notSaved} onClick={retrySave}>Not saved · Retry</button> · <button type="button" className={s.notSaved} onClick={() => download([d.id], 'pptx')}>Download a copy</button></>} <SyncInline />
           </span>
@@ -263,10 +270,10 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         {!viewer && (
           <div className={s.insert} role="toolbar" aria-label="Insert">
             <InsertButton label="Text" hint="Insert a text box" iconOnly={iconOnly} icon={<TextT size={16} />} onClick={() => insertText(visibleCentre())} onDragStart={dragInsert('text')} />
-            <InsertButton label="Shape" hint="Insert a shape" iconOnly={iconOnly} icon={<Shapes size={16} />} onClick={insertMenu} onDragStart={dragInsert('rect')} caret />
+            <InsertButton label="Shapes" hint="Insert a shape" iconOnly={iconOnly} icon={<Shapes size={16} />} onClick={openGallery('shapes')} onDragStart={dragInsert('rect')} expanded={gallery?.kind === 'shapes'} caret />
             <InsertButton label="Picture" hint="Insert a picture" iconOnly={iconOnly} icon={<ImageIcon size={16} />} onClick={() => void pic()} onDragStart={dragInsert('picture')} />
-            <InsertButton label="Table" hint="Insert a table" iconOnly={iconOnly || width < 1440} icon={<Table size={16} />} onClick={tableMenu} onDragStart={dragInsert('table')} caret />
-            <InsertButton label="Chart" hint="Insert a chart" iconOnly={iconOnly || width < 1440} icon={<ChartBar size={16} />} onClick={chartMenu} onDragStart={dragInsert('chart')} caret />
+            <InsertButton label="Table" hint="Insert a table" iconOnly={iconOnly} icon={<Table size={16} />} onClick={openGallery('table')} onDragStart={dragInsert('table')} expanded={gallery?.kind === 'table'} caret />
+            <InsertButton label="Chart" hint="Insert a chart" iconOnly={iconOnly} icon={<ChartBar size={16} />} onClick={openGallery('chart')} onDragStart={dragInsert('chart')} expanded={gallery?.kind === 'chart'} caret />
           </div>
         )}
         {!viewer && width >= 760 && (
@@ -276,14 +283,8 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
           </div>
         )}
         <div className={s.actions}>
-          {width >= 1100 ? <>
-            <Tooltip label="Download PowerPoint (.pptx)"><Button variant="ghost" icon={<PptxMark />} onClick={() => { endEdit(); download([d.id], 'pptx') }}>PowerPoint</Button></Tooltip>
-            <Tooltip label="Download HTML"><Button variant="ghost" icon={<HtmlMark />} onClick={() => { endEdit(); download([d.id], 'html') }}>HTML</Button></Tooltip>
-          </> : <Button variant="ghost" icon={<DownloadSimple size={15} />} trailing={<CaretDown size={11} />} aria-haspopup="menu" onClick={downloadMenu}>Download</Button>}
-          {!viewer && (ai
-            ? <Segmented<'format' | 'ask'> label="Right column" value={(column ?? '') as 'format' | 'ask'} onChange={(v) => setColumn(column === v ? null : v)}
-                options={[{ value: 'format', label: <span className={s.seg}><SlidersHorizontal size={14} />Format</span>, title: 'Format (⌥⌘I)' }, { value: 'ask', label: <span className={s.seg}><ChatCircleText size={14} />Ask</span>, title: `Ask Ream (${modKey}J)` }]} />
-            : <Tooltip label="Format" hint="⌥⌘I"><Button variant={column === 'format' ? 'secondary' : 'ghost'} aria-pressed={column === 'format'} icon={<SlidersHorizontal size={15} />} onClick={() => setColumn(column === 'format' ? null : 'format')}>Format</Button></Tooltip>)}
+          {!viewer && ai && <Tooltip label="Ask Ream" hint={`${modKey}J`}><Button variant={column === 'ask' ? 'secondary' : 'ghost'} aria-pressed={column === 'ask'} icon={<ChatCircleText size={15} />} onClick={() => setColumn(column === 'ask' ? null : 'ask')}>Ask</Button></Tooltip>}
+          <Button variant="ghost" icon={<DownloadSimple size={15} />} trailing={<CaretDown size={11} />} aria-haspopup="menu" onClick={downloadMenu}>Download</Button>
           <span className={s.presentGroup}>
             <Tooltip label="Present from this slide" hint="⇧F5"><Button variant="primary" icon={<Play size={14} weight="fill" />} onClick={() => present(false)}>Present</Button></Tooltip>
             <IconButton label="More ways to present" className={s.presentMore} aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ anchor: { x: r.right, y: r.bottom + 6, align: 'end' }, label: 'Present', items: [
@@ -296,22 +297,34 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
       </header>
       <div className={s.body} data-column={showColumn || undefined} data-overlay={overlay || undefined} style={{ ['--col' as string]: `${colW}px` }}>
         <Rail deck={d} compact={compactRail} readOnly={viewer} />
-        <div className={s.stageWrap} onDragOver={(e) => { if (e.dataTransfer.types.includes('application/x-ream-insert') || e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation() } }} onDrop={onDrop}>
-          <Canvas deck={d} slide={cur} label={`Slide ${index + 1} of ${d.slides.length}`} readOnly={viewer} />
-          <ZoomCluster />
-          {find && <FindBar deck={d} replace={find.replace} onClose={() => { setFind(null); document.querySelector<HTMLElement>('[data-region="stage"]')?.focus() }} />}
+        <div className={s.stageCol}>
+          {!viewer && <ContextBar deck={d} slide={cur} index={index} />}
+          <div className={s.stageWrap} onDragOver={(e) => { if (e.dataTransfer.types.includes('application/x-ream-insert') || e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation() } }} onDrop={onDrop}>
+            <Canvas deck={d} slide={cur} label={`Slide ${index + 1} of ${d.slides.length}`} readOnly={viewer} />
+            <ZoomCluster />
+            {find && <FindBar deck={d} replace={find.replace} onClose={() => { setFind(null); document.querySelector<HTMLElement>('[data-region="stage"]')?.focus() }} />}
+          </div>
+          {!viewer && <NotesDrawer slide={cur} />}
         </div>
         {showColumn && (
           <div className={s.column}>
             <Splitter width={colW} onWidth={(w) => { setColW(w); write(WIDTH_KEY, String(w)) }} />
-            {column === 'format' && <FormatPanel deck={d} slide={cur} index={index} onClose={() => setColumn(null)} />}
-            {/* Ask stays mounted once opened, so switching to Format never stops or loses a run. */}
-            {askMounted && ai && <div className={s.askHost} hidden={!askOn}><AgentPanel deck={d} slide={index} onClose={() => setColumn(null)} /></div>}
-            {column === 'ask' && !ai && <FormatPanel deck={d} slide={cur} index={index} onClose={() => setColumn(null)} />}
           </div>
         )}
+        {/* Ask stays mounted once opened, so closing it never stops or loses a run. */}
+        {askMounted && ai && <div className={s.askHost} data-region="column" data-overlay={overlay || undefined} hidden={!askOn}><AgentPanel deck={d} slide={index} onClose={() => setColumn(null)} /></div>}
       </div>
-      <TextBar />
+      {gallery && (
+        <Popover anchor={gallery.anchor} label={gallery.kind === 'shapes' ? 'Shapes' : gallery.kind === 'table' ? 'Table' : 'Chart'} width={gallery.kind === 'shapes' ? 268 : gallery.kind === 'table' ? 258 : 248}
+          className={galleryAside ? s.aside : undefined} onClose={() => setGallery(null)}>
+          {gallery.kind === 'shapes' && <ShapesGallery onPick={(k) => picked(() => insertShape(k, visibleCentre()))} onDrag={(on) => { setGalleryAside(on); if (!on) setGallery(null) }} />}
+          {gallery.kind === 'table' && <TableGallery onPick={(r, c) => picked(() => insertTable(r, c, visibleCentre()))} onDrag={(on) => { setGalleryAside(on); if (!on) setGallery(null) }} />}
+          {gallery.kind === 'chart' && <ChartGallery onPick={(t) => picked(() => insertChart(t, visibleCentre()))} onDrag={(on) => { setGalleryAside(on); if (!on) setGallery(null) }} />}
+        </Popover>
+      )}
+      {deckDialog === 'design' && <DesignDialog deck={d} onClose={() => setDeckDialog(null)} />}
+      {deckDialog === 'a11y' && <Dialog title="Accessibility" width={480} onClose={() => setDeckDialog(null)} actions={<Button variant="secondary" onClick={() => setDeckDialog(null)}>Done</Button>}><FlatSections.Provider value="bare"><AccessibilitySection deck={d} sec={FLAT} /></FlatSections.Provider></Dialog>}
+      {deckDialog === 'versions' && <VersionsDialog deck={d} onClose={() => setDeckDialog(null)} />}
       {presenting && <Present deck={d} presenter={presenter} start={presentFrom.current ?? index} onExit={(i) => { setEditor({ presenting: false, slideId: d.slides[i]?.id ?? cur.id }); requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-region="stage"]')?.focus()) }} />}
       <Menu open={!!menu} anchor={menu?.anchor ?? null} items={menu?.items ?? []} label={menu?.label ?? ''} onClose={() => setMenu(null)} />
       <Toaster />
@@ -319,10 +332,23 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   )
 }
 
-function InsertButton({ label, hint, icon, iconOnly, onClick, onDragStart, caret }: { label: string; hint: string; icon: React.ReactNode; iconOnly: boolean; onClick: (e: React.MouseEvent) => void; onDragStart: (e: React.DragEvent) => void; caret?: boolean }) {
+/** Deck-wide design (the deck menu): replace fonts and colours throughout, slide size, missing fonts. */
+function DesignDialog({ deck, onClose }: { deck: Deck; onClose: () => void }) {
+  const missing = useMissingFonts(deck)
+  return (
+    <Dialog title="Design" width={480} onClose={onClose} actions={<Button variant="secondary" onClick={onClose}>Done</Button>}>
+      <FlatSections.Provider value="bare">
+        <DesignSection deck={deck} sec={FLAT} colors={colorsOf(deck)} />
+      </FlatSections.Provider>
+      {missing.map((f) => <p key={f} className={s.dialogNote}>{f} isn’t available here; showing a similar font. Exports keep {f}.</p>)}
+    </Dialog>
+  )
+}
+
+function InsertButton({ label, hint, icon, iconOnly, onClick, onDragStart, caret, expanded }: { label: string; hint: string; icon: React.ReactNode; iconOnly: boolean; onClick: (e: React.MouseEvent<HTMLElement>) => void; onDragStart: (e: React.DragEvent) => void; caret?: boolean; expanded?: boolean }) {
   return (
     <Tooltip label={iconOnly ? label : hint}>
-      <button type="button" className={s.insertBtn} aria-label={label} draggable onDragStart={onDragStart} onClick={onClick} aria-haspopup={caret ? 'menu' : undefined}>
+      <button type="button" className={s.insertBtn} aria-label={label} draggable onDragStart={onDragStart} onClick={onClick} aria-haspopup={caret ? 'dialog' : undefined} aria-expanded={caret ? !!expanded : undefined}>
         {icon}{!iconOnly && <span>{label}</span>}{caret && <CaretDown size={10} weight="bold" />}
       </button>
     </Tooltip>

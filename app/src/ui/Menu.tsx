@@ -139,6 +139,7 @@ function MenuPanel({ anchor, items: all, onClose, label, search }: { anchor: Men
       ref={ref}
       role="menu"
       aria-label={label}
+      data-ream-layer=""
       tabIndex={-1}
       className={`${s.menu} glass`}
       style={{ left: pos.left, top: pos.top, transformOrigin: pos.origin, pointerEvents: present ? undefined : 'none' }}

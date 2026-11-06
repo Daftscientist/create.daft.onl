@@ -1,8 +1,9 @@
 .page { height: 100%; display: flex; flex-direction: column; background: var(--frame); }
 .header { display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 16px; flex: none; min-width: 0; }
 .title { flex: 1; min-width: 80px; display: flex; flex-direction: column; }
-.title h1 { font-size: 15px; line-height: 20px; font-weight: 620; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.title span { font-size: 12.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.titleRow { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.title h1 { min-width: 0; font-size: 15px; line-height: 20px; font-weight: 620; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title > span:last-child { font-size: 12.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .notSaved { color: var(--danger); font-weight: 600; font-size: inherit; }
 .notSaved:hover { text-decoration: underline; }
 .insert { display: flex; align-items: center; gap: 2px; padding: 2px; border-radius: var(--r-pill); background: var(--fill); }
@@ -14,18 +15,26 @@
 .insertBtn:focus-visible { outline: 2px solid var(--select); outline-offset: 1px; }
 .history { display: flex; align-items: center; }
 .actions { display: flex; align-items: center; gap: 6px; }
-.seg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 560; padding: 0 2px; }
 .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 8px; padding: 0 8px 8px; position: relative; }
 .body[data-column] { grid-template-columns: 200px minmax(0, 1fr) var(--col); }
-/* Narrow windows: the column overlays the stage instead of pushing it (spec: Widths). */
+/* Narrow windows: Ask overlays the stage instead of pushing it (spec: Widths). */
 .body[data-column][data-overlay] { grid-template-columns: 200px minmax(0, 1fr); }
-.body[data-overlay] .column { position: absolute; right: 8px; top: 0; bottom: 8px; width: min(var(--col), calc(100% - 96px)); z-index: 5; box-shadow: var(--shadow-float); border-radius: var(--r-panel); }
-.stageWrap { position: relative; min-height: 0; min-width: 0; }
-.column { position: relative; min-height: 0; display: flex; }
-.column > aside, .askHost { flex: 1; min-width: 0; }
-.askHost { display: flex; }
+/* The stage column is one panel: context bar, canvas, notes. */
+.stageCol {
+  display: flex; flex-direction: column; min-height: 0; min-width: 0; grid-column: 2; grid-row: 1;
+  border-radius: var(--r-panel); background: var(--panel); box-shadow: 0 0 0 1px var(--hair); overflow: hidden;
+}
+.stageWrap { position: relative; flex: 1; min-height: 0; min-width: 0; }
+.column { position: relative; min-height: 0; grid-column: 3; grid-row: 1; pointer-events: none; }
+.column > * { pointer-events: auto; }
+.askHost { display: flex; grid-column: 3; grid-row: 1; min-height: 0; min-width: 0; }
 .askHost[hidden] { display: none; }
 .askHost > * { flex: 1; min-width: 0; }
+.askHost[data-overlay] { position: absolute; right: 8px; top: 0; bottom: 8px; width: min(var(--col), calc(100% - 96px)); z-index: 5; box-shadow: var(--shadow-float); border-radius: var(--r-panel); }
+.body[data-overlay] .column { display: none; }
+/* A gallery steps aside while one of its tiles is dragged onto the slide. */
+.aside { opacity: 0; pointer-events: none; }
+.dialogNote { font-size: 12.5px; color: var(--ink-3); margin-top: 8px; }
 .splitter { position: absolute; left: -8px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 2; }
 .splitter:hover, .splitter:focus-visible { background: linear-gradient(to right, transparent 3px, var(--select) 3px 5px, transparent 5px); outline: none; }
 .zoom {

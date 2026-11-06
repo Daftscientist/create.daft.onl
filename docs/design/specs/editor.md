@@ -415,3 +415,52 @@ from three): **one contextual bar above the slide** + **visual insert galleries*
 
 ### Ask
 - The AI column stays (Ask button in the header, ⌘J). Format | Ask segmented control is gone.
+
+### v3 pre-build review triage (Claude subagent "C", Codex `high` "X"; 2026-11-06)
+Accepted, and these override the v3 text above where they differ:
+- **Fixed slots** (C4, X5): `[Objects ▾ · selection name] | [text group] | [kind group] | ⟶ [Arrange ▾ · Animate ▾ · ⋯]`.
+  The text group shows whenever *any* selected object has text (multi-selections and groups included; mixed
+  states), always in the same place. Arrange, Animate and ⋯ are right-aligned and never move. Groups: kind group
+  = Ungroup + Fill and border + Effects.
+- **Work-surface popovers stay open on the canvas** (C1, C6, X1): Arrange and Objects don't close when you click
+  or drag on the stage or rail; they rebind to the new selection. Before the canvas handles the pointer, a focused
+  field is blurred, so its draft commits to the *old* selection. Every other popover closes on any outside click.
+- **Bookmarks for every control** (C3, X2): any bar control or popover that takes focus while text is being
+  edited leaves the edit alive; closing it (Enter, Esc, outside click) returns to the caret or range
+  (`refocus`). Immediate toggles (B I U, align, lists) still prevent mousedown.
+- **Keyboard** (C2, X3, X16): the bar is an ARIA toolbar with one tab stop; ←/→ move between controls except
+  inside a text field. F6 cycles header → bar → stage → notes → rail → Ask (if open). ⌥⌘I (Ctrl+Alt+I, ignored
+  when AltGraph is down) focuses the bar; **Alt+F10 opens Objects** (PowerPoint's Selection Pane shortcut).
+  Escape resolves innermost first: field draft → child picker → popover → bar back to text or stage → canvas
+  ladder.
+- **Deck-wide things leave the slide bar** (C7, X7): a **deck menu** (▾ beside the title) holds Design (replace
+  fonts / colours throughout the deck, slide size), Accessibility check, Version history, Find and replace. The
+  slide state of the bar keeps only slide-scoped things: Background, Transition, This slide's comments.
+- **Objects ▾** (C6, X8) is labelled "Objects" with the selection's name beside it; the list keeps rename,
+  hide, lock and drag order from v2.
+- **Overflow** (C5, X4) by container width: < 980px, buttons in the kind group and the right cluster lose their
+  labels (icons + tooltips); < 780px, alignment, lists and paragraph controls fold into **Text ▾**. Font, size,
+  colour and B I U never fold.
+- **Header keeps the save line** (C8): title, then "N slides · Saved in this browser · Synced" or
+  "Not saved · Retry · Download a copy", unchanged.
+- **Popovers** (X9, X17, X18): solid paper, clamped to the viewport (≤ 70vh, scroll inside). A colour well or
+  menu opened from a popover is a child layer: clicks in it don't dismiss the parent, Esc closes only the child.
+  Headings say what they do: "Fill and border", "Text alignment", "Paragraph", "Align objects".
+- **Galleries** (C11, X10, X11): roving 2-D arrow focus, Home/End, Enter inserts, Esc returns to the button. The
+  table grid starts at 1 column × 1 row, announces "4 columns, 3 rows", and has a "Custom size" row (columns,
+  rows fields; 1–30 each). Dragging a tile hides the popover; it stays closed after the drop. Lines and arrows
+  stay (endpoint handles shipped in phase 2); shapes are grouped Lines · Basic shapes · Arrows & stars.
+- **Notes** (C12, X14): 160px initially, drag splitter (80px – 40% of the window, remembered, arrow keys
+  ±16px), empty copy "Click to add speaker notes". Fit recalculates against the remaining stage.
+- **Locked by Ask** (X13): when Ask is editing the slide, the bar and notes are inert with "Ask is editing this
+  slide" in the chip.
+- **Desktop only** (X18): phones keep the viewer.
+
+Rejected or deferred:
+- Always-visible W × H in the bar (C1): Arrange staying open while you drag covers the "watch the numbers"
+  habit without spending bar width on every object.
+- On-canvas crop mode (X12), the Animation Pane sequence in Animate ▾ (C14), Format painter button and grow/shrink
+  shortcuts (C15), live preview on hover (bolder alternatives): later; logged in the backlog.
+- Download export progress and "Download original" (C13, X15): the existing export toast states stay; Download
+  original needs the original file kept, which imports don't do yet.
+- Table scope display (X6): v2's Table section already labels "This cell" vs "Whole table"; kept as is.

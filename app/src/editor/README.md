@@ -15,4 +15,5 @@ gestures preview on the live stage DOM and commit once. Exactness per object: `i
 | `snap` | Smart guides and equal spacing |
 | `units` | in/cm/pt/px with arithmetic |
 | `insert`, `clipboard`, `keys`, `commandList` | Insert bar, clipboard format, keyboard map, ⌘K commands |
-| `Canvas`, `Rail`, `FormatPanel`, `TextBar`, `Present` | The surfaces |
+| `Canvas`, `Rail`, `ContextBar`, `NotesDrawer`, `InsertGallery`, `Present` | The surfaces (v3: the context bar replaced the Format column and floating text bar) |
+| `Sections` | The property sections the context bar opens in popovers (and Design in a dialog) |

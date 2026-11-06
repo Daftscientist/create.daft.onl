@@ -1,4 +1,4 @@
-// Editor keyboard (spec: Keyboard and focus). Regions: header, rail, stage, column; F6 cycles them.
+// Editor keyboard (spec: Keyboard and focus, v3). Regions: header, bar, stage, notes, rail, column; F6 cycles them.
 // Keys inside the text being edited go to the text first. Esc ladder: cancel drag (Canvas) → end text
 // editing → exit group → clear selection → nothing. Esc never leaves the deck.
 import { useEffect } from 'react'
@@ -12,12 +12,13 @@ import { editingLive, endEdit, formatRuns, textHistory, textState, textUndo } fr
 import { isGroup, members } from './geometry'
 import { copyFormat, pasteFormat } from './painter'
 
-const REGIONS = ['header', 'rail', 'stage', 'column'] as const
+const REGIONS = ['header', 'bar', 'stage', 'notes', 'rail', 'column'] as const
 export const regionOf = (el: Element | null) => (el?.closest('[data-region]') as HTMLElement | null)?.dataset.region ?? null
 
 export function focusRegion(r: string) {
   const el = document.querySelector<HTMLElement>(`[data-region="${r}"]`)
   if (!el) return false
+  if (r === 'bar') { dispatchEvent(new Event('ream:focus-bar')); return true }
   const target = r === 'stage' ? el : el.querySelector<HTMLElement>('[aria-current="true"], button:not([disabled]), input, textarea, [tabindex="0"]') ?? el
   target.focus()
   return true
@@ -53,7 +54,8 @@ export function useEditorKeys(o: Opts) {
 
       // ---- anywhere ----
       if (mod && k === 'j') { e.preventDefault(); o.onAsk(); return }
-      if (mod && e.altKey && (k === 'i' || e.code === 'KeyI')) { e.preventDefault(); o.onFormat(); return }
+      if (mod && e.altKey && !e.getModifierState('AltGraph') && (k === 'i' || e.code === 'KeyI')) { e.preventDefault(); o.onFormat(); return }
+      if (e.altKey && e.key === 'F10' && !o.readOnly) { e.preventDefault(); dispatchEvent(new Event('ream:objects')); return }
       if (e.key === 'F6') {
         e.preventDefault()
         const cur = regionOf(document.activeElement)
@@ -97,7 +99,7 @@ export function useEditorKeys(o: Opts) {
       if (e.key === 'PageDown' || e.key === 'PageUp') { e.preventDefault(); step(o, e.key === 'PageDown' ? 1 : -1); return }
 
       const region = regionOf(document.activeElement)
-      if (region === 'rail' || region === 'column' || region === 'header') return
+      if (region === 'rail' || region === 'column' || region === 'header' || region === 'bar' || region === 'notes') return
       // ---- the stage (or nothing focused) ----
       const sel = st.sel
       if (e.key === 'Escape') {

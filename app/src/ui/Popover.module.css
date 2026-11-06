@@ -1,0 +1,6 @@
+.popover {
+  position: fixed; z-index: 55; padding: 12px; border-radius: var(--r-md); overflow: auto; overscroll-behavior: contain;
+  background: var(--paper); box-shadow: var(--shadow-float), 0 0 0 1px var(--hair);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.popover:focus { outline: none; }

@@ -47,7 +47,7 @@ export function Overlay({ onClose, label, children, className, align = 'center' 
   }, [])
 
   return createPortal(
-    <div className={s.root} data-align={align}>
+    <div className={s.root} data-align={align} data-ream-layer="">
       <motion.div
         className={s.smoke}
         initial={{ opacity: 0 }}

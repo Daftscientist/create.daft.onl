@@ -37,3 +37,12 @@ Added for the deck editor (2026-11-06):
 | Primitive | Use for | Notes |
 |---|---|---|
 | `Inspector` (`Section`, `Row`, `NumberField`, `ColorWell`, `KeptChip`) | Properties panels (the editor's Format column) | `NumberField`: units and arithmetic via `parse`, Enter/blur commit, Esc revert, arrows step, label scrubbing. `ColorWell`: solid paper popover (deck colours, recent, picker, hex). `KeptChip`: a value the controls can't show, with Replace |
+
+Added for the v3 editor layout (2026-11-06):
+
+| Primitive | Use for | Notes |
+|---|---|---|
+| `Popover` | Property forms and galleries anchored to a button | Solid paper, viewport-clamped; Esc returns focus to the button; any outside click closes it after committing a half-typed field; child layers (`data-ream-layer`: colour popover, menus, dialogs) don't dismiss it |
+| `Toolbar` | Any horizontal strip of controls | ARIA toolbar: one tab stop, ←/→/Home/End between controls (not inside text fields); `ref.focus()` returns to the last control |
+| `Slider` (in `Inspector`) | Bounded values: opacity, widths, radii, durations, angles | Native range (keyboard and screen readers); live `onPreview`, one `onCommit` on release; readout in the value's unit |
+| `FlatSections` (in `Inspector`) | Sections inside a popover or dialog | `true`: heading + rows, always open; `'bare'`: rows only |

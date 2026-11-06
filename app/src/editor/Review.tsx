@@ -1,5 +1,5 @@
 // Review (spec phase 6): comments on slides and objects, the accessibility checker, and local version
-// history. All three live in the Format column's Slide view, where PowerPoint's Review tab would be.
+// history. The context bar opens slide and object comments; the deck menu opens the checker and history.
 import { ArrowCounterClockwise, Check, ChatCircle, Trash, Warning } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
 import type { Deck, SlideDoc } from '../data/types'
@@ -13,7 +13,7 @@ import { transact } from './history'
 import { addComment, deleteComment, replyComment, resolveComment } from './ops'
 import { getEditor, setEditor } from './session'
 import { listVersions, type Version } from './versions'
-import s from './FormatPanel.module.css'
+import s from './Sections.module.css'
 
 type Sec = { open: boolean; onToggle: () => void }
 

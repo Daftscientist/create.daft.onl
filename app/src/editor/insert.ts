@@ -4,10 +4,31 @@ import { toast } from '../data/toasts'
 import { deckTextStyle, insertObject, newId, openDeck } from './ops'
 import { lineHtml } from './line'
 
-export type ShapeKind = 'rect' | 'rounded' | 'ellipse' | 'triangle' | 'star' | 'line' | 'arrow'
-export const SHAPES: { kind: ShapeKind; label: string }[] = [
-  { kind: 'rect', label: 'Rectangle' }, { kind: 'rounded', label: 'Rounded rectangle' }, { kind: 'ellipse', label: 'Ellipse' },
-  { kind: 'triangle', label: 'Triangle' }, { kind: 'star', label: 'Star' }, { kind: 'line', label: 'Line' }, { kind: 'arrow', label: 'Arrow' },
+// Polygons are domOXML's own preset outlines (domoxml/core/drawingml/presets.py), so each exports as the native
+// PowerPoint shape, not a freeform.
+const POLY = {
+  triangle: '50% 0%,100% 100%,0% 100%', rtTriangle: '0% 0%,100% 100%,0% 100%', diamond: '50% 0%,100% 50%,50% 100%,0% 50%',
+  pentagon: '50% 0%,97.55% 34.55%,79.39% 90.45%,20.61% 90.45%,2.45% 34.55%', hexagon: '25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%',
+  octagon: '29.29% 0%,70.71% 0%,100% 29.29%,100% 70.71%,70.71% 100%,29.29% 100%,0% 70.71%,0% 29.29%',
+  parallelogram: '25% 0%,100% 0%,75% 100%,0% 100%', trapezoid: '25% 0%,75% 0%,100% 100%,0% 100%',
+  plus: '25% 0%,75% 0%,75% 25%,100% 25%,100% 75%,75% 75%,75% 100%,25% 100%,25% 75%,0% 75%,0% 25%,25% 25%',
+  rightArrow: '0% 25%,50% 25%,50% 0%,100% 50%,50% 100%,50% 75%,0% 75%', leftArrow: '0% 50%,50% 0%,50% 25%,100% 25%,100% 75%,50% 75%,50% 100%',
+  upArrow: '50% 0%,100% 50%,75% 50%,75% 100%,25% 100%,25% 50%,0% 50%', downArrow: '25% 0%,75% 0%,75% 50%,100% 50%,50% 100%,0% 50%,25% 50%',
+  chevron: '0% 0%,50% 0%,100% 50%,50% 100%,0% 100%,50% 50%',
+  star: '50% 0%,61.23% 34.55%,97.55% 34.55%,68.16% 55.9%,79.39% 90.45%,50% 69.1%,20.61% 90.45%,31.84% 55.9%,2.45% 34.55%,38.77% 34.55%',
+  star4: '50% 0%,58.84% 41.16%,100% 50%,58.84% 58.84%,50% 100%,41.16% 58.84%,0% 50%,41.16% 41.16%',
+} as const
+
+export type ShapeKind = 'rect' | 'rounded' | 'ellipse' | 'line' | 'arrow' | keyof typeof POLY
+export type ShapeGroup = 'Lines' | 'Basic shapes' | 'Arrows and stars'
+export const SHAPES: { kind: ShapeKind; label: string; group: ShapeGroup; poly?: string }[] = [
+  { kind: 'line', label: 'Line', group: 'Lines' }, { kind: 'arrow', label: 'Arrow', group: 'Lines' },
+  { kind: 'rect', label: 'Rectangle', group: 'Basic shapes' }, { kind: 'rounded', label: 'Rounded rectangle', group: 'Basic shapes' },
+  { kind: 'ellipse', label: 'Ellipse', group: 'Basic shapes' },
+  ...([['triangle', 'Triangle'], ['rtTriangle', 'Right triangle'], ['diamond', 'Diamond'], ['pentagon', 'Pentagon'], ['hexagon', 'Hexagon'],
+    ['octagon', 'Octagon'], ['parallelogram', 'Parallelogram'], ['trapezoid', 'Trapezoid'], ['plus', 'Plus']] as const).map(([kind, label]) => ({ kind, label, group: 'Basic shapes' as const, poly: POLY[kind] })),
+  ...([['rightArrow', 'Right arrow'], ['leftArrow', 'Left arrow'], ['upArrow', 'Up arrow'], ['downArrow', 'Down arrow'], ['chevron', 'Chevron'],
+    ['star', 'Star'], ['star4', '4-point star']] as const).map(([kind, label]) => ({ kind, label, group: 'Arrows and stars' as const, poly: POLY[kind] })),
 ]
 
 const esc = (t: string) => t.replace(/"/g, '&quot;')
@@ -31,7 +52,6 @@ export function insertText(at: Place) {
   )
 }
 
-const STAR = '50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%'
 export function insertShape(kind: ShapeKind, at: Place) {
   if (kind === 'line' || kind === 'arrow') {
     const deck = openDeck()
@@ -41,13 +61,12 @@ export function insertShape(kind: ShapeKind, at: Place) {
     insertObject(lineHtml(newId('line'), { x: at.x - 160, y: at.y }, { x: at.x + 160, y: at.y }, color, 3, kind === 'arrow'), `Insert ${kind}`)
     return
   }
-  const w = kind === 'rect' || kind === 'rounded' ? 320 : 240, h = 240 * (kind === 'rect' || kind === 'rounded' ? 0.75 : 1)
+  const wide = (['rect', 'rounded', 'parallelogram', 'trapezoid', 'rightArrow', 'leftArrow'] as ShapeKind[]).includes(kind)
+  const w = wide ? 320 : 240, h = wide ? 180 : 240
   const p = centred(at, w, h)
   const fill = 'rgba(232,96,60,1)'
-  const extra = kind === 'rounded' ? ';border-radius:24px'
-    : kind === 'ellipse' ? ';border-radius:50%'
-    : kind === 'triangle' ? ';clip-path:polygon(50% 0%,100% 100%,0% 100%)'
-    : kind === 'star' ? `;clip-path:polygon(${STAR})` : ''
+  const poly = SHAPES.find((x) => x.kind === kind)?.poly
+  const extra = kind === 'rounded' ? ';border-radius:24px' : kind === 'ellipse' ? ';border-radius:50%' : poly ? `;clip-path:polygon(${poly})` : ''
   insertObject(`<div class="domoxml-shape" data-domoxml-node-id="${newId()}" data-ream-shape="${kind}" style="${pos(p.x, p.y, w, h)};background-color:${fill}${extra}"></div>`, `Insert ${SHAPES.find((x) => x.kind === kind)!.label.toLowerCase()}`)
 }
 

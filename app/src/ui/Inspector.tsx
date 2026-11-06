@@ -2,12 +2,23 @@
 // labelled sections, compact rows, number fields with label scrubbing and arithmetic, and a colour well
 // with a solid paper popover (deck colours, recent colours, a picker and hex input).
 import { CaretDown } from '@phosphor-icons/react'
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import s from './Inspector.module.css'
 
+/** Inside a popover, sections lie flat: a heading and their rows, always open. `'bare'` (a dialog that
+ *  already names the section) drops the heading too. */
+export const FlatSections = createContext<boolean | 'bare'>(false)
+
 export function Section({ title, open, onToggle, children, aside }: { title: string; open: boolean; onToggle: () => void; children: ReactNode; aside?: ReactNode }) {
   const id = useId()
+  const flat = useContext(FlatSections)
+  if (flat) return (
+    <section className={s.flat} aria-labelledby={flat === 'bare' ? undefined : id}>
+      {flat === 'bare' ? null : <div className={s.flatHead}><h3 id={id}>{title}</h3>{aside}</div>}
+      <div className={s.sectionBody}>{children}</div>
+    </section>
+  )
   return (
     <section className={s.section}>
       <div className={s.sectionHead}>
@@ -115,6 +126,35 @@ export function NumberField({ label, name, value, format, parse, onCommit, onPre
   )
 }
 
+/** A slider (native range: arrows, Page Up/Down, Home/End and screen readers work). Dragging previews
+ *  live (`onPreview`) and commits once on release; the readout shows the value in its unit. */
+export function Slider({ label, value, min, max, step = 1, format, onCommit, onPreview, mixed, disabled }: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step?: number
+  format: (v: number) => string
+  onCommit: (v: number) => void
+  onPreview?: (v: number) => void
+  mixed?: boolean
+  disabled?: boolean
+}) {
+  const [draft, setDraft] = useState<number | null>(null)
+  const v = draft ?? value
+  const commit = () => { if (draft !== null) { const d = draft; setDraft(null); if (d !== value) onCommit(d) } }
+  const pct = ((Math.min(max, Math.max(min, v)) - min) / (max - min)) * 100
+  return (
+    <span className={s.slider} data-disabled={disabled || undefined}>
+      <input type="range" className={s.range} min={min} max={max} step={step} value={v} disabled={disabled} aria-label={label} aria-valuetext={mixed && draft === null ? 'Mixed' : format(v)}
+        style={{ ['--pct' as string]: `${pct}%` }}
+        onChange={(e) => { const n = Number(e.target.value); setDraft(n); onPreview?.(n) }}
+        onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+      <span className={s.readout}>{mixed && draft === null ? 'Mixed' : format(v)}</span>
+    </span>
+  )
+}
+
 const recent: string[] = []
 
 /** A colour well. `colors`: the deck's own colours, shown first. `none` adds a "No fill" choice. */
@@ -160,7 +200,7 @@ function ColorPopover({ anchor, value, colors, none, onChange, onClose }: { anch
   ))
   const BASIC = ['#ffffff', '#000000', '#5c5c66', '#e8603c', '#e3b341', '#1e9e62', '#1d56e0', '#8b5cf6']
   return createPortal(
-    <div ref={ref} className={s.popover} style={pos} role="dialog" aria-label="Colour">
+    <div ref={ref} className={s.popover} style={pos} role="dialog" aria-label="Colour" data-ream-layer="">
       {colors.length > 0 && <><div className={s.popTitle}>This deck</div><div className={s.chips}>{chips(colors.slice(0, 16))}</div></>}
       {recent.length > 0 && <><div className={s.popTitle}>Recent</div><div className={s.chips}>{chips(recent)}</div></>}
       <div className={s.popTitle}>Colours</div>

@@ -19,10 +19,13 @@ import { ModelPicker } from './ModelPicker'
 import s from './AgentPanel.module.css'
 
 type Step = { label: string; ms: number }
+/** What happened in a turn, in order: the model's words between (or before) its steps. */
+type Item = { kind: 'text'; text: string } | { kind: 'step'; label: string }
 type Turn = {
   prompt: string
   slide: number
   steps: Step[]
+  log?: Item[]
   text: string
   thought?: string
   edited?: number[]
@@ -71,13 +74,26 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
     setDraft('')
     const target = slide
     const history: ModelMessage[] = turns.flatMap((t) => [{ role: 'user' as const, content: t.prompt }, ...(t.text ? [{ role: 'assistant' as const, content: t.text }] : [])])
-    setTurns((ts) => [...ts, { prompt: text, slide: target, steps: [], text: '', state: 'running', startedAt: Date.now() }])
+    setTurns((ts) => [...ts, { prompt: text, slide: target, steps: [], log: [], text: '', state: 'running', startedAt: Date.now() }])
     const ac = new AbortController()
     abort.current = ac
-    // The slide the agent is changing is read-only on the canvas until it's done (editor spec, contract 6).
-    const lockedId = deck.slides[target]?.id
-    endEdit()
-    if (lockedId) setEditor((e) => ({ locked: [...e.locked, lockedId], sel: e.slideId === lockedId ? [] : e.sel }))
+    // A slide the agent has changed is read-only on the canvas until the run ends (editor spec, contract 6).
+    // Only slides it actually touches: asking for a new slide leaves the one you're on alone.
+    const lockedIds = new Set<string>()
+    const lock = (numbers: number[]) => {
+      const d = getLibrary().entries[deck.id] as Deck
+      const ids = numbers.map((n) => d.slides[n - 1]?.id).filter((x): x is string => !!x && !lockedIds.has(x))
+      if (!ids.length) return
+      ids.forEach((x) => lockedIds.add(x))
+      endEdit()
+      setEditor((e) => ({ locked: [...e.locked, ...ids], sel: ids.includes(e.slideId ?? '') ? [] : e.sel }))
+    }
+    const log = (item: Item) => patchLast((t) => {
+      const l = t.log ?? []
+      const last = l[l.length - 1]
+      if (item.kind === 'text' && last?.kind === 'text') return { ...t, log: [...l.slice(0, -1), { kind: 'text', text: last.text + item.text }] }
+      return { ...t, log: [...l, item] }
+    })
     try {
       const { before, after } = await runAgent({
         deckId: deck.id, slide: target, prompt: text, history, signal: ac.signal,
@@ -88,8 +104,9 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
           } else if (ev.type === 'activity') {
             show(ev.label)
             patchLast((t) => ({ ...t, steps: [...t.steps, { label: ev.label, ms: 0 }] }))
-          } else if (ev.type === 'text') { flush(); patchLast((t) => ({ ...t, text: t.text + ev.delta })) }
-          else if (ev.type === 'edit') patchLast((t) => ({ ...t, edited: ev.slides }))
+            log({ kind: 'step', label: ev.label })
+          } else if (ev.type === 'text') { flush(); patchLast((t) => ({ ...t, text: t.text + ev.delta })); log({ kind: 'text', text: ev.delta }) }
+          else if (ev.type === 'edit') { lock(ev.slides); patchLast((t) => ({ ...t, edited: ev.slides })) }
           else if (ev.type === 'error') { flush(); patchLast((t) => ({ ...t, error: ev.message })) }
         },
       })
@@ -102,7 +119,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
       patchLast((t) => ({ ...t, state: stopped ? 'stopped' : 'done', ms: Date.now() - t.startedAt, error: stopped ? undefined : (e as Error).message, edit: t.edited?.length ? { before: deck.slides, after: d.slides } : undefined }))
     } finally {
       abort.current = null
-      if (lockedId) setEditor((e) => ({ locked: e.locked.filter((x) => x !== lockedId) }))
+      if (lockedIds.size) setEditor((e) => ({ locked: e.locked.filter((x) => !lockedIds.has(x)) }))
     }
   }
 
@@ -156,24 +173,16 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
         {turns.map((t, i) => (
           <div key={i} className={s.turn}>
             <div className={s.user}>{t.prompt}<span className={s.ctx}>Slide {t.slide + 1}</span></div>
-            {t.state === 'running' && !t.text ? (
-              <div className={s.activity} role="status" aria-live="polite">
-                <span className={s.dot} aria-hidden />
-                <AnimatePresence mode="wait" initial={false}>
-                  <motion.span key={line ?? 'Working'} className={s.line} aria-hidden initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16 }}>
-                    {line ?? 'Working'}
-                  </motion.span>
-                </AnimatePresence>
-                <span className="sr-only">Working…</span>
-              </div>
-            ) : t.steps.length > 0 && (
-              <details className={s.steps}>
-                <summary>{t.steps.length} steps · {Math.round((t.ms ?? 0) / 1000)}s{t.state === 'stopped' ? ' · stopped' : ''}</summary>
-                <ol>{t.steps.map((st, j) => <li key={j}><Check size={12} weight="bold" />{st.label}</li>)}</ol>
-              </details>
-            )}
+            {t.log ? <Log turn={t} line={line} /> : <>
+              {t.state === 'running' && !t.text ? <Activity line={line} /> : t.steps.length > 0 && (
+                <details className={s.steps}>
+                  <summary>{t.steps.length} steps · {Math.round((t.ms ?? 0) / 1000)}s{t.state === 'stopped' ? ' · stopped' : ''}</summary>
+                  <ol>{t.steps.map((st, j) => <li key={j}><Check size={12} weight="bold" />{st.label}</li>)}</ol>
+                </details>
+              )}
+            </>}
             {t.thought && <details className={s.steps}><summary>Thought it through</summary><p className={s.thought}>{t.thought}</p></details>}
-            {t.text && <p className={s.answer}>{t.text}</p>}
+            {!t.log && t.text && <p className={s.answer}>{t.text}</p>}
             {t.error && <p className={s.error}>{t.error}</p>}
             {t.edit && t.edited?.length ? (
               <div className={s.change}>
@@ -209,3 +218,39 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   )
 }
 
+function Activity({ line }: { line: string | null }) {
+  return (
+    <div className={s.activity} role="status" aria-live="polite">
+      <span className={s.dot} aria-hidden />
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span key={line ?? 'Working'} className={s.line} aria-hidden initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16 }}>
+          {line ?? 'Working'}
+        </motion.span>
+      </AnimatePresence>
+      <span className="sr-only">Working…</span>
+    </div>
+  )
+}
+
+/** A turn as it happened: the model's messages in order, with each run of steps between them folded into one
+ *  line ("3 steps") you can open. While it runs, the live activity line sits at the end. */
+function Log({ turn: t, line }: { turn: Turn; line: string | null }) {
+  const groups: ({ kind: 'text'; text: string } | { kind: 'steps'; labels: string[] })[] = []
+  for (const it of t.log ?? []) {
+    const last = groups[groups.length - 1]
+    if (it.kind === 'step') { if (last?.kind === 'steps') last.labels.push(it.label); else groups.push({ kind: 'steps', labels: [it.label] }) }
+    else if (it.text.trim()) groups.push({ kind: 'text', text: it.text })
+  }
+  const running = t.state === 'running'
+  const lastIsText = groups[groups.length - 1]?.kind === 'text'
+  return (
+    <>
+      {groups.map((g, j) => g.kind === 'text'
+        ? <p key={j} className={s.answer}>{g.text.trim()}</p>
+        : (running && j === groups.length - 1) ? null
+          : <details key={j} className={s.steps}><summary>{g.labels.length === 1 ? g.labels[0] : `${g.labels.length} steps`}</summary><ol>{g.labels.map((l, k) => <li key={k}><Check size={12} weight="bold" />{l}</li>)}</ol></details>)}
+      {running && !lastIsText && <Activity line={line} />}
+      {!running && t.ms !== undefined && <p className={s.meta}>{Math.round(t.ms / 1000)}s{t.state === 'stopped' ? ' · stopped' : ''}</p>}
+    </>
+  )
+}

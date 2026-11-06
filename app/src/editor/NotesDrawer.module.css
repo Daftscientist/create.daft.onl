@@ -1,0 +1,20 @@
+.drawer {
+  flex: none; position: relative; display: flex; flex-direction: column; min-width: 0;
+  border-radius: 0 0 var(--r-panel) var(--r-panel); background: var(--panel); box-shadow: 0 -1px 0 var(--hair);
+}
+.strip {
+  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; min-width: 0; text-align: left;
+  font-size: 12.5px; color: var(--ink-3); border-radius: 0 0 var(--r-panel) var(--r-panel);
+}
+.drawer[data-open] .strip { border-radius: 0; }
+.strip:hover { color: var(--ink); }
+.strip:focus-visible { outline: 2px solid var(--select); outline-offset: -2px; }
+.title { font-weight: 620; color: var(--ink-2); flex: none; }
+.preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.area {
+  display: block; width: 100%; resize: none; border: 0; outline: none; padding: 2px 14px 12px; background: transparent;
+  font: inherit; font-size: 14px; line-height: 21px; color: var(--ink);
+}
+.area::placeholder { color: var(--ink-3); }
+.splitter { position: absolute; left: 0; right: 0; top: -4px; height: 8px; cursor: row-resize; z-index: 2; }
+.splitter:hover, .splitter:focus-visible { background: linear-gradient(to bottom, transparent 3px, var(--select) 3px 5px, transparent 5px); outline: none; }

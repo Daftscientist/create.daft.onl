@@ -47,3 +47,4 @@
 :global(html[data-motion="reduce"]) .dot { animation: none; }
 .thought { white-space: pre-wrap; margin: 6px 0 0; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
 .error { font-size: 13px; color: var(--danger); }
+.meta { font-size: 11.5px; color: var(--ink-3); }

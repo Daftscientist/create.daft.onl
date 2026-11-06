@@ -15,7 +15,13 @@
 .chipBtn[aria-pressed="true"] { background: var(--paper); color: var(--ink); box-shadow: var(--shadow-tile); }
 .linkBtn { font-size: 12px; font-weight: 560; color: var(--select); padding: 0 4px; height: 28px; }
 .linkBtn:hover { text-decoration: underline; }
-.objects { list-style: none; display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; }
+.objects { list-style: none; display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; }
+.objects:not(.objects .objects) { max-height: 360px; overflow-y: auto; }
+.objectItem { display: block; }
+.twisty { width: 16px; height: 22px; display: grid; place-items: center; color: var(--ink-3); flex: none; border-radius: 4px; }
+.twisty:hover { color: var(--ink); background: var(--fill-2); }
+.twisty svg { transition: rotate var(--dur-1) var(--ease-out); }
+.twisty[aria-expanded="true"] svg { rotate: 90deg; }
 .object { display: flex; align-items: center; gap: 2px; height: 32px; padding: 0 2px 0 0; border-radius: var(--r-xs); }
 .object:hover { background: var(--fill); }
 .object[data-drop] { box-shadow: inset 0 -2px 0 transparent; }

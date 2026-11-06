@@ -50,3 +50,22 @@
 
 .kept { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 10px; border-radius: var(--r-pill); background: var(--fill); font-size: 12px; color: var(--ink-2); }
 .kept button { height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--paper); box-shadow: var(--shadow-tile); font-size: 11.5px; font-weight: 560; color: var(--ink); }
+
+.flat + .flat { border-top: 1px solid var(--hair); padding-top: 10px; }
+.flatHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; margin-bottom: 4px; }
+.flatHead h3 { font-size: 12px; font-weight: 640; color: var(--ink-2); letter-spacing: 0.01em; }
+:global([data-theme="dark"]) .swatch { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.28); }
+@media (prefers-color-scheme: dark) { :global(:root:not([data-theme="light"])) .swatch { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.28); } }
+
+.slider { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 120px; height: 30px; }
+.slider[data-disabled] { opacity: 0.5; }
+.readout { min-width: 44px; text-align: right; font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.range { flex: 1; min-width: 0; height: 20px; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer; }
+.range:focus { outline: none; }
+.range::-webkit-slider-runnable-track { height: 4px; border-radius: 99px; background: linear-gradient(to right, var(--select) var(--pct), var(--fill-2) var(--pct)); }
+.range::-moz-range-track { height: 4px; border-radius: 99px; background: var(--fill-2); }
+.range::-moz-range-progress { height: 4px; border-radius: 99px; background: var(--select); }
+.range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.18), 0 1px 3px rgb(0 0 0 / 0.25); }
+.range::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.18), 0 1px 3px rgb(0 0 0 / 0.25); }
+.range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--select), 0 1px 3px rgb(0 0 0 / 0.25); }
+.range:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--select); }

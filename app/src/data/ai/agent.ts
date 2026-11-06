@@ -67,7 +67,9 @@ Keep every existing data-domoxml-node-id attribute on elements you keep; new ele
 Prefer edit_element for small changes and replace_slide for redesigns. Read a slide before changing it.
 Slide numbers are 1-based. The user is looking at slide ${slide + 1}. Keep text concise and fitting its box.
 Every tool call needs an "activity": at most four plain words describing what you're doing.
-When you finish, reply in one or two sentences saying what you changed.`
+Talk to the user as you work, like a colleague would: before your first tool call, say in one short sentence what
+you're going to do; between steps, add a short update only when it helps (a decision you made, something you
+noticed). Don't narrate every tool call. When you finish, say in one or two sentences what you changed.`
 }
 
 export async function runAgent(opts: {
