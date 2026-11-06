@@ -1,0 +1,7 @@
+{
+  "domoxml": "domoxml-0.1.0a0-py3-none-any.whl",
+  "deps": [
+    "defusedxml-0.7.1-py2.py3-none-any.whl"
+  ],
+  "rev": "cb65e44"
+}

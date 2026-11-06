@@ -29,7 +29,7 @@ def font_css() -> str:
         data = base64.b64encode(path.read_bytes()).decode()
         return f"@font-face{{font-family:'{family}';src:url(data:font/woff2;base64,{data}) format('woff2');font-weight:{weight}}}"
 
-    return face("Instrument Sans Variable", SANS, "400 700") + face("Instrument Serif", SERIF, "400")
+    return face("Instrument Sans", SANS, "400 700") + face("Instrument Serif", SERIF, "400")
 
 
 e = html.escape
@@ -38,7 +38,7 @@ e = html.escape
 def slide_html(spec: dict, t: dict) -> str:
     """Every text block and shape is its own absolutely positioned element with explicit geometry
     and line-height (the shape the AI is asked to write, and the most faithful capture path)."""
-    sans = "'Instrument Sans Variable', sans-serif"
+    sans = "'Instrument Sans', sans-serif"
     display = "'Instrument Serif', serif" if t.get("serif") else sans
     dw = "500" if t.get("serif") else "650"
 

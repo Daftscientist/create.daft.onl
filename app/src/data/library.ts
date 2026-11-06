@@ -6,6 +6,7 @@ import { useSyncExternalStore } from 'react'
 import { claimOwnership, ownInMemory, persistStorage, storage } from '../storage/client'
 import type { Mutation } from '../storage/protocol'
 import { blankSlide, SAMPLE_IDS, sampleLibrary, sampleSlides } from './fixtures'
+import { withFamilyNames } from '../slides/fonts'
 import { slideText as textOf } from '../slides/SlideView'
 import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideDoc } from './types'
 import { deviceId, noteLocalChange } from './sync'
@@ -34,6 +35,10 @@ function fromOpened(o: Awaited<ReturnType<typeof storage.open>>): LibraryState {
     if (x.type === 'deck' && (!Array.isArray(x.slides) || x.slides.some((sl) => typeof (sl as SlideDoc).html !== 'string'))) {
       const fresh = sampleSlides(x.id)
       x = { ...x, slides: fresh.length ? fresh : [blankSlide(`${x.id}-s1`, x.name)] }
+    }
+    // Slides from before fonts were named by family (see slides/fonts): same font, real name.
+    if (x.type === 'deck' && x.slides.some((sl) => sl.html.includes('Instrument Sans Variable'))) {
+      x = { ...x, slides: x.slides.map((sl) => ({ ...sl, html: withFamilyNames(sl.html) })) }
     }
     // An import can't survive a reload (the engine work lives in memory): say so instead of spinning forever.
     if (x.type === 'deck' && x.status === 'importing') x = { ...x, status: 'failed', phase: undefined, error: 'The import was interrupted. Try again.' }
@@ -98,8 +103,8 @@ export function bootLibrary() {
 // ---------- persistence ----------
 function toMutations(e: Entry): Mutation[] {
   if (e.type !== 'deck') return [{ kind: 'entry', entry: e }]
-  const { slides, ...meta } = e
-  return [{ kind: 'entry', entry: meta as Entry }, { kind: 'doc', id: e.id, doc: { slides } }]
+  const { slides, css, size, ...meta } = e
+  return [{ kind: 'entry', entry: meta as Entry }, { kind: 'doc', id: e.id, doc: { slides, css, size } }]
 }
 
 function diff(prev: LibraryState, next: LibraryState): Mutation[] {
@@ -248,12 +253,19 @@ export function openDeck(deckId: string) {
 }
 
 /** Replaces one slide (agent edits, later the editor). A real edit: it prompts about paused sync. */
+/** A slide's imported IR only describes the HTML it came with: once the HTML changes it goes, so
+ *  export captures the slide as it is now instead of shipping the stale original. */
+function settleIr(prev: SlideDoc[], next: SlideDoc[]): SlideDoc[] {
+  const before = new Map(prev.map((sl) => [sl.id, sl.html]))
+  return next.map((sl) => (sl.ir && before.has(sl.id) && before.get(sl.id) !== sl.html ? (({ ir: _ir, ...rest }) => rest)(sl) : sl))
+}
+
 export function updateSlide(deckId: string, index: number, slide: SlideDoc) {
   const d = state.entries[deckId]
   if (!d || d.type !== 'deck') return
   const slides = d.slides.slice()
   slides[index] = slide
-  patch(deckId, { slides, modifiedAt: Date.now() })
+  patch(deckId, { slides: settleIr(d.slides, slides), modifiedAt: Date.now() })
 }
 
 export function setLastSlide(deckId: string, index: number) {
@@ -418,9 +430,11 @@ export function newDeck(parentId: string | null): string {
 
 // ---------- simulated engine work ----------
 
-const PHASES = ['queued', 'reading', 'converting', 'saving'] as const
+const importSources = new Map<string, File>()
 
-export function importFiles(files: { name: string; size: number }[], parentId: string | null) {
+/** Imports .pptx files with domOXML (in the engine worker): each becomes a deck of normalized HTML
+ *  slides that keep their IR, so an untouched slide exports exactly as it came in. */
+export function importFiles(files: File[], parentId: string | null) {
   for (const file of files) {
     const deckId = `d-${id()}`
     const base = file.name.replace(/\.pptx$/i, '')
@@ -430,50 +444,87 @@ export function importFiles(files: { name: string; size: number }[], parentId: s
       sizeBytes: file.size, lastSlide: 0, status: 'importing', phase: 'queued', progress: 0,
       slides: [blankSlide(`s-${id()}`, base)],
     }
+    importSources.set(deckId, file)
     commit({ ...state, entries: { ...state.entries, [deckId]: d } })
-    const fails = /locked|password/i.test(file.name)
-    let step = 0
-    const tick = () => {
-      const cur = state.entries[deckId]
-      if (!cur || cur.type !== 'deck') return
-      step++
-      if (fails && step === 2) {
-        patch(deckId, { status: 'failed', phase: undefined, error: 'It’s password-protected. Remove the password in PowerPoint and import again.' })
-        return
-      }
-      if (step >= PHASES.length) {
-        patch(deckId, { status: 'ready', phase: undefined, progress: 1 })
-        toast({ message: `Imported “${cur.name}”` })
-        return
-      }
-      patch(deckId, { phase: PHASES[step], progress: step / PHASES.length })
-      setTimeout(tick, 700 + Math.random() * 600)
-    }
-    setTimeout(tick, 500)
+    void runImport(deckId, file)
   }
+}
+
+async function runImport(deckId: string, file: File) {
+  const live = () => state.entries[deckId]?.type === 'deck'
+  try {
+    const engine = await import('../engine')
+    await engine.engineReady()
+    if (!live()) return
+    patch(deckId, { phase: 'reading', progress: 0.25 })
+    const bytes = await file.arrayBuffer()
+    patch(deckId, { phase: 'converting', progress: 0.5 })
+    const out = await engine.importPptx(bytes)
+    if (!live()) return
+    patch(deckId, { phase: 'saving', progress: 0.9 })
+    const first = out.slides[0]
+    const name = (state.entries[deckId] as Deck).name
+    patch(deckId, {
+      status: 'ready', phase: undefined, progress: 1, error: undefined,
+      slides: out.slides.length ? out.slides.map((sl) => ({ id: `s-${id()}`, html: sl.html, ir: sl.ir })) : [blankSlide(`s-${id()}`, name)],
+      css: out.css || undefined,
+      size: first && (first.w !== 1280 || first.h !== 720) ? { w: first.w, h: first.h } : undefined,
+    })
+    importSources.delete(deckId)
+    toast({ message: out.warnings.length ? `Imported “${name}” with ${plural(out.warnings.length, 'note')}` : `Imported “${name}”` })
+  } catch (e) {
+    if (!live()) return
+    patch(deckId, { status: 'failed', phase: undefined, error: importError(e as Error) })
+  }
+}
+
+function importError(e: Error): string {
+  const m = e.message
+  if (/not a zip file|BadZipFile/i.test(m)) return 'It isn’t a PowerPoint file Ream can open. If it’s password-protected, remove the password in PowerPoint and import again.'
+  if (/pyodide|jsdelivr|failed to fetch|networkerror/i.test(m)) return 'The engine couldn’t load. Check your connection and try again.'
+  return `Ream couldn’t read it: ${m}`
 }
 
 export function retryImport(deckId: string) {
   const d = state.entries[deckId]
+  const file = importSources.get(deckId)
   if (!d || d.type !== 'deck') return
-  remove([deckId])
-  importFiles([{ name: `${d.name.replace(/locked|password/gi, '').trim() || 'Deck'}.pptx`, size: d.sizeBytes }], d.parentId)
+  if (!file) { toast({ message: 'Import the file again to retry.' }); return }
+  patch(deckId, { status: 'importing', phase: 'queued', progress: 0, error: undefined })
+  void runImport(deckId, file)
 }
 
-let engineWarm = false
+/** Downloads decks as PowerPoint (through domOXML) or standalone HTML; several decks come as a .zip. */
 export function download(ids: string[], format: ExportFormat) {
   const items = ids.map((i) => state.entries[i]).filter((e): e is Deck => e?.type === 'deck' && e.status === 'ready')
   if (!items.length) return
   const ext = format === 'pptx' ? 'pptx' : 'html'
   const label = items.length === 1 ? `${items[0].name}.${ext}` : `${items.length} decks (.zip)`
-  const done = () => toast({ message: `Downloaded ${label}`, tone: 'ok' })
-  if (engineWarm) return void setTimeout(done, 350)
-  const t = toast({ message: `Preparing ${label}…`, busy: true, duration: Infinity })
-  setTimeout(() => {
-    engineWarm = true
-    t.dismiss()
-    done()
-  }, 1600)
+  void (async () => {
+    const engine = await import('../engine')
+    const t = toast({ message: format === 'pptx' && !engine.engineBooted() ? `Getting the engine ready (first time only), then ${label}…` : `Preparing ${label}…`, busy: true, duration: Infinity })
+    try {
+      const ex = await import('../engine/export')
+      const files: { name: string; data: Uint8Array<ArrayBuffer> | string }[] = []
+      let notes = 0
+      for (const d of items) {
+        if (format === 'pptx') { const out = await ex.deckToPptx(d); notes += out.warnings.length; files.push({ name: `${d.name}.pptx`, data: out.bytes }) }
+        else files.push({ name: `${d.name}.html`, data: await ex.deckToHtml(d) })
+      }
+      if (files.length === 1) ex.save(files[0].name, files[0].data, format === 'pptx' ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : 'text/html')
+      else {
+        const { zipSync, strToU8 } = await import('fflate')
+        const used = new Set<string>()
+        const unique = (n: string) => { let x = n, i = 2; while (used.has(x)) x = n.replace(/(\.\w+)$/, ` ${i++}$1`); used.add(x); return x }
+        ex.save('Ream decks.zip', zipSync(Object.fromEntries(files.map((f) => [unique(f.name), typeof f.data === 'string' ? strToU8(f.data) : f.data]))) as Uint8Array<ArrayBuffer>, 'application/zip')
+      }
+      t.dismiss()
+      toast({ message: notes ? `Downloaded ${label}. ${plural(notes, 'thing')} may look different in PowerPoint.` : `Downloaded ${label}`, tone: 'ok' })
+    } catch (e) {
+      t.dismiss()
+      toast({ message: `Couldn’t export ${label}: ${(e as Error).message}`, tone: 'danger' })
+    }
+  })()
 }
 
 export function backUp() {
@@ -516,5 +567,5 @@ export function applyRemoteSettings(settings: LibraryState['settings']) {
 export function updateSlides(deckId: string, slides: SlideDoc[]) {
   const d = state.entries[deckId]
   if (!d || d.type !== 'deck') return
-  patch(deckId, { slides, modifiedAt: Date.now() })
+  patch(deckId, { slides: settleIr(d.slides, slides), modifiedAt: Date.now() })
 }

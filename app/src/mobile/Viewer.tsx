@@ -24,6 +24,7 @@ export function MobileViewer({ deckId, slide }: { deckId: string; slide?: number
     const el = strip.current
     if (el) el.scrollTo({ left: index * el.clientWidth, behavior: 'instant' as ScrollBehavior })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void import('../engine').then((m) => m.warmEngine()) }, []) // a deck is open: have the engine ready for export
   useEffect(() => { if (deck?.type === 'deck') setLastSlide(deck.id, index) }, [index]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const present = () => strip.current?.parentElement?.requestFullscreen?.().catch(() => {})
@@ -62,7 +63,7 @@ export function MobileViewer({ deckId, slide }: { deckId: string; slide?: number
       >
         {deck.slides.map((sp, i) => (
           <div key={i} className={s.page} aria-hidden={i !== index}>
-            <div className={s.slide}><SlideView slide={sp} interactive={i === index} /></div>
+            <div className={s.slide}><SlideView slide={sp} size={deck.size} css={deck.css} interactive={i === index} /></div>
           </div>
         ))}
       </div>

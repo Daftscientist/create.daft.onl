@@ -14,7 +14,7 @@ export const KEYFILE = 'ream-key.json'
 export const SETTINGS = 'ream-settings.json'
 const docName = (id: string) => `ream-doc-${id}.json`
 
-type Meta = Omit<Deck, 'slides'> | Entry
+type Meta = Omit<Deck, 'slides' | 'css' | 'size'> | Entry
 type RemoteEntry = { entry?: Meta; clock: number; device: string; deleted?: true }
 export type EntriesFile = { format: 1; entries: Record<string, RemoteEntry>; devices: Record<string, { name: string; seen: number }> }
 type Base = { entries: Record<string, number>; docs: Record<string, number> }
@@ -35,7 +35,7 @@ export function pendingCount(): number {
   return n
 }
 
-const meta = (e: Entry): Meta => (e.type === 'deck' ? (({ slides: _s, ...m }) => m)(e) : e)
+const meta = (e: Entry): Meta => (e.type === 'deck' ? (({ slides: _s, css: _c, size: _z, ...m }) => m)(e) : e)
 
 export type SyncContext = { drive: CloudDrive; device: string; deviceName: string; key: CryptoKey | null }
 
@@ -112,12 +112,12 @@ export async function syncOnce(ctx: SyncContext, onProgress?: (label: string, do
       onProgress?.('Bringing in changes', done++, total)
       const got = await read(ctx, docName(id))
       const rm = remote.entries[id].entry as Deck
-      if (got) upserts.push({ ...rm, ...(got.data as Pick<Deck, 'slides'>) } as Deck)
+      if (got) upserts.push({ ...rm, ...(got.data as Pick<Deck, 'slides' | 'css' | 'size'>) } as Deck)
     }
     // Push deck content that changed here.
     for (const d of docPush) {
       onProgress?.('Sending changes', done++, total)
-      await write(ctx, docName(d.id), { slides: d.slides, docClock: d.docClock })
+      await write(ctx, docName(d.id), { slides: d.slides, css: d.css, size: d.size, docClock: d.docClock })
     }
     // Deleted decks: remove their content files too (best effort).
     for (const [id, r] of Object.entries(merged)) if (r.deleted && remote.entries[id] && !remote.entries[id].deleted) await ctx.drive.remove(docName(id)).catch(() => {})

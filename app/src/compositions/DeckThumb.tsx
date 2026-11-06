@@ -27,7 +27,7 @@ export function DeckThumb({ deck, slide = 0, layoutId, className }: { deck: Deck
   const doc = deck.slides[Math.min(slide, deck.slides.length - 1)]
   return (
     <motion.div layoutId={layoutId} className={`${s.thumb} ${className ?? ''}`}>
-      {doc && <SlideView slide={doc} />}
+      {doc && <SlideView slide={doc} size={deck.size} css={deck.css} />}
     </motion.div>
   )
 }

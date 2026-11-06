@@ -26,6 +26,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const n = deck?.type === 'deck' ? deck.slides.length : 0
   const ai = true
   const [ask, setAsk] = useState(() => ai && localStorage.getItem('ream.ask.open') === '1')
+  useEffect(() => { void import('../engine').then((m) => m.warmEngine()) }, []) // a deck is open: have the engine ready for export
   useEffect(() => { try { localStorage.setItem('ream.ask.open', ask ? '1' : '0') } catch { /* ok */ } }, [ask])
 
   useEffect(() => { if (deck?.type === 'deck') setLastSlide(deck.id, index) }, [deck?.id, index]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -80,7 +81,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         </nav>
         <div className={s.stageWrap}>
           <div className={s.stage} ref={stage} data-stage tabIndex={-1}>
-            <SlideView slide={deck.slides[index]} interactive />
+            <SlideView slide={deck.slides[index]} size={deck.size} css={deck.css} interactive />
           </div>
           <div className={s.pager}>
             <IconButton label="Previous slide" hint="←" side="top" disabled={index === 0} onClick={() => setIndex(index - 1)}><CaretLeft size={16} /></IconButton>

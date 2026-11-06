@@ -228,6 +228,6 @@ export function blankSlide(id: string, title: string): SlideDoc {
     id,
     html: `<div class="domoxml-slide" style="position:relative;overflow:hidden;box-sizing:border-box;width:1280px;height:720px;background-color:rgba(255,255,255,1)">`
       + `<div class="domoxml-shape" data-domoxml-node-id="title" style="position:absolute;box-sizing:border-box;left:102px;top:290px;width:1076px;height:90px">`
-      + `<div class="domoxml-text"><span style="font-family:Instrument Sans Variable,sans-serif;font-size:48pt;font-weight:650;color:rgba(22,22,27,1);letter-spacing:-1.5pt">${esc}</span></div></div></div>`,
+      + `<div class="domoxml-text"><span style="font-family:Instrument Sans,sans-serif;font-size:48pt;font-weight:650;color:rgba(22,22,27,1);letter-spacing:-1.5pt">${esc}</span></div></div></div>`,
   }
 }

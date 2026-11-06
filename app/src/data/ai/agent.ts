@@ -4,7 +4,7 @@
 import { isStepCount, streamText, tool, type ModelMessage } from 'ai'
 import { z } from 'zod'
 import { getLibrary, updateSlides } from '../library'
-import type { Deck, SlideDoc } from '../types'
+import type { Deck, SlideDoc, SlideSize } from '../types'
 import { sanitize, slideText, SLIDE_H, SLIDE_W } from '../../slides/SlideView'
 import { runBrowserLoop } from './browser'
 import { providerDef } from './providers'
@@ -31,7 +31,7 @@ const newId = () => `ai-${Date.now().toString(36)}-${(auto++).toString(36)}`
 
 /** Normalises model-written HTML into the slide shape: one 1280x720 .domoxml-slide root whose
  *  top-level elements each carry a node id. Sanitised, so nothing executable survives. */
-export function normaliseSlide(html: string): string {
+export function normaliseSlide(html: string, size: SlideSize = { w: SLIDE_W, h: SLIDE_H }): string {
   const doc = new DOMParser().parseFromString(`<body>${sanitize(html)}</body>`, 'text/html')
   let root = doc.body.firstElementChild as HTMLElement | null
   if (!root || !root.classList.contains('domoxml-slide') || doc.body.children.length > 1) {
@@ -43,8 +43,8 @@ export function normaliseSlide(html: string): string {
   }
   root.style.position = 'relative'
   root.style.overflow = 'hidden'
-  root.style.width = `${SLIDE_W}px`
-  root.style.height = `${SLIDE_H}px`
+  root.style.width = `${size.w}px`
+  root.style.height = `${size.h}px`
   for (const el of Array.from(root.children) as HTMLElement[]) {
     if (!el.dataset.domoxmlNodeId) el.dataset.domoxmlNodeId = newId()
   }
@@ -58,10 +58,11 @@ function deck(id: string): Deck {
 }
 
 function system(d: Deck, slide: number) {
+  const { w, h } = d.size ?? { w: SLIDE_W, h: SLIDE_H }
   return `You are Ream's deck assistant. You edit the user's presentation "${d.name}" (${d.slides.length} slides) directly.
-Slides are HTML: a single root <div class="domoxml-slide"> that is exactly ${SLIDE_W}x${SLIDE_H}px, containing absolutely
+Slides are HTML: a single root <div class="domoxml-slide"> that is exactly ${w}x${h}px, containing absolutely
 positioned elements (position:absolute with left/top/width/height in px). Use inline styles only, no <style>, <script>, classes
-or external resources. Fonts available: "Instrument Sans Variable" (sans) and "Instrument Serif" (serif).
+or external resources. Fonts available: "Instrument Sans" (sans, any weight; PowerPoint gets regular and bold) and "Instrument Serif" (serif).
 Keep every existing data-domoxml-node-id attribute on elements you keep; new elements may omit it (one is assigned).
 Prefer edit_element for small changes and replace_slide for redesigns. Read a slide before changing it.
 Slide numbers are 1-based. The user is looking at slide ${slide + 1}. Keep text concise and fitting its box.
@@ -110,7 +111,7 @@ export async function runAgent(opts: {
       execute: async ({ slide, html }) => {
         const d = at(slide)
         const slides = d.slides.slice()
-        slides[slide - 1] = { ...slides[slide - 1], html: normaliseSlide(html) }
+        slides[slide - 1] = { ...slides[slide - 1], html: normaliseSlide(html, deck(opts.deckId).size) }
         commit(slides, [slide])
         return { ok: true }
       },
@@ -147,7 +148,7 @@ export async function runAgent(opts: {
           el.querySelectorAll('span').forEach((s, i) => { if (i > 0 && s.closest('.domoxml-text') === span.closest('.domoxml-text')) s.remove() })
         }
         const slides = d.slides.slice()
-        slides[slide - 1] = { ...slides[slide - 1], html: normaliseSlide(doc.body.innerHTML) }
+        slides[slide - 1] = { ...slides[slide - 1], html: normaliseSlide(doc.body.innerHTML, d.size) }
         commit(slides, [slide])
         return { ok: true }
       },
@@ -159,7 +160,7 @@ export async function runAgent(opts: {
         const d = deck(opts.deckId)
         const pos = Math.max(0, Math.min(after, d.slides.length))
         const slides = d.slides.slice()
-        slides.splice(pos, 0, { id: newId(), html: normaliseSlide(html) })
+        slides.splice(pos, 0, { id: newId(), html: normaliseSlide(html, deck(opts.deckId).size) })
         commit(slides, [pos + 1])
         return { ok: true, slide: pos + 1 }
       },

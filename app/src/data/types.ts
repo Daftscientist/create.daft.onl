@@ -3,7 +3,11 @@
 
 /** One slide as normalized HTML (domOXML's output shape): what the viewer renders, the AI reads and
  *  edits, and the engine converts to and from PPTX. `id` is stable across edits and reorders. */
-export type SlideDoc = { id: string; html: string }
+/** One slide as domOXML normalized HTML. `ir`: its domOXML IR from import (JSON), kept while the
+ *  slide is unchanged so export is exact; dropped as soon as the HTML changes. */
+export type SlideDoc = { id: string; html: string; ir?: string }
+/** Slide size in CSS px; 1280x720 unless an imported deck says otherwise. */
+export type SlideSize = { w: number; h: number }
 
 export type ImportPhase = 'queued' | 'reading' | 'converting' | 'saving'
 
@@ -26,6 +30,9 @@ export type Deck = {
   docClock?: number
   sizeBytes: number
   slides: SlideDoc[]
+  /** Imported decks: their slide size and shared CSS (embedded @font-face). Stored with the slides. */
+  size?: SlideSize
+  css?: string
   lastSlide: number
   status: 'ready' | 'importing' | 'failed'
   phase?: ImportPhase

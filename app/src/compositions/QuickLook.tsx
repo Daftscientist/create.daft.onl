@@ -32,7 +32,7 @@ export function QuickLook({ deckId, slide, onSlide, onClose }: { deckId: string;
     <Overlay label={`Quick Look: ${deck.name}`} onClose={onClose}>
       <div className={s.stage}>
         <motion.div layoutId={`ql-${deck.id}`} className={s.slide} transition={gentle}>
-          <SlideView slide={deck.slides[slide]} interactive />
+          <SlideView slide={deck.slides[slide]} size={deck.size} css={deck.css} interactive />
         </motion.div>
         <motion.div
           className={`${s.bar} glass`}
