@@ -463,7 +463,8 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
           ))}
           {marquee && <div className={s.marquee} style={scr(marquee)} />}
           {/* Fixed-size boxes whose text runs past them (spec: imported boxes keep their size). */}
-          {!dragging && pickable().filter((el) => !el.hasAttribute('data-ream-autogrow') && overflows(el)).map((el) => {
+          {/* Shown on the selected box only (as Keynote does), so imported decks don't fill with marks. */}
+          {!dragging && boxes.map((x) => x.el).filter((el) => !el.hasAttribute('data-ream-autogrow') && overflows(el)).map((el) => {
             const b = boxOf(el)
             return <span key={idOf(el)} className={s.overflow} style={{ left: (b.x + b.w) * z - 10, top: (b.y + b.h) * z - 10 }} title="This text doesn’t fit its box. Make the box bigger or the text smaller." />
           })}
