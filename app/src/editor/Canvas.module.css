@@ -28,6 +28,13 @@
 .handle {
   position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; pointer-events: auto; touch-action: none;
 }
+/* Touch: bigger targets, the same small square. */
+@media (pointer: coarse) {
+  .handle { width: 32px; height: 32px; margin: -16px 0 0 -16px; }
+  .handle::after { inset: 11px; }
+  .endpoint { width: 32px; height: 32px; margin: -16px 0 0 -16px; }
+  .endpoint::after { inset: 9px; }
+}
 .handle::after {
   content: ""; position: absolute; inset: 4px; background: #fff; border: 1px solid var(--select);
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.9), 0 1px 2px rgb(0 0 0 / 0.2);

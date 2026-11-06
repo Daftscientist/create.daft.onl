@@ -1,8 +1,9 @@
 // The deck editor (docs/design/specs/editor.md, v3 layout). Mica header: title with the deck menu, insert
 // galleries, undo/redo, honest save status, Ask, Download and Present. Below: the slide rail, then the stage
-// column (context bar, canvas, notes drawer), and the Ask column when open. Coarse pointers get the viewer.
+// column (context bar, canvas, notes drawer), and the Ask column when open. Tablets edit too (touch-sized handles,
+// pinch to zoom); phones have their own shell.
 import { ArrowArcLeft, ArrowArcRight, ArrowLeft, CaretDown, ChartBar, Table, ChatCircleText, DownloadSimple, Image as ImageIcon, Minus, Play, Plus, Shapes, TextT } from '@phosphor-icons/react'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { download, openDeck as touchDeck, retrySave, setLastSlide, useLibrary, useSaveState } from '../data/library'
 import { useActiveModel } from '../data/ai/settings'
 import type { Deck } from '../data/types'
@@ -48,9 +49,11 @@ import s from './DeckPage.module.css'
 const kept = new Map<string, { slideId: string | null; sel: string[]; scope: string | null; zoom: number | 'fit' }>()
 const COL_KEY = 'ream.editor.column'
 const WIDTH_KEY = 'ream.editor.columnWidth'
-const coarse = matchMedia('(pointer: coarse)')
+const RAIL_KEY = 'ream.editor.railWidth'
+const ASK = { min: 300, max: 600, start: 360 }, RAIL = { min: 140, max: 360, start: 200 }
+/** A remembered width, always within its limits (a bad or zero value can't collapse a panel). */
+const widthOf = (k: string, l: { min: number; max: number; start: number }) => { const v = Number(read(k)); return Number.isFinite(v) && v > 0 ? Math.min(l.max, Math.max(l.min, v)) : l.start }
 type Gallery = { kind: 'shapes' | 'table' | 'chart' | 'picture'; anchor: HTMLElement }
-const useCoarse = () => useSyncExternalStore((l) => (coarse.addEventListener('change', l), () => coarse.removeEventListener('change', l)), () => coarse.matches)
 function useWidth() {
   const [w, setW] = useState(innerWidth)
   useEffect(() => { const on = () => setW(innerWidth); addEventListener('resize', on); return () => removeEventListener('resize', on) }, [])
@@ -64,7 +67,6 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const deck = lib.entries[deckId]
   const isDeck = deck?.type === 'deck' && deck.trashedAt === null
   const width = useWidth()
-  const viewer = useCoarse()
   const ai = !!useActiveModel()
   const slideId = useEditor((e) => e.slideId)
   const column = useEditor((e) => e.column)
@@ -74,7 +76,8 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   useEditor((e) => e.editing)
   const th = textHistory()
   const hist = th ? { canUndo: th.canUndo, canRedo: th.canRedo, undoLabel: 'typing', redoLabel: 'typing' } : deckHist
-  const [colW, setColW] = useState(() => Math.min(520, Math.max(300, Number(read(WIDTH_KEY)) || 340)))
+  const [colW, setColW] = useState(() => widthOf(WIDTH_KEY, ASK))
+  const [railW, setRailW] = useState(() => widthOf(RAIL_KEY, RAIL))
   const [askMounted, setAskMounted] = useState(false)
   const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuItem[]; label: string } | null>(null)
   const [find, setFind] = useState<{ replace: boolean } | null>(null)
@@ -93,7 +96,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     // Coming back (a resize across the phone layout, browser zoom): the same slide, selection and zoom.
     const back = kept.get(deckId)
     const slideOk = back && d.slides.some((x) => x.id === back.slideId)
-    setEditor({ deckId, slideId: slideOk ? back.slideId : start, sel: slideOk ? back.sel : [], scope: slideOk ? back.scope : null, editing: null, railSel: start ? [slideOk ? back.slideId! : start] : [], railAnchor: start, zoom: back?.zoom ?? 'fit', column: col, locked: [], presenting: false, readOnly: coarse.matches })
+    setEditor({ deckId, slideId: slideOk ? back.slideId : start, sel: slideOk ? back.sel : [], scope: slideOk ? back.scope : null, editing: null, railSel: start ? [slideOk ? back.slideId! : start] : [], railAnchor: start, zoom: back?.zoom ?? 'fit', column: col, locked: [], presenting: false, readOnly: false })
     touchDeck(deckId)
     void import('../engine').then((m) => m.warmEngine()) // a deck is open: have the engine ready for export
     return () => { endEdit(); const st = getEditor(); kept.set(deckId, { slideId: st.slideId, sel: st.sel, scope: st.scope, zoom: st.zoom }); setEditor({ deckId: null, slideId: null, sel: [], editing: null }) }
@@ -106,7 +109,6 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   useEffect(() => { if (d && slideId && !d.slides.some((x) => x.id === slideId)) setEditor({ slideId: d.slides[Math.min(index, d.slides.length - 1)]?.id ?? null, sel: [] }) })
   useEffect(() => { if (d) setLastSlide(d.id, index) }, [d?.id, index]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (column === 'ask') setAskMounted(true) }, [column])
-  useEffect(() => { setEditor({ readOnly: viewer }) }, [viewer])
   const [, bump] = useState(0)
   useEffect(() => onTextChange(() => bump((n) => n + 1)), [])
   // Local version history: a copy when the deck opens, then at most every 10 minutes of editing.
@@ -129,12 +131,12 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const presentFrom = useRef<number | null>(null)
   const [presenter, setPresenter] = useState(false)
   const keyOpts = useMemo(() => ({
-    readOnly: viewer, deckId, slides: d?.slides.map((x) => x.id) ?? [],
+    readOnly: false, deckId, slides: d?.slides.map((x) => x.id) ?? [],
     onPresent: present,
     onAsk: () => setColumn(getEditor().column === 'ask' ? null : 'ask'),
     onFormat: () => dispatchEvent(new Event('ream:focus-bar')),
     onLeave: leave, onFind: (replace: boolean) => setFind({ replace }), fitZoom: currentFit,
-  }), [deckId, d?.slides, present, viewer]) // eslint-disable-line react-hooks/exhaustive-deps
+  }), [deckId, d?.slides, present]) // eslint-disable-line react-hooks/exhaustive-deps
   useEditorKeys(keyOpts)
 
   // Clipboard: the native events, while the stage is focused and no text is being edited.
@@ -142,7 +144,6 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     if (!d) return
     const size = d.size ?? { w: 1280, h: 720 }
     const on = (e: ClipboardEvent) => {
-      if (coarse.matches) return
       const r = regionOf(document.activeElement)
       if (r !== 'stage' && document.activeElement !== document.body) return
       onClipboardEvent(e, visibleCentre, size)
@@ -189,7 +190,6 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   // The canvas context menu.
   useEffect(() => {
     const on = (e: Event) => {
-      if (coarse.matches) return
       const { x, y, text } = (e as CustomEvent<{ x: number; y: number; text?: boolean }>).detail
       const sel = getEditor().sel
       if (text) {
@@ -266,11 +266,10 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
 
   const size = d.size ?? { w: 1280, h: 720 }
   const iconOnly = width < 1280
-  // Ask docks only while the stage keeps room for a 640px slide plus handle clearance; otherwise it overlays.
-  const overlay = width - 216 - colW < 640 + 96
-  const compactRail = false
-  const askOn = !viewer && ai && column === 'ask'
-  const showColumn = askOn
+  // Ask docks only while the slide keeps at least 560px; otherwise it floats over the stage.
+  const overlay = width - railW - colW - 40 < 560
+  const compactRail = railW < 150
+  const askOn = ai && column === 'ask'
 
   const openGallery = (kind: Gallery['kind']) => (e: React.MouseEvent<HTMLElement>) => { const a = e.currentTarget; setGallery((g) => (g?.kind === kind ? null : { kind, anchor: a })) }
   const picked = (run: () => void) => { setGallery(null); run() }
@@ -284,7 +283,6 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const pic = async (at?: { x: number; y: number }) => { const f = await pickPicture(); if (f) await insertPicture(f, at ?? visibleCentre(), size) }
   const dragInsert = (kind: string) => (e: React.DragEvent) => { e.dataTransfer.setData('application/x-ream-insert', kind); e.dataTransfer.effectAllowed = 'copy' }
   const onDrop = (e: React.DragEvent) => {
-    if (viewer) return
     const kind = e.dataTransfer.getData('application/x-ream-insert')
     const at = slidePoint(e.clientX, e.clientY)
     if (kind) {
@@ -309,35 +307,33 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         <div className={s.title}>
           <span className={s.titleRow}>
             <h1 title={d.name}>{d.name}</h1>
-            {!viewer && <IconButton label="Deck options" size="sm" tone="plain" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ anchor: { x: r.left, y: r.bottom + 6 }, label: 'Deck', items: [
+            <IconButton label="Deck options" size="sm" tone="plain" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ anchor: { x: r.left, y: r.bottom + 6 }, label: 'Deck', items: [
               { label: 'Find and replace', hint: `⇧${modKey}H`, run: () => setFind({ replace: true }) },
               { kind: 'sep' },
               { label: 'Design: fonts, colours, slide size…', run: () => setDeckDialog('design') },
               { label: 'Check accessibility…', run: () => setDeckDialog('a11y') },
               { label: 'Version history…', run: () => setDeckDialog('versions') },
-            ] }) }}><CaretDown size={12} weight="bold" /></IconButton>}
+            ] }) }}><CaretDown size={12} weight="bold" /></IconButton>
           </span>
           <span>
             {count(d.slides.length, 'slide')} · {status ?? <><button type="button" className={s.notSaved} onClick={retrySave}>Not saved · Retry</button> · <button type="button" className={s.notSaved} onClick={() => download([d.id], 'pptx')}>Download a copy</button></>} <SyncInline />
           </span>
         </div>
-        {!viewer && (
-          <div className={s.insert} role="toolbar" aria-label="Insert">
-            <InsertButton label="Text" hint="Insert a text box" iconOnly={iconOnly} icon={<TextT size={16} />} onClick={() => insertText(visibleCentre())} onDragStart={dragInsert('text')} />
-            <InsertButton label="Shapes" hint="Insert a shape" iconOnly={iconOnly} icon={<Shapes size={16} />} onClick={openGallery('shapes')} onDragStart={dragInsert('rect')} expanded={gallery?.kind === 'shapes'} caret />
-            <InsertButton label="Picture" hint="Insert or generate a picture" iconOnly={iconOnly} icon={<ImageIcon size={16} />} onClick={openGallery('picture')} onDragStart={dragInsert('picture')} expanded={gallery?.kind === 'picture'} caret />
-            <InsertButton label="Table" hint="Insert a table" iconOnly={iconOnly} icon={<Table size={16} />} onClick={openGallery('table')} onDragStart={dragInsert('table')} expanded={gallery?.kind === 'table'} caret />
-            <InsertButton label="Chart" hint="Insert a chart" iconOnly={iconOnly} icon={<ChartBar size={16} />} onClick={openGallery('chart')} onDragStart={dragInsert('chart')} expanded={gallery?.kind === 'chart'} caret />
-          </div>
-        )}
-        {!viewer && width >= 760 && (
+        <div className={s.insert} role="toolbar" aria-label="Insert">
+          <InsertButton label="Text" hint="Insert a text box" iconOnly={iconOnly} icon={<TextT size={16} />} onClick={() => insertText(visibleCentre())} onDragStart={dragInsert('text')} />
+          <InsertButton label="Shapes" hint="Insert a shape" iconOnly={iconOnly} icon={<Shapes size={16} />} onClick={openGallery('shapes')} onDragStart={dragInsert('rect')} expanded={gallery?.kind === 'shapes'} caret />
+          <InsertButton label="Picture" hint="Insert or generate a picture" iconOnly={iconOnly} icon={<ImageIcon size={16} />} onClick={openGallery('picture')} onDragStart={dragInsert('picture')} expanded={gallery?.kind === 'picture'} caret />
+          <InsertButton label="Table" hint="Insert a table" iconOnly={iconOnly} icon={<Table size={16} />} onClick={openGallery('table')} onDragStart={dragInsert('table')} expanded={gallery?.kind === 'table'} caret />
+          <InsertButton label="Chart" hint="Insert a chart" iconOnly={iconOnly} icon={<ChartBar size={16} />} onClick={openGallery('chart')} onDragStart={dragInsert('chart')} expanded={gallery?.kind === 'chart'} caret />
+        </div>
+        {width >= 760 && (
           <div className={s.history}>
             <IconButton label={hist.canUndo ? `Undo ${hist.undoLabel?.toLowerCase() ?? ''}`.trim() : 'Undo'} hint={`${modKey}Z`} tone="plain" disabled={!hist.canUndo} onClick={() => applyUndo(d.id, 'undo')}><ArrowArcLeft size={16} /></IconButton>
             <IconButton label={hist.canRedo ? `Redo ${hist.redoLabel?.toLowerCase() ?? ''}`.trim() : 'Redo'} hint={`⇧${modKey}Z`} tone="plain" disabled={!hist.canRedo} onClick={() => applyUndo(d.id, 'redo')}><ArrowArcRight size={16} /></IconButton>
           </div>
         )}
         <div className={s.actions}>
-          {!viewer && ai && <Tooltip label="Ask Ream" hint={`${modKey}J`}><Button variant={column === 'ask' ? 'secondary' : 'ghost'} aria-pressed={column === 'ask'} icon={<ChatCircleText size={15} />} onClick={() => setColumn(column === 'ask' ? null : 'ask')}>Ask</Button></Tooltip>}
+          {ai && <Tooltip label="Ask Ream" hint={`${modKey}J`}><Button variant={column === 'ask' ? 'secondary' : 'ghost'} aria-pressed={column === 'ask'} icon={<ChatCircleText size={15} />} onClick={() => setColumn(column === 'ask' ? null : 'ask')}>Ask</Button></Tooltip>}
           <Button variant="ghost" icon={<DownloadSimple size={15} />} trailing={<CaretDown size={11} />} aria-haspopup="menu" onClick={downloadMenu}>Download</Button>
           <span className={s.presentGroup}>
             <Tooltip label="Present from this slide" hint="⇧F5"><Button variant="primary" icon={<Play size={14} weight="fill" />} onClick={() => present(false)}>Present</Button></Tooltip>
@@ -349,24 +345,27 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
           </span>
         </div>
       </header>
-      <div className={s.body} data-column={showColumn || undefined} data-overlay={overlay || undefined} style={{ ['--col' as string]: `${colW}px` }}>
-        <Rail deck={d} compact={compactRail} readOnly={viewer} />
+      <div className={s.body} data-overlay={overlay || undefined} style={{ ['--col' as string]: `${colW}px`, ['--rail' as string]: `${railW}px` }}>
+        <div className={s.railCol}>
+          <Rail deck={d} compact={compactRail} readOnly={false} />
+          <Splitter edge="right" label="Resize slides" value={railW} limits={RAIL} onChange={(w) => { setRailW(w); write(RAIL_KEY, String(w)) }} />
+        </div>
         <div className={s.stageCol}>
-          {!viewer && <ContextBar deck={d} slide={cur} index={index} />}
+          <ContextBar deck={d} slide={cur} index={index} />
           <div className={s.stageWrap} onDragOver={(e) => { if (e.dataTransfer.types.includes('application/x-ream-insert') || e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation() } }} onDrop={onDrop}>
-            <Canvas deck={d} slide={cur} label={`Slide ${index + 1} of ${d.slides.length}`} readOnly={viewer} />
+            <Canvas deck={d} slide={cur} label={`Slide ${index + 1} of ${d.slides.length}`} readOnly={false} />
             <ZoomCluster />
             {find && <FindBar deck={d} replace={find.replace} onClose={() => { setFind(null); document.querySelector<HTMLElement>('[data-region="stage"]')?.focus() }} />}
           </div>
-          {!viewer && <NotesDrawer slide={cur} />}
+          <NotesDrawer slide={cur} />
         </div>
-        {showColumn && (
-          <div className={s.column}>
-            <Splitter width={colW} onWidth={(w) => { setColW(w); write(WIDTH_KEY, String(w)) }} />
+        {/* Ask stays mounted once opened, so closing it never stops or loses a run. */}
+        {askMounted && ai && (
+          <div className={s.askHost} data-region="column" data-overlay={overlay || undefined} hidden={!askOn}>
+            <Splitter edge="left" label="Resize Ask" value={colW} limits={ASK} onChange={(w) => { setColW(w); write(WIDTH_KEY, String(w)) }} />
+            <AgentPanel deck={d} slide={index} onClose={() => setColumn(null)} />
           </div>
         )}
-        {/* Ask stays mounted once opened, so closing it never stops or loses a run. */}
-        {askMounted && ai && <div className={s.askHost} data-region="column" data-overlay={overlay || undefined} hidden={!askOn}><AgentPanel deck={d} slide={index} onClose={() => setColumn(null)} /></div>}
       </div>
       {gallery && (
         <Popover anchor={gallery.anchor} label={gallery.kind === 'shapes' ? 'Shapes' : gallery.kind === 'table' ? 'Table' : gallery.kind === 'picture' ? 'Picture' : 'Chart'} width={gallery.kind === 'shapes' ? 268 : gallery.kind === 'table' ? 258 : gallery.kind === 'picture' ? 320 : 248}
@@ -430,15 +429,18 @@ function ZoomCluster() {
   )
 }
 
-/** The column's splitter: drag (or arrow keys) between 300 and 520px. */
-function Splitter({ width, onWidth }: { width: number; onWidth: (w: number) => void }) {
-  const clamp = (w: number) => Math.round(Math.min(520, Math.max(300, w)))
+/** A panel's edge: drag it (or arrow keys, 16px a step) to resize within its limits. `edge`: which side of the
+ *  panel it sits on (the rail's right edge, Ask's left edge). */
+function Splitter({ value, limits, onChange, edge, label }: { value: number; limits: { min: number; max: number }; onChange: (w: number) => void; edge: 'left' | 'right'; label: string }) {
+  const clamp = (w: number) => Math.round(Math.min(limits.max, Math.max(limits.min, w)))
+  const dir = edge === 'right' ? 1 : -1
   return (
-    <div role="separator" aria-orientation="vertical" aria-label="Resize column" aria-valuemin={300} aria-valuemax={520} aria-valuenow={width} tabIndex={0} className={s.splitter}
-      onKeyDown={(e) => { if (e.key === 'ArrowLeft') onWidth(clamp(width + 16)); if (e.key === 'ArrowRight') onWidth(clamp(width - 16)) }}
+    <div role="separator" aria-orientation="vertical" aria-label={label} aria-valuemin={limits.min} aria-valuemax={limits.max} aria-valuenow={value} tabIndex={0} className={s.splitter} data-edge={edge}
+      onKeyDown={(e) => { if (e.key === 'ArrowLeft') onChange(clamp(value - 16 * dir)); if (e.key === 'ArrowRight') onChange(clamp(value + 16 * dir)) }}
       onPointerDown={(e) => {
-        const x0 = e.clientX, w0 = width
-        const move = (m: PointerEvent) => onWidth(clamp(w0 + (x0 - m.clientX)))
+        e.preventDefault()
+        const x0 = e.clientX, w0 = value
+        const move = (m: PointerEvent) => onChange(clamp(w0 + (m.clientX - x0) * dir))
         const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up) }
         addEventListener('pointermove', move); addEventListener('pointerup', up)
       }} />

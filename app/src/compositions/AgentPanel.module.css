@@ -1,8 +1,5 @@
-.panel {
-  display: flex; flex-direction: column; min-height: 0; border-radius: var(--r-panel);
-  background: var(--panel); box-shadow: 0 0 0 1px var(--hair);
-}
-.head { display: flex; align-items: center; gap: 4px; height: 48px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--hair); flex: none; }
+.panel { display: flex; flex-direction: column; min-height: 0; }
+.head { display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 4px 0 14px; flex: none; }
 .model { display: inline-flex; white-space: nowrap; flex: none; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .model svg { color: var(--ink-3); }
 .headSpacer { flex: 1; }

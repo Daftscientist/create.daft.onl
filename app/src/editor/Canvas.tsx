@@ -26,6 +26,7 @@ type Gesture =
   | { kind: 'rotate'; id: string; orig: Box }
   | { kind: 'end'; id: string; which: 0 | 1; ends: [Pt, Pt] }
   | { kind: 'marquee'; start: { x: number; y: number }; base: string[] }
+  | { kind: 'pinch'; d0: number; z0: number }
   | { kind: 'pan'; start: { x: number; y: number }; scroll: { l: number; t: number } }
 
 let stageEl: HTMLDivElement | null = null
@@ -55,6 +56,7 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
   const [, setTick] = useState(0)
   const rerender = useCallback(() => setTick((t) => t + 1), [])
   const gesture = useRef<Gesture | null>(null)
+  const touches = useRef(new Map<number, { x: number; y: number }>())
   const [dragging, setDragging] = useState(false)
   const [guides, setGuides] = useState<Guide[]>([])
   const [marquee, setMarquee] = useState<Box | null>(null)
@@ -180,6 +182,16 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
   const others = (ids: string[]) => pickable().filter((el) => !ids.includes(idOf(el))).map((el) => bounds(boxOf(el)))
 
   const onPointerDown = (e: React.PointerEvent) => {
+    // Touch: two fingers pinch to zoom (whatever the first finger was doing is cancelled).
+    if (e.pointerType === 'touch') {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (touches.current.size === 2) {
+        if (gesture.current && gesture.current.kind !== 'pan') finish(true)
+        const [a, b] = [...touches.current.values()]
+        gesture.current = { kind: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: zoomPref === 'fit' ? fit : zoomPref }
+        return
+      }
+    }
     if (e.button === 1 || space) {
       e.preventDefault()
       gesture.current = { kind: 'pan', start: { x: e.clientX, y: e.clientY }, scroll: { l: vp.current!.scrollLeft, t: vp.current!.scrollTop } }
@@ -214,6 +226,13 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
     // A click outside the entered group leaves it.
     if (scope && !(hits[0] && live(scope)?.contains(live(hits[0])))) setEditor({ scope: null })
     if (e.button === 2) { if (hits[0] && !sel.includes(hits[0])) select([hits[0]]); else if (!hits.length) select([]); return }
+    if (!hits.length && e.pointerType === 'touch') {
+      // A finger on empty slide pans (as on an iPad); a tap there clears the selection.
+      select([])
+      gesture.current = { kind: 'pan', start: { x: e.clientX, y: e.clientY }, scroll: { l: vp.current!.scrollLeft, t: vp.current!.scrollTop } }
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      return
+    }
     if (!hits.length) {
       gesture.current = { kind: 'marquee', start: p, base: e.shiftKey ? sel : [] }
       if (!e.shiftKey) select([])
@@ -239,7 +258,16 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     const g = gesture.current
+    if (g?.kind === 'pinch') {
+      if (touches.current.size < 2) return
+      const [a, b] = [...touches.current.values()]
+      const r = vp.current!.getBoundingClientRect()
+      zoomAnchor.current = { cx: (a.x + b.x) / 2 - r.left, cy: (a.y + b.y) / 2 - r.top }
+      setEditor({ zoom: clampZoom(g.z0 * Math.hypot(a.x - b.x, a.y - b.y) / g.d0) })
+      return
+    }
     if (!g) {
       if (e.pointerType === 'mouse' && !dragging) { const h = hitsAt(e.clientX, e.clientY)[0] ?? null; if (h !== hover) setHover(h) }
       return
@@ -324,6 +352,7 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
 
   const finish = (cancel: boolean) => {
     const g = gesture.current
+    if (g?.kind === 'pinch') { if (touches.current.size < 2) gesture.current = null; return }
     gesture.current = null
     setGuides([]); setMarquee(null); setReadout(null); setDragging(false)
     if (!g) return
@@ -460,8 +489,8 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
       data-commenting={commenting || undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={() => finish(false)}
-      onPointerCancel={() => finish(true)}
+      onPointerUp={(e) => { touches.current.delete(e.pointerId); finish(false) }}
+      onPointerCancel={(e) => { touches.current.delete(e.pointerId); finish(true) }}
       onPointerLeave={() => setHover(null)}
       onDoubleClick={onDoubleClick}
       onContextMenu={(e) => {
