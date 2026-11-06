@@ -37,7 +37,7 @@ export function RecentsScreen(p: ScreenProps) {
   const list = p.select.active ? all : rest
   useReport(list, p.reportIds)
   return (
-    <LargeTitle title="Recents" leading={p.header.leading} trailing={p.header.trailing}>
+    <LargeTitle title="Home" leading={p.header.leading} trailing={p.header.trailing}>
       <SyncNotice />
       {!all.length ? (
         <EmptyState icon={<ClockCounterClockwise size={24} />} title="Your decks will show up here" body="Import a PowerPoint file from your phone. Everything stays in this browser, on this device.">

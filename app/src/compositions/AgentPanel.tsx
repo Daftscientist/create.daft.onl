@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import type { ModelMessage } from 'ai'
 import { runAgent, type Attachment } from '../data/ai/agent'
+import { takePendingAsk } from '../data/ai/pending'
 import { canSee, modelLabel, providerName, setAi, useActiveModel, useAi } from '../data/ai/settings'
 import { useBrowserModel } from '../data/ai/browser'
 import { AI_PROVIDER_IDS } from '../data/ai/providers'
@@ -73,6 +74,15 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   const picker = useRef<HTMLInputElement>(null)
 
   useEffect(() => { input.current?.focus() }, [])
+  // A prompt from Home: make the presentation as soon as the panel is up.
+  useEffect(() => {
+    // Taken when it runs, so a cancelled first mount (React's double effects in development) can't lose it.
+    const t = setTimeout(() => {
+      const p = takePendingAsk(deck.id)
+      if (p) void send(p.fresh ? `Make a new presentation: ${p.prompt}\n\n(This deck is new: replace its placeholder first slide with your title slide, create the rest with create_slides, and give the deck a short name with rename_deck.)` : p.prompt, p.files)
+    }, 50)
+    return () => clearTimeout(t)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   // The box grows with what you type and shrinks back once it's sent.
   useEffect(() => { if (!draft && input.current) input.current.style.height = '' }, [draft])
   useEffect(() => { try { localStorage.setItem(key(deck.id), JSON.stringify(turns.map((t) => (t.state === 'running' ? { ...t, state: 'stopped' } : t)))) } catch { /* ok */ } }, [turns, deck.id])
@@ -92,12 +102,12 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   const patchLast = (fn: (t: Turn) => Turn) => setTurns((ts) => ts.map((t, i) => (i === ts.length - 1 ? fn(t) : t)))
 
   const abort = useRef<AbortController | null>(null)
-  const send = async (prompt: string) => {
+  const send = async (prompt: string, withFiles?: Attachment[]) => {
     const text = prompt.trim()
     if (!text || running || !ready) return
     setDraft('')
     const target = slide
-    const attached = files
+    const attached = withFiles ?? files
     setFiles([])
     // What the user is doing: the open slide, the selection, and what they changed by hand since last time.
     const st = getEditor(), stage = liveStage()

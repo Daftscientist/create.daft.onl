@@ -36,7 +36,7 @@ export function MobileViewer({ deckId, slide }: { deckId: string; slide?: number
   }, [])
 
   if (!deck || deck.type !== 'deck') {
-    return <EmptyState icon={<CaretLeft size={24} />} title="This deck isn’t available" body="It may have been moved to Trash."><Button variant="secondary" onClick={() => navigate({ name: 'home' })}>Back to Recents</Button></EmptyState>
+    return <EmptyState icon={<CaretLeft size={24} />} title="This deck isn’t available" body="It may have been moved to Trash."><Button variant="secondary" onClick={() => navigate({ name: 'home' })}>Back to Home</Button></EmptyState>
   }
   const leave = () => (history.length > 1 ? back() : navigate({ name: 'home' }))
 

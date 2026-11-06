@@ -248,7 +248,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     return (
       <div className={s.missing}>
         <EmptyState icon={<ArrowLeft size={24} />} title="This deck isn’t available" body="It may have been moved to Trash or deleted.">
-          <Button variant="secondary" onClick={() => navigate({ name: 'home' })}>Back to Recents</Button>
+          <Button variant="secondary" onClick={() => navigate({ name: 'home' })}>Back to Home</Button>
         </EmptyState>
       </div>
     )

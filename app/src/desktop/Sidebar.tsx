@@ -1,6 +1,6 @@
 // Desktop sidebar (DESIGN.md §6 Sidebar): sits on the frame, no panel, no glass.
 import {
-  CaretRight, ClockCounterClockwise, FolderSimple, GearSix, Plus, Star, Trash,
+  CaretRight, FolderSimple, GearSix, House, Plus, Star, Trash,
 } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { childrenOf, folders, isLive, isTrashRoot, isWithin, move, newFolder, useLibrary, getLibrary, importFiles } from '../data/library'
@@ -22,7 +22,7 @@ export function Sidebar({ route }: { route: Route }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(route.name === 'files' && route.folderId ? ancestors(route.folderId) : []))
 
   const nav = [
-    { route: { name: 'home' } as Route, label: 'Recents', icon: <ClockCounterClockwise size={18} />, active: route.name === 'home' },
+    { route: { name: 'home' } as Route, label: 'Home', icon: <House size={18} />, active: route.name === 'home' },
     { route: { name: 'files', folderId: null } as Route, label: 'Files', icon: <FolderSimple size={18} />, active: route.name === 'files' && !route.folderId, drop: '' },
     { route: { name: 'starred' } as Route, label: 'Starred', icon: <Star size={18} />, active: route.name === 'starred', count: starred },
     { route: { name: 'trash' } as Route, label: 'Trash', icon: <Trash size={18} />, active: route.name === 'trash', count: trashed },

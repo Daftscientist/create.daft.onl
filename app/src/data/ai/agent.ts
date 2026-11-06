@@ -9,7 +9,7 @@
 // and older slide HTML in the conversation is replaced by a note on each step.
 import { generateText, isStepCount, streamText, tool, type ModelMessage, type UserContent } from 'ai'
 import { z } from 'zod'
-import { getLibrary, updateSlides } from '../library'
+import { getLibrary, rename, updateSlides } from '../library'
 import type { Deck, SlideDoc, SlideSize } from '../types'
 import { sanitize, slideText, SLIDE_H, SLIDE_W } from '../../slides/SlideView'
 import { rasterSlide } from '../../slides/raster'
@@ -468,6 +468,11 @@ export async function runAgent(opts: {
         return { ok: true }
       },
     }),
+    rename_deck: tool({
+      description: 'Give the deck a new name (short, like a file name).',
+      inputSchema: z.object({ name: z.string().min(1).max(80), activity }),
+      execute: async ({ name }) => { rename(opts.deckId, name, { quiet: true }); return { ok: true } },
+    }),
     set_deck_styles: tool({
       description: "Read or replace the deck's shared CSS (applies to every slide, e.g. imported decks' embedded fonts). Omit css to read it.",
       inputSchema: z.object({ css: z.string().optional(), activity }),
@@ -483,7 +488,7 @@ export async function runAgent(opts: {
   const FALLBACK: Record<string, string> = {
     list_slides: 'Looking through the deck', read_slides: 'Reading slides', view_slides: 'Looking at slides', replace_slide: 'Redesigning a slide',
     edit_element: 'Editing a slide', delete_elements: 'Removing elements', create_slides: 'Adding slides', delete_slides: 'Removing slides',
-    move_slide: 'Reordering slides', set_slides: 'Changing slide settings', set_animation: 'Adding an animation', comment: 'Leaving a comment', set_deck_styles: 'Changing deck styles',
+    move_slide: 'Reordering slides', rename_deck: 'Naming the deck', set_slides: 'Changing slide settings', set_animation: 'Adding an animation', comment: 'Leaving a comment', set_deck_styles: 'Changing deck styles',
   }
 
   const d0 = deck(opts.deckId)

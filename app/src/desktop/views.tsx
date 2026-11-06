@@ -5,6 +5,7 @@ import { Collection } from '../compositions/Collection'
 import { EmptyState, PageHeader, SectionHeader } from '../compositions/PageHeader'
 import { ViewTools } from '../compositions/ViewTools'
 import { SyncNotice } from '../compositions/SyncNotice'
+import { PromptStart } from '../compositions/PromptStart'
 import { childrenOf, emptyTrash, isLive, isTrashRoot, newDeck, newFolder, pathTo, recents, trashDaysLeft, useLibrary, decks } from '../data/library'
 import type { Entry } from '../data/types'
 import { count, relTimeInline } from '../lib/format'
@@ -34,7 +35,8 @@ export function RecentsView() {
   if (!total) {
     return (
       <>
-        <PageHeader title="Recents" />
+        <PageHeader title="Home" />
+        <PromptStart />
         <EmptyState icon={<ClockCounterClockwise size={24} />} title="Your decks will show up here" body="Import a PowerPoint file or start a new deck. Everything stays in this browser, on this device.">
           <Button variant="secondary" icon={<UploadSimple size={16} />} onClick={a.pickFiles}>Import .pptx</Button>
           <Button variant="primary" icon={<Plus size={16} />} onClick={() => a.open(lib.entries[newDeck(null)])}>New deck</Button>
@@ -45,8 +47,9 @@ export function RecentsView() {
 
   return (
     <>
-      <PageHeader title="Recents" count={count(all.length, 'deck')} />
+      <PageHeader title="Home" />
       <SyncNotice />
+      <PromptStart />
       {showJump && (
         <section className={s.section} aria-label="Jump back in">
           <SectionHeader title="Jump back in" />
@@ -54,7 +57,7 @@ export function RecentsView() {
         </section>
       )}
       <section className={s.section} aria-label="Earlier">
-        <SectionHeader title={showJump ? 'Earlier' : 'Recently opened'}>
+        <SectionHeader title={showJump ? 'Earlier' : 'Recents'}>
           <ViewTools prefs={prefs} onChange={setPrefs} />
         </SectionHeader>
         <Collection {...cp} entries={rest} view={prefs.view} label="Recent decks" meta={opened} layoutPrefix="ql-" />

@@ -308,13 +308,13 @@ export function setLastSlide(deckId: string, index: number) {
   patch(deckId, { lastSlide: index }, true)
 }
 
-export function rename(entryId: string, name: string): boolean {
+export function rename(entryId: string, name: string, opts: { quiet?: boolean } = {}): boolean {
   const trimmed = name.trim()
   const e = state.entries[entryId]
   if (!e || !trimmed || trimmed === e.name) return false
   const prev = e.name
   patch(entryId, { name: trimmed, modifiedAt: Date.now() })
-  toast({ message: `Renamed to “${trimmed}”`, action: { label: 'Undo', run: () => patch(entryId, { name: prev }) } })
+  if (!opts.quiet) toast({ message: `Renamed to “${trimmed}”`, action: { label: 'Undo', run: () => patch(entryId, { name: prev }) } })
   return true
 }
 

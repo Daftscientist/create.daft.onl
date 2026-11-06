@@ -30,7 +30,7 @@ export function useSearch(q: string, onDone: () => void, pickFiles: () => void):
       { id: 'a-import', section: 'Actions', icon: <UploadSimple size={16} />, title: 'Import .pptx…', run: go(pickFiles) },
       { id: 'a-backup', section: 'Actions', icon: <CloudArrowUp size={16} />, title: 'Back up now', run: go(() => void backUp()) },
       { id: 'g-settings', section: 'Go to', icon: <GearSix size={16} />, title: 'Settings', run: go(() => navigate({ name: 'settings', section: null })) },
-      { id: 'g-recents', section: 'Go to', icon: <ClockCounterClockwise size={16} />, title: 'Recents', run: go(() => navigate({ name: 'home' })) },
+      { id: 'g-recents', section: 'Go to', icon: <ClockCounterClockwise size={16} />, title: 'Home', run: go(() => navigate({ name: 'home' })) },
       { id: 'g-files', section: 'Go to', icon: <FolderSimple size={16} />, title: 'Files', run: go(() => navigate({ name: 'files', folderId: null })) },
       { id: 'g-starred', section: 'Go to', icon: <Star size={16} />, title: 'Starred', run: go(() => navigate({ name: 'starred' })) },
       { id: 'g-trash', section: 'Go to', icon: <Trash size={16} />, title: 'Trash', run: go(() => navigate({ name: 'trash' })) },
