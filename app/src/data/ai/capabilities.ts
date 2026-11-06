@@ -18,12 +18,13 @@ export const CAPABILITIES: { id: Capability; label: string; description: string 
 
 export function classify(_provider: AiProviderId, id: string): Capability {
   const m = id.toLowerCase()
-  if (/realtime|[-_]live\b|live-|native-audio|voice-|grok-voice|gpt-live|audio-preview|s2s/.test(m)) return 'voice'
+  // Transcription first: 'gpt-live-transcribe' and 'gpt-realtime-whisper' are transcription, not live voice.
   if (/transcri|whisper|\bstt\b|scribe|nova-[23]|speech-to-text|asr/.test(m)) return 'transcription'
+  if (/realtime|[-_]live\b|live-|native-audio|voice-|grok-voice|gpt-live|audio-preview|s2s/.test(m)) return 'voice'
   if (/\btts\b|-tts|tts-|text-to-speech|aura|sonic|eleven|playai|speech/.test(m)) return 'speech'
   if (/sora|veo|video|kling|wan-|hunyuan-video|ray-/.test(m)) return 'video'
   if (/embed|embedding|rerank/.test(m)) return 'embedding'
-  if (/gpt-image|dall-e|imagen|image-gen|flux|stable-diffusion|sdxl|sd3|recraft|ideogram|seedream|playground-v|grok-2-image|grok-imagine|-image(-preview)?$|image-\d|aurora/.test(m)) return 'image'
+  if (/gpt-image|chatgpt-image|nano-banana|grok-imagine|dall-e|imagen|image-gen|flux|stable-diffusion|sdxl|sd3|recraft|ideogram|seedream|playground-v|grok-2-image|grok-imagine|-image(-preview)?$|image-\d|aurora/.test(m)) return 'image'
   if (/moderation|guard|search|computer-use|codex-mini|babbage|davinci|ada-|curie/.test(m)) return 'other'
   return 'text'
 }

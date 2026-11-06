@@ -1,9 +1,9 @@
 // Settings sections (docs/design/specs/settings.md). Both shells render these; they only frame them.
 import {
   Archive, Cloud, Database, DownloadSimple, Info, Keyboard, Palette, Sparkle,
-  ChartBar,
+  ChartBar, Cube, Waveform,
 } from '@phosphor-icons/react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { backUp, decks, isLive, useLibrary } from '../data/library'
 import { setPrefs, useDevicePrefs } from '../data/prefs'
 import {
@@ -13,9 +13,7 @@ import { toast } from '../data/toasts'
 import { bytes, count, relTimeInline } from '../lib/format'
 import { KEYMAP } from '../lib/keymap'
 import { useBrowserModel } from '../data/ai/browser'
-import { AI_PROVIDER_IDS, providerDef, type AiProviderId } from '../data/ai/providers'
-import { classify } from '../data/ai/capabilities'
-import { canSee, getAi, providerName, setAi, setEnabled, setModels, setProvider, useActiveModel, useAi, type ModelProvider } from '../data/ai/settings'
+import { providerName, type ModelProvider } from '../data/ai/settings'
 import { clearUsage, usageSince, useUsageVersion } from '../data/ai/usage'
 import { persistStorage, storage } from '../storage/client'
 import { PRODUCT } from '../ui/Brand'
@@ -24,25 +22,24 @@ import { Confirm } from '../ui/Dialog'
 import { SettingGroup, SettingRow, Switch, TextField } from '../ui/Field'
 import { Segmented } from '../ui/Segmented'
 import { useShell } from '../lib/shell'
-import { AiMark } from './AiMark'
-import { ModelSetup } from './ModelSetup'
-import { CapabilityPicker } from './CapabilityPicker'
 import { VoiceAgentsSettings } from './VoiceAgents'
-import { ModelPicker } from './ModelPicker'
+import { AiModels, AiProviders } from './AiSettings'
 import { ProviderMark } from './ProviderMark'
 import { openSyncFlow, prepareProviders, startConnect } from './SyncFlows'
 import { runSyncAction, useSyncSummary } from './SyncStatus'
 import s from './settings.module.css'
 
-export type SectionDef = { id: string; label: string; group: 'This browser' | 'Library' | 'Ream'; icon: ReactNode; render: () => ReactNode; preview?: boolean; keyboardOnly?: boolean }
+export type SectionDef = { id: string; label: string; group: 'This browser' | 'Library' | 'AI' | 'Ream'; icon: ReactNode; render: () => ReactNode; preview?: boolean; keyboardOnly?: boolean }
 
 export const SECTIONS: SectionDef[] = [
   { id: 'appearance', label: 'Appearance', group: 'This browser', icon: <Palette size={18} />, render: () => <Appearance /> },
   { id: 'shortcuts', label: 'Keyboard shortcuts', group: 'This browser', icon: <Keyboard size={18} />, render: () => <Shortcuts />, keyboardOnly: true },
   { id: 'storage', label: 'Storage', group: 'Library', icon: <Database size={18} />, render: () => <Storage /> },
   { id: 'sync', label: 'Sync', group: 'Library', icon: <Cloud size={18} />, render: () => <Sync /> },
-  { id: 'ai', label: 'AI', group: 'Library', icon: <Sparkle size={18} />, render: () => <AiSettings /> },
-  { id: 'usage', label: 'AI usage', group: 'Library', icon: <ChartBar size={18} />, render: () => <Usage /> },
+  { id: 'ai', label: 'Providers', group: 'AI', icon: <Sparkle size={18} />, render: () => <AiProviders /> },
+  { id: 'models', label: 'Models', group: 'AI', icon: <Cube size={18} />, render: () => <AiModels /> },
+  { id: 'voice', label: 'Voice', group: 'AI', icon: <Waveform size={18} />, render: () => <VoiceAgentsSettings /> },
+  { id: 'usage', label: 'Usage', group: 'AI', icon: <ChartBar size={18} />, render: () => <Usage /> },
   { id: 'about', label: `About ${PRODUCT}`, group: 'Ream', icon: <Info size={18} />, render: () => <About /> },
 ]
 /** Shortcuts only where there is a keyboard (review: it was dead UI on phones). */
@@ -223,111 +220,6 @@ function Sync() {
         <Confirm title="Turn off encryption?" confirmLabel="Turn off" onClose={() => setOff(false)} onConfirm={() => void setEncryption(false)}
           body={<p>Your cloud copy will be stored readable by {p.name} again. Your library itself doesn’t change.</p>} />
       )}
-    </>
-  )
-}
-
-function AiSettings() {
-  const ai = useAi()
-  const sync = useSync()
-  const browser = useBrowserModel()
-  const active = useActiveModel()
-  const [adding, setAdding] = useState<AiProviderId | null>(null)
-  const [busy, setBusy] = useState<AiProviderId | null>(null)
-  const [error, setError] = useState<{ id: AiProviderId; message: string } | null>(null)
-  const [setup, setSetup] = useState<{ id: AiProviderId; models: string[] } | null>(null)
-
-  const load = async (id: AiProviderId, config = ai.providers[id] ?? {}) => {
-    const def = providerDef(id)
-    if (!def.models) return
-    setBusy(id); setError(null)
-    try { const list = await def.models(config); setModels(id, list); if (!ai.enabled?.[id]) setSetup({ id, models: list }) }
-    catch (e) { setError({ id, message: (e as Error).message }) }
-    finally { setBusy(null) }
-  }
-  // Providers connected before the setup flow have a list saved when only chat models were kept: list them again
-  // (every model now) and offer the setup, one provider at a time.
-  const migrating = useRef(false)
-  useEffect(() => {
-    if (migrating.current || setup || busy) return
-    const stale = AI_PROVIDER_IDS.find((id) => ai.providers[id] && providerDef(id).models && !ai.enabled?.[id])
-    if (!stale) return
-    migrating.current = true
-    void load(stale).finally(() => { migrating.current = false })
-  }, [ai.providers, ai.enabled, setup, busy]) // eslint-disable-line react-hooks/exhaustive-deps
-  const status = (id: AiProviderId) => {
-    const n = ai.models?.[id]?.length ?? 0
-    return busy === id ? 'Loading models…' : `Connected${n ? ` · ${count(n, 'model')}` : ''}`
-  }
-
-  return (
-    <>
-      <p className={s.lede}>Ream uses your own AI account and calls the provider straight from this browser. Nothing goes through Ream.</p>
-      <SettingGroup title="Model">
-        <SettingRow label="Model for Ask Ream" description={active ? providerName(active.provider, browser) : 'Add a provider below.'}>
-          <ModelPicker variant="field" />
-        </SettingRow>
-        <SettingRow label="Picture generation" description="Picture → Generate in the editor, and pictures Ask makes for slides. Turn on picture models with Choose models.">
-          <CapabilityPicker cap="image" label="Picture generation model" value={ai.imageModel} onChange={(m) => setAi({ imageModel: m })} none="First one turned on" />
-        </SettingRow>
-        <SettingRow label="Seeing slides" description="When Ask’s model can’t see pictures, this model describes slides for it.">
-          <CapabilityPicker cap="text" label="Model that describes slides" value={ai.visionModel} onChange={(m) => setAi({ visionModel: m })} filter={(m) => canSee(ai, m)} none="Ask each time" />
-        </SettingRow>
-      </SettingGroup>
-      <SettingGroup title="Providers">
-        {browser && (
-          <SettingRow
-            label={<><AiMark id="browser" size={22} />{browser.name}</>}
-            description={`${browser.model} runs on this device: free, private and offline. ${browser.status === 'available' ? 'Ready.' : 'It downloads the first time you use it.'} Small, so best for short edits.`}
-          />
-        )}
-        {AI_PROVIDER_IDS.map((id) => {
-          const def = providerDef(id)
-          const config = ai.providers[id]
-          const open = adding === id
-          return (
-            <SettingRow
-              key={id}
-              label={<><AiMark id={id} size={22} />{def.name}</>}
-              description={error?.id === id ? <span className={s.err}>{error.message}</span> : config ? status(id) : open ? undefined : def.keysUrl ? <a href={def.keysUrl} target="_blank" rel="noreferrer" className={s.link}>Get a key</a> : def.baseHint}
-            >
-              {config ? (
-                <>
-                  {(ai.models?.[id]?.length ?? 0) > 0 && <Button variant="secondary" onClick={() => setSetup({ id, models: ai.models?.[id] ?? [] })}>Choose models</Button>}
-                  {def.models && <Button variant="ghost" disabled={busy === id} onClick={() => void load(id)}>Refresh</Button>}
-                  <Button variant="ghost" onClick={() => setProvider(id, null)}>Remove</Button>
-                </>
-              ) : open ? (
-                <form className={s.keyForm} onSubmit={(e) => {
-                  e.preventDefault()
-                  const f = new FormData(e.currentTarget)
-                  const c = { apiKey: String(f.get('apiKey') ?? '') || undefined, baseURL: String(f.get('baseURL') ?? '') || undefined }
-                  setProvider(id, c); setAdding(null)
-                  const model = String(f.get('model') ?? '').trim()
-                  if (model) { setModels(id, [model]); setAi({ model: { provider: id, id: model } }) }
-                  else void load(id, c)
-                }}>
-                  {def.needs.includes('baseURL') && <TextField label="Base URL" hideLabel name="baseURL" placeholder={def.baseHint} autoFocus />}
-                  {(def.needs.includes('apiKey') || id === 'local') && <TextField label="API key" hideLabel name="apiKey" type="password" placeholder={id === 'local' ? 'API key (optional)' : def.keyHint ?? 'API key'} autoFocus={!def.needs.includes('baseURL')} autoComplete="off" />}
-                  {!def.models && <TextField label="Model" hideLabel name="model" placeholder={id === 'azure' ? 'Deployment name' : 'Model name'} required />}
-                  <Button variant="primary" type="submit">Save</Button>
-                </form>
-              ) : (
-                <Button variant="secondary" onClick={() => { setAdding(id); setError(null) }}>Add</Button>
-              )}
-            </SettingRow>
-          )
-        })}
-      </SettingGroup>
-      <VoiceAgentsSettings />
-      {setup && <ModelSetup provider={setup.id} models={setup.models} onClose={() => {
-        // Closed without choosing: keep the default (its chat models), so it isn't offered again on every visit.
-        if (!getAi().enabled?.[setup.id]) setEnabled(setup.id, setup.models.filter((m) => classify(setup.id, m) === 'text'))
-        setSetup(null)
-      }} />}
-      <p className={s.note}>{sync.provider
-        ? sync.encrypted ? 'Keys sync with your library, end-to-end encrypted.' : `Keys sync with your library, so ${PROVIDERS[sync.provider].name} can read them. Turn on end-to-end encryption in Sync to prevent that.`
-        : 'Keys are stored in this browser’s library. If you connect sync, they go with it.'}</p>
     </>
   )
 }

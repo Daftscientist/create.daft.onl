@@ -4,6 +4,7 @@ import { getLibrary, setLibrarySettings, useLibrary } from '../library'
 import { BROWSER_MODEL_ID, getBrowserModel, useBrowserModel, type BrowserModel } from './browser'
 import { AI_PROVIDERS, AI_PROVIDER_IDS, type AiProviderId, type ProviderConfig } from './providers'
 import { classify, type Capability } from './capabilities'
+import { withKnown } from './catalog'
 
 /** A model's provider: one the user added, or the browser's built-in model. */
 export type ModelProvider = AiProviderId | 'browser'
@@ -13,6 +14,8 @@ export type AiSettings = {
   providers: Partial<Record<AiProviderId, ProviderConfig>>
   /** Each provider's chat models, as last listed from the provider. */
   models?: Partial<Record<AiProviderId, string[]>>
+  /** Known models the provider's own list left out (offered anyway; see data/ai/catalog). */
+  unlisted?: Partial<Record<AiProviderId, string[]>>
   model: ModelRef | null
   /** The reasoning level last chosen for each model (`provider:id`); absent = the provider's default. */
   reasoning?: Record<string, ReasoningLevel>
@@ -71,7 +74,8 @@ export function setProvider(id: AiProviderId, config: ProviderConfig | null) {
   setAi({ providers, models, model: model && model.provider !== 'browser' && !providers[model.provider] ? null : model })
 }
 export function setModels(id: AiProviderId, list: string[]) {
-  setAi({ models: { ...getAi().models, [id]: list } })
+  const { all, unlisted } = withKnown(id, list)
+  setAi({ models: { ...getAi().models, [id]: all }, unlisted: { ...getAi().unlisted, [id]: unlisted } })
 }
 
 /** The chosen model, falling back to the browser's built-in one when nothing is chosen. */

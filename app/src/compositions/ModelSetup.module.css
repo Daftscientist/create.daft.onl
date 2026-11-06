@@ -16,3 +16,5 @@
 .model input { width: 16px; height: 16px; accent-color: var(--select); }
 .search { width: 100%; height: 34px; padding: 0 10px; margin-bottom: 10px; border: 0; border-radius: var(--r-sm); background: var(--fill); font: inherit; font-size: 13px; color: var(--ink); outline: none; }
 .search:focus { box-shadow: inset 0 0 0 1.5px var(--select); background: var(--paper); }
+.kindIcon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--fill); color: var(--ink-2); flex: none; }
+.tag { margin-left: 8px; font-size: 11px; color: var(--ink-3); background: var(--fill); padding: 1px 6px; border-radius: var(--r-pill); }

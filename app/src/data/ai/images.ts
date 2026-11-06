@@ -26,7 +26,10 @@ export async function makePicture(opts: { prompt: string; references?: string[];
   const r = await generateImage({
     model,
     prompt: opts.references?.length ? { text: opts.prompt, images: opts.references } : opts.prompt,
-    aspectRatio: opts.aspect,
+    // OpenAI's picture models take a size, not an aspect ratio: the nearest one they make.
+    ...(ref.provider === 'openai' || ref.provider === 'azure'
+      ? { size: (opts.aspect === '1:1' ? '1024x1024' : opts.aspect === '3:4' || opts.aspect === '9:16' ? '1024x1536' : '1536x1024') as `${number}x${number}` }
+      : { aspectRatio: opts.aspect }),
     abortSignal: opts.signal,
     maxRetries: 2,
   })

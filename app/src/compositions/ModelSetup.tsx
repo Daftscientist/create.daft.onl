@@ -8,7 +8,14 @@ import { providerDef, type AiProviderId } from '../data/ai/providers'
 import { Button } from '../ui/Button'
 import { Dialog } from '../ui/Dialog'
 import { Switch } from '../ui/Field'
+import { ChatText, ImageSquare, Microphone, SpeakerHigh, Waveform, VideoCamera, Graph, DotsThree } from '@phosphor-icons/react'
+import type { ReactNode } from 'react'
 import s from './ModelSetup.module.css'
+
+const ICON: Record<Capability, ReactNode> = {
+  text: <ChatText size={18} />, image: <ImageSquare size={18} />, voice: <Waveform size={18} />, speech: <SpeakerHigh size={18} />,
+  transcription: <Microphone size={18} />, video: <VideoCamera size={18} />, embedding: <Graph size={18} />, other: <DotsThree size={18} weight="bold" />,
+}
 
 export function ModelSetup({ provider, models: all, onClose }: { provider: AiProviderId; models: string[]; onClose: () => void }) {
   const ai = getAi()
@@ -22,6 +29,7 @@ export function ModelSetup({ provider, models: all, onClose }: { provider: AiPro
   const [caps, setCaps] = useState<Set<Capability>>(() => new Set(CAPABILITIES.map((c) => c.id).filter((c) => (byCap.get(c) ?? []).some((id) => on.has(id)) || (c === 'text' && byCap.has('text')))))
   const [q, setQ] = useState('')
   const name = providerDef(provider).name
+  const unlisted = getAi().unlisted?.[provider] ?? []
   const toggleCap = (c: Capability, v: boolean) => {
     const next = new Set(caps); if (v) next.add(c); else next.delete(c)
     setCaps(next)
@@ -45,6 +53,7 @@ export function ModelSetup({ provider, models: all, onClose }: { provider: AiPro
       <ul className={s.kinds}>
         {kinds.map((c) => (
           <li key={c.id} className={s.kind}>
+            <span className={s.kindIcon} aria-hidden>{ICON[c.id]}</span>
             <span className={s.kindText}><b>{c.label} <span className={s.count}>{byCap.get(c.id)!.length}</span></b><span>{c.description}</span></span>
             <Switch label={c.label} checked={caps.has(c.id)} onChange={(v) => toggleCap(c.id, v)} />
           </li>
@@ -73,7 +82,7 @@ export function ModelSetup({ provider, models: all, onClose }: { provider: AiPro
                   <li key={id}>
                     <label className={s.model}>
                       <input type="checkbox" checked={on.has(id)} onChange={(e) => { const o = new Set(on); if (e.target.checked) o.add(id); else o.delete(id); setOn(o) }} />
-                      <span>{id}</span>
+                      <span>{id}</span>{unlisted.includes(id) && <span className={s.tag} title="Not in your key’s model list; your account may not have it">not listed</span>}
                     </label>
                   </li>
                 ))}
