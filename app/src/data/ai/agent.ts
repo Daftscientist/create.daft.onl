@@ -30,7 +30,7 @@ export type AgentEvent =
   | { type: 'text'; delta: string }
   | { type: 'edit'; slides: number[] }
   /** What changed on a slide, as it lands: the editor animates these objects (and follows along). */
-  | { type: 'changed'; slideId: string; nodes: string[]; added: boolean }
+  | { type: 'changed'; slideId: string; nodes: string[]; fresh: string[]; added: boolean }
   /** The model wants to look at slides but can't see pictures and no picture-reading model is set. */
   | { type: 'need-vision'; resolve: (choice: 'retry' | 'continue') => void }
   | { type: 'error'; message: string }
@@ -117,6 +117,32 @@ export function normaliseSlide(html: string, size: SlideSize = { w: SLIDE_W, h: 
     if (plainText(el)) normalizeHost(el)
   }
   return root.outerHTML
+}
+
+/** Parses JSON that's still arriving: closes the open string and brackets, trimming back to the last complete
+ *  value. Returns null until there's something to show. */
+export function partialJson(s: string): Record<string, unknown> | null {
+  const close = (t: string) => {
+    let inStr = false, esc = false
+    const stack: string[] = []
+    for (const ch of t) {
+      if (esc) { esc = false; continue }
+      if (inStr) { if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue }
+      if (ch === '"') inStr = true
+      else if (ch === '{') stack.push('}')
+      else if (ch === '[') stack.push(']')
+      else if (ch === '}' || ch === ']') stack.pop()
+    }
+    let out = t
+    if (esc) out = out.slice(0, -1)
+    if (inStr) out += '"'
+    out = out.replace(/[,:\s]+$/, '')
+    return out + stack.reverse().join('')
+  }
+  for (let cut = s.length; cut > 0 && s.length - cut < 80; cut--) {
+    try { const v = JSON.parse(close(s.slice(0, cut))); return v && typeof v === 'object' ? v as Record<string, unknown> : null } catch { /* trim and try again */ }
+  }
+  return null
 }
 
 function deck(id: string): Deck {
@@ -212,7 +238,7 @@ export async function runAgent(opts: {
       const old = was ? topNodes(parseSlide(was)) : new Map<string, Element>()
       const now = topNodes(parseSlide(s.html))
       const nodes = [...now].filter(([id, el]) => old.get(id)?.outerHTML !== el.outerHTML).map(([id]) => id)
-      opts.on({ type: 'changed', slideId: s.id, nodes, added: !was })
+      opts.on({ type: 'changed', slideId: s.id, nodes, fresh: nodes.filter((id) => !old.has(id)), added: !was })
     }
   }
   const at = (n: number) => {
@@ -256,6 +282,38 @@ export async function runAgent(opts: {
     return r.text
   }
 
+  // ---------- drawing while the model writes ----------
+  // Tool arguments stream in; slide HTML is drawn as it arrives (new slides appear and fill in, a redesigned slide
+  // rebuilds), a few times a second. The tool's own run then finishes the same slides.
+  const drafts = new Map<string, { tool: string; buf: string; ids: string[]; at: number }>()
+  const draft = (id: string, final = false) => {
+    const dr = drafts.get(id)
+    if (!dr || (!final && performance.now() - dr.at < 250)) return
+    dr.at = performance.now()
+    const v = partialJson(dr.buf)
+    if (!v) return
+    const d = deck(opts.deckId)
+    if (dr.tool === 'create_slides' && Array.isArray(v.slides) && typeof v.after === 'number') {
+      const htmls = (v.slides as unknown[]).filter((x): x is string => typeof x === 'string' && x.length > 20)
+      if (!htmls.length) return
+      const cur = d.slides.slice()
+      const pos = Math.max(0, Math.min(v.after as number, cur.length))
+      htmls.forEach((h, k) => {
+        const html = normaliseSlide(assets.expand(h), d.size)
+        const known = dr.ids[k] && cur.findIndex((x) => x.id === dr.ids[k])
+        if (typeof known === 'number' && known >= 0) cur[known] = { ...cur[known], html }
+        else { const nid = newId(); dr.ids[k] = nid; cur.splice(pos + k, 0, { id: nid, html }) }
+      })
+      commit(cur, htmls.map((_, k) => pos + k + 1))
+    } else if (dr.tool === 'replace_slide' && typeof v.slide === 'number' && typeof v.html === 'string' && v.html.length > 40) {
+      const n = v.slide as number
+      if (n < 1 || n > d.slides.length) return
+      const cur = d.slides.slice()
+      cur[n - 1] = { ...cur[n - 1], html: normaliseSlide(assets.expand(v.html as string), d.size) }
+      commit(cur, [n])
+    }
+  }
+
   const tools = {
     list_slides: tool({
       description: 'List every slide with its number and visible text (the brief already has this; use it after big changes).',
@@ -285,25 +343,30 @@ export async function runAgent(opts: {
     create_slides: tool({
       description: 'Create one or more new slides after the given slide number (0 = at the start), in order.',
       inputSchema: z.object({ after: z.number().int(), slides: z.array(z.string().describe('The slide HTML')).min(1).max(12), activity }),
-      execute: async ({ after, slides: htmls }) => {
+      execute: async ({ after, slides: htmls }, { toolCallId }) => {
         const d = deck(opts.deckId)
-        const pos = Math.max(0, Math.min(after, d.slides.length))
-        const added: number[] = []
-        // One at a time, so they appear one after another.
-        for (const [k, html] of htmls.entries()) {
-          const cur = deck(opts.deckId).slides.slice()
-          cur.splice(pos + k, 0, { id: newId(), html: normaliseSlide(assets.expand(html), d.size) })
-          commit(cur, [pos + k + 1])
-          added.push(pos + k + 1)
-          if (k < htmls.length - 1) await new Promise((r) => setTimeout(r, 120))
-        }
-        return { ok: true, slides: added }
+        // The slides were already drawn while the model wrote them (see `draft`): finish those, add any missing.
+        const ids = drafts.get(toolCallId)?.ids ?? []
+        drafts.delete(toolCallId)
+        let cur = deck(opts.deckId).slides.slice()
+        const pos = ids.length ? Math.max(0, cur.findIndex((x) => x.id === ids[0])) : Math.max(0, Math.min(after, d.slides.length))
+        htmls.forEach((html, k) => {
+          const slide = { id: ids[k] ?? newId(), html: normaliseSlide(assets.expand(html), d.size) }
+          const at = cur.findIndex((x) => x.id === slide.id)
+          if (at >= 0) cur[at] = { ...cur[at], html: slide.html }
+          else cur.splice(pos + k, 0, slide)
+        })
+        // Drafts the final call didn't keep (it wrote fewer slides than it started).
+        cur = cur.filter((x) => !ids.slice(htmls.length).includes(x.id))
+        commit(cur, htmls.map((_, k) => pos + k + 1))
+        return { ok: true, slides: htmls.map((_, k) => pos + k + 1) }
       },
     }),
     replace_slide: tool({
       description: "Replace one slide's HTML entirely (keep the root's data-notes / data-transition attributes unless changing them).",
       inputSchema: z.object({ slide: z.number().int(), html: z.string(), activity }),
-      execute: async ({ slide, html }) => {
+      execute: async ({ slide, html }, { toolCallId }) => {
+        drafts.delete(toolCallId)
         const d = at(slide)
         const slides = d.slides.slice()
         slides[slide - 1] = { ...slides[slide - 1], html: normaliseSlide(assets.expand(html), d.size) }
@@ -574,7 +637,12 @@ export async function runAgent(opts: {
       case 'reasoning-start': reasoning = ''; opts.on({ type: 'thinking', on: true }); break
       case 'reasoning-delta': reasoning += String(part.text ?? part.delta ?? ''); break
       case 'reasoning-end': opts.on({ type: 'thinking', on: false, summary: reasoning.trim() || undefined }); break
-      case 'tool-input-start': opts.on({ type: 'activity', label: FALLBACK[String(part.toolName)] ?? 'Working on it', live: true }); break
+      case 'tool-input-start':
+        opts.on({ type: 'activity', label: FALLBACK[String(part.toolName)] ?? 'Working on it', live: true })
+        if (part.toolName === 'create_slides' || part.toolName === 'replace_slide') drafts.set(String(part.id), { tool: String(part.toolName), buf: '', ids: [], at: 0 })
+        break
+      case 'tool-input-delta': { const dr = drafts.get(String(part.id)); if (dr) { dr.buf += String(part.delta ?? ''); try { draft(String(part.id)) } catch { /* a draft that can't be drawn yet */ } } break }
+      case 'tool-input-end': try { draft(String(part.id), true) } catch { /* the tool run finishes it */ } break
       case 'tool-call': {
         const input = (part.input ?? {}) as { activity?: string }
         opts.on({ type: 'activity', label: activityLabel(input.activity, FALLBACK[String(part.toolName)] ?? 'Working on it') })

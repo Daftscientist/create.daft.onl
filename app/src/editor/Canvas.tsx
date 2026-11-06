@@ -111,19 +111,22 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
   const live = (id: string) => stage?.querySelector<HTMLElement>(`[data-domoxml-node-id="${CSS.escape(id)}"]`) ?? null
   // Ask's changes landing on this slide: new objects fade in, changed ones get a brief glow (spec: streaming edits).
   const [glows, setGlows] = useState<{ key: number; box: Box }[]>([])
+  const glowed = useRef(new Map<string, number>())
   useEffect(() => {
     let n = 0
     const on = (e: Event) => {
-      const d = (e as CustomEvent<{ slideId: string; nodes: string[]; added: boolean }>).detail
+      const d = (e as CustomEvent<{ slideId: string; nodes: string[]; fresh?: string[]; added: boolean }>).detail
       if (d.slideId !== slide.id) return
       requestAnimationFrame(() => {
         const calm = document.documentElement.dataset.motion === 'reduce' || matchMedia('(prefers-reduced-motion: reduce)').matches
         const fresh: { key: number; box: Box }[] = []
+        const now = performance.now()
         for (const id of d.nodes.slice(0, 40)) {
           const el = live(id)
           if (!el) continue
-          fresh.push({ key: ++n, box: bounds(boxOf(el)) })
-          if (!calm) el.animate([{ opacity: 0, transform: `${el.style.transform || ''} translateY(8px)`.trim() }, { opacity: 1, transform: el.style.transform || 'none' }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' })
+          // A glow at most every 1.5s per object (drafts update it several times a second); only new ones fade in.
+          if (now - (glowed.current.get(id) ?? -1e9) > 1500) { glowed.current.set(id, now); fresh.push({ key: ++n, box: bounds(boxOf(el)) }) }
+          if (!calm && (d.fresh ?? []).includes(id)) el.animate([{ opacity: 0, transform: `${el.style.transform || ''} translateY(8px)`.trim() }, { opacity: 1, transform: el.style.transform || 'none' }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' })
         }
         setGlows((g) => [...g, ...fresh])
         setTimeout(() => setGlows((g) => g.filter((x) => !fresh.includes(x))), 1400)

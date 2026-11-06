@@ -3,7 +3,7 @@
 // voice agent in use, mute and back to typing.
 import { Microphone, MicrophoneSlash, Waveform, Keyboard, CaretDown } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
-import { activeVoiceAgent, listen, speaker, startLive, voiceAgents, type Listener, type Live, type Speaker, type VoiceAgent } from '../data/ai/voice'
+import { activeVoiceAgent, isEcho, listen, speaker, startLive, voiceAgents, type Listener, type Live, type Speaker, type VoiceAgent } from '../data/ai/voice'
 import { setAi, useAi, type ModelRef, type ReasoningLevel } from '../data/ai/settings'
 import { navigate } from '../lib/router'
 import { Button, IconButton } from '../ui/Button'
@@ -30,6 +30,7 @@ export function VoiceMode({ onSend, onUser, onAssistant, onExit, onStop }: {
   const [muted, setMuted] = useState(false)
   const [menu, setMenu] = useState<MenuAnchor | null>(null)
   const live = useRef<{ listener?: Listener; speaker?: Speaker; live?: Live } | null>(null)
+  const lastSaid = useRef('')
   const send = useRef(onSend); send.current = onSend
   const user = useRef(onUser); user.current = onUser
   const assistant = useRef(onAssistant); assistant.current = onAssistant
@@ -49,11 +50,13 @@ export function VoiceMode({ onSend, onUser, onAssistant, onExit, onStop }: {
             onPartial: (t) => { if (!gone) { setHeard(t); if (t) setState('hearing') } },
             onError: fail,
             onUtterance: async (t) => {
+              // Ream's own reply heard back through the speakers: not something the user said.
+              if (isEcho(t, lastSaid.current)) { setHeard(''); return }
               cur.listener?.mute(true); setHeard(''); setState('thinking')
               try {
                 const reply = await send.current(t, { model: agent.llm, reasoning: agent.reasoning, voice: true })
                 if (gone) return
-                if (reply.trim()) { setState('speaking'); await cur.speaker?.say(reply) }
+                if (reply.trim()) { lastSaid.current = reply; setState('speaking'); await cur.speaker?.say(reply) }
               } finally { if (!gone) { cur.listener?.mute(false); setState('listening') } }
             },
           })

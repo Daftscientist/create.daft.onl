@@ -7,7 +7,7 @@
 // The built-in "Browser voice" agent needs no setup where the browser has speech recognition.
 import { experimental_generateSpeech as generateSpeech, experimental_transcribe as transcribe } from 'ai'
 import { providerDef, type AiProviderId } from './providers'
-import { getAi, setAi, type AiSettings, type ModelRef, type ReasoningLevel } from './settings'
+import { getAi, modelsFor, setAi, type AiSettings, type ModelRef, type ReasoningLevel } from './settings'
 import { recordUsage } from './usage'
 
 export type VoiceAgent =
@@ -19,10 +19,15 @@ const RecognitionCtor = (): (new () => Recognition) | null => ((window as unknow
 export const browserCanListen = () => !!RecognitionCtor()
 
 export const BROWSER_AGENT: VoiceAgent = { id: 'browser', name: 'Browser voice', kind: 'parts', stt: 'browser', llm: null, tts: 'browser' }
-/** Every voice agent: the browser's own (where it can listen), then the user's. */
+/** Every voice agent: the user's own, one live agent for each live voice model they turned on (so turning on
+ *  GPT Live is enough to use it), and the browser's own where it can listen. */
 export function voiceAgents(s: AiSettings): VoiceAgent[] {
-  return [...(browserCanListen() ? [BROWSER_AGENT] : []), ...(s.voiceAgents ?? [])]
+  const own = s.voiceAgents ?? []
+  const auto: VoiceAgent[] = modelsFor(s, 'voice').filter((m) => m.provider === 'openai' && !own.some((a) => a.kind === 'live' && a.model.id === m.id))
+    .map((m) => ({ id: `live:${m.id}`, name: `Live · ${m.id}`, kind: 'live', model: m, supervisor: null }))
+  return [...own, ...auto, ...(browserCanListen() ? [BROWSER_AGENT] : [])]
 }
+/** The chosen agent; without a choice, the first (a live voice model when one is on, before the browser's). */
 export function activeVoiceAgent(s: AiSettings): VoiceAgent | null {
   const all = voiceAgents(s)
   return all.find((a) => a.id === s.activeVoice) ?? all[0] ?? null
@@ -63,7 +68,18 @@ function browserListener(h: Hear): Listener {
   r.onerror = (e) => { if (e.error !== 'no-speech' && e.error !== 'aborted') h.onError(e.error === 'not-allowed' ? 'Ream needs the microphone. Allow it in the browser’s address bar.' : `Speech recognition stopped (${e.error}).`) }
   r.onend = () => { if (!stopped) try { r.start() } catch { /* already running */ } }
   r.start()
-  return { stop: () => { stopped = true; clearTimeout(timer); r.abort() }, mute: (on) => { muted = on; if (on) { said = ''; h.onPartial('') } } }
+  // Unmuting (after Ream has spoken) restarts recognition, so nothing it heard of Ream's own voice carries over,
+  // and ignores the first moments while the speaker's tail dies away.
+  let deaf = 0
+  const onresult = r.onresult
+  r.onresult = (e) => { if (Date.now() >= deaf) onresult?.(e) }
+  return {
+    stop: () => { stopped = true; clearTimeout(timer); r.abort() },
+    mute: (on) => {
+      muted = on; said = ''; clearTimeout(timer); h.onPartial('')
+      if (!on) { deaf = Date.now() + 600; try { r.abort() } catch { /* restarts in onend */ } }
+    },
+  }
 }
 
 /** The microphone, cut into utterances by silence, each transcribed by the agent's speech-to-text model. */
@@ -123,6 +139,14 @@ export function listen(agent: VoiceAgent & { kind: 'parts' }, h: Hear): Promise<
 
 export type Speaker = { say: (text: string) => Promise<void>; stop: () => void }
 
+/** The most natural-sounding browser voice in the user's language (neural and online voices first). */
+export function bestVoice(): SpeechSynthesisVoice | undefined {
+  const lang = (navigator.language || 'en').slice(0, 2)
+  const all = speechSynthesis.getVoices().filter((v) => v.lang.startsWith(lang))
+  const score = (v: SpeechSynthesisVoice) => (/natural|neural|online/i.test(v.name) ? 4 : 0) + (/google/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1) + (v.default ? 0.5 : 0)
+  return all.sort((a, b) => score(b) - score(a))[0]
+}
+
 export function speaker(agent: VoiceAgent & { kind: 'parts' }): Speaker {
   let audio: HTMLAudioElement | null = null
   let chain: Promise<void> = Promise.resolve()
@@ -131,8 +155,9 @@ export function speaker(agent: VoiceAgent & { kind: 'parts' }): Speaker {
     return {
       say: (text) => new Promise<void>((resolve) => {
         const u = new SpeechSynthesisUtterance(text)
-        const v = speechSynthesis.getVoices().find((x) => x.name === agent.voice)
+        const v = speechSynthesis.getVoices().find((x) => x.name === agent.voice) ?? bestVoice()
         if (v) u.voice = v
+        u.rate = 1.03
         u.onend = () => resolve(); u.onerror = () => resolve()
         speechSynthesis.speak(u)
       }),
@@ -162,6 +187,14 @@ export function speaker(agent: VoiceAgent & { kind: 'parts' }): Speaker {
   }
 }
 
+/** Did the listener just hear Ream's own words back (speakers into the microphone)? */
+export function isEcho(heard: string, said: string): boolean {
+  const words = (t: string) => t.toLowerCase().replace(/[^a-z0-9' ]/g, ' ').split(/\s+/).filter((w) => w.length > 2)
+  const h = words(heard), s = new Set(words(said))
+  if (!h.length || !s.size) return false
+  return h.filter((w) => s.has(w)).length / h.length > 0.6
+}
+
 // ---------- live (realtime) ----------
 
 export type LiveTool = { name: string; description: string; parameters: Record<string, unknown>; run: (args: Record<string, unknown>) => Promise<string> }
@@ -181,6 +214,7 @@ export async function startLive(agent: VoiceAgent & { kind: 'live' }, o: {
   const key = getAi().providers.openai?.apiKey
   if (!key) throw new Error('Add your OpenAI key in Settings → AI.')
   o.onState('connecting')
+  if (/live/i.test(agent.model.id) && !/realtime/i.test(agent.model.id)) return startOpenAILive(agent, o, key)
   const session = {
     type: 'realtime', model: agent.model.id, instructions: o.instructions,
     audio: { input: { transcription: { model: 'gpt-4o-mini-transcribe' }, turn_detection: { type: 'server_vad' } }, output: { voice: agent.voice || 'marin' } },
@@ -231,5 +265,78 @@ export async function startLive(agent: VoiceAgent & { kind: 'live' }, o: {
   return {
     stop: () => { dc.close(); pc.close(); mic.getTracks().forEach((t) => t.stop()); out.srcObject = null },
     mute: (on) => { track.enabled = !on },
+  }
+}
+
+/** OpenAI Live (gpt-live): continuous speech both ways, and client delegation, its own supervisor pattern. When
+ *  it needs work done it delegates; Ream runs what was asked through the deck agent and hands back the result,
+ *  which it then says. One request to /live/sessions carries the session and the WebRTC offer. */
+async function startOpenAILive(agent: VoiceAgent & { kind: 'live' }, o: Parameters<typeof startLive>[1], key: string): Promise<Live> {
+  const pc = new RTCPeerConnection()
+  const out = new Audio(); out.autoplay = true
+  pc.ontrack = (e) => { out.srcObject = e.streams[0] }
+  const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+  const track = mic.getTracks()[0]
+  pc.addTrack(track, mic)
+  const dc = pc.createDataChannel('oai-events')
+  const send = (ev: Record<string, unknown>) => { if (dc.readyState === 'open') dc.send(JSON.stringify(ev)) }
+  const offer = await pc.createOffer()
+  await pc.setLocalDescription(offer)
+  const res = await fetch('https://api.openai.com/v1/live/sessions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      session: {
+        model: agent.model.id,
+        instructions: `${o.instructions} When the user wants anything read or changed in the deck, delegate it; you'll be given what was done, then tell them briefly.`,
+        audio: { output: { voice: agent.voice || 'marin' } },
+        delegation: { type: 'client' },
+        client: { data_channel: { allowed_client_events: 'all', allowed_server_events: 'all' } },
+      },
+      transport: { type: 'webrtc', sdp: offer.sdp },
+    }),
+  }).catch(() => { throw new Error('Couldn’t reach OpenAI from this browser to start live voice.') })
+  if (!res.ok) {
+    pc.close(); mic.getTracks().forEach((t) => t.stop())
+    const detail = await res.text().catch(() => '')
+    throw new Error(`OpenAI didn’t start live voice (${res.status}). ${/"message":\s*"([^"]+)/.exec(detail)?.[1] ?? ''}`.trim())
+  }
+  const body = (await res.json()) as { transport?: { sdp?: string } }
+  if (!body.transport?.sdp) throw new Error('OpenAI didn’t answer the call.')
+  await pc.setRemoteDescription({ type: 'answer', sdp: body.transport.sdp })
+
+  let heard = '', said = '', lastAsk = ''
+  const used = { input: 0, output: 0 }
+  const endUser = () => { if (heard.trim()) { lastAsk = heard.trim(); o.onUser(lastAsk) } heard = '' }
+  const endSaid = () => { if (said.trim()) o.onAssistant(said.trim(), true); said = '' }
+  dc.onmessage = async (m) => {
+    const ev = JSON.parse(m.data as string) as Record<string, any>
+    switch (ev.type) {
+      case 'session.input_transcript.delta': endSaid(); heard += ev.delta ?? ''; o.onState('listening'); break
+      case 'session.output_transcript.delta': endUser(); said += ev.delta ?? ''; o.onState('speaking'); o.onAssistant(said, false); break
+      case 'session.delegation.created': {
+        endUser()
+        const tool = o.tools[0]
+        o.onState('working')
+        let result = 'Nothing was done.'
+        try { result = tool ? await tool.run({ request: lastAsk || 'Help with the deck' }) : result } catch (e) { result = `It failed: ${(e as Error).message}` }
+        send({ type: 'session.thinking.append', content: result || 'Done.', delegation_id: ev.delegation?.id ?? null })
+        o.onState('listening')
+        break
+      }
+      case 'session.usage.updated': {
+        // Running totals: record what's new since the last update.
+        const i = ev.usage?.input_tokens ?? used.input, out = ev.usage?.output_tokens ?? used.output
+        recordUsage('openai', agent.model.id, { input: i - used.input, output: out - used.output })
+        used.input = i; used.output = out
+        break
+      }
+      case 'error': o.onError(ev.error?.message ?? 'Live voice hit an error.'); break
+    }
+  }
+  o.onState('listening')
+  return {
+    stop: () => { send({ type: 'session.close' }); dc.close(); pc.close(); mic.getTracks().forEach((t) => t.stop()); out.srcObject = null },
+    mute: (on) => { track.enabled = !on; send({ type: on ? 'session.input_audio.mute' : 'session.input_audio.unmute' }) },
   }
 }

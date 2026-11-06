@@ -85,7 +85,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
     // Taken when it runs, so a cancelled first mount (React's double effects in development) can't lose it.
     const t = setTimeout(() => {
       const p = takePendingAsk(deck.id)
-      if (p) void send(p.fresh ? `Make a new presentation: ${p.prompt}\n\n(This deck is new: replace its placeholder first slide with your title slide, create the rest with create_slides, and give the deck a short name with rename_deck.)` : p.prompt, p.files)
+      if (p) void send(p.fresh ? `Make a new presentation: ${p.prompt}\n\n(This deck is new: replace its placeholder first slide with your title slide, create the rest with create_slides, and give the deck a short name with rename_deck.)` : p.prompt, p.files, { display: p.prompt })
     }, 50)
     return () => clearTimeout(t)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -109,7 +109,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
 
   const abort = useRef<AbortController | null>(null)
   /** Runs one turn; resolves with its final reply (voice speaks it). */
-  const send = async (prompt: string, withFiles?: Attachment[], o: { model?: ModelRef | null; reasoning?: ReasoningLevel; voice?: boolean } = {}): Promise<string> => {
+  const send = async (prompt: string, withFiles?: Attachment[], o: { model?: ModelRef | null; reasoning?: ReasoningLevel; voice?: boolean; display?: string } = {}): Promise<string> => {
     const text = prompt.trim()
     if (!text || busy.current || !ready) return busy.current ? 'Still working on the last request.' : ''
     busy.current = true
@@ -126,7 +126,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
       editsSince: userEditsSince(deck.id, mark.current),
     }
     const history: ModelMessage[] = turns.flatMap((t) => [{ role: 'user' as const, content: t.prompt }, ...(t.text ? [{ role: 'assistant' as const, content: t.text }] : [])])
-    setTurns((ts) => [...ts, { prompt: text, slide: target, steps: [], log: [], files: attached.map((f) => f.name), voice: o.voice, text: '', state: 'running', startedAt: Date.now() }])
+    setTurns((ts) => [...ts, { prompt: o.display ?? text, slide: target, steps: [], log: [], files: attached.map((f) => f.name), voice: o.voice, text: '', state: 'running', startedAt: Date.now() }])
     const ac = new AbortController()
     abort.current = ac
     // A slide the agent has changed is read-only on the canvas until the run ends (editor spec, contract 6).
@@ -335,14 +335,13 @@ function Log({ turn: t, line }: { turn: Turn; line: string | null }) {
     else if (it.text.trim()) groups.push({ kind: 'text', text: it.text })
   }
   const running = t.state === 'running'
-  const lastIsText = groups[groups.length - 1]?.kind === 'text'
   return (
     <>
       {groups.map((g, j) => g.kind === 'text'
         ? <p key={j} className={s.answer}>{g.text.trim()}</p>
         : (running && j === groups.length - 1) ? null
           : <details key={j} className={s.steps}><summary>{g.labels.length === 1 ? g.labels[0] : `${g.labels.length} steps`}</summary><ol>{g.labels.map((l, k) => <li key={k}><Check size={12} weight="bold" />{l}</li>)}</ol></details>)}
-      {running && <Activity line={lastIsText ? 'Working' : line} />}
+      {running && <Activity line={line} />}
       {!running && t.ms !== undefined && <p className={s.meta}>{Math.round(t.ms / 1000)}s{t.state === 'stopped' ? ' · stopped' : ''}</p>}
     </>
   )
