@@ -9,6 +9,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLibrary } from '../data/library'
 import type { Deck, SlideDoc } from '../data/types'
+import { FONTS, fontStack } from '../slides/fonts'
 import { IconButton, Button } from '../ui/Button'
 import { ColorWell, KeptChip, NumberField, Row, Section, toHex } from '../ui/Inspector'
 import { Menu, type MenuAnchor, type MenuItem } from '../ui/Menu'
@@ -52,7 +53,7 @@ export function objectName(el: HTMLElement): string {
   return t ? `${KIND_NAME[k]}: ${t.length > 28 ? `${t.slice(0, 28)}…` : t}` : KIND_NAME[k]
 }
 
-const FONTS = ['Instrument Sans', 'Instrument Serif', 'Arial', 'Helvetica', 'Georgia', 'Times New Roman', 'Calibri', 'Cambria', 'Aptos', 'Segoe UI', 'Verdana', 'Trebuchet MS', 'Garamond', 'Courier New']
+const FONT_NAMES = FONTS.map((f) => f.name)
 const SHADOWS = { none: '', soft: '0px 8px 24px rgba(0,0,0,0.22)', hard: '6px 6px 0px rgba(0,0,0,0.85)' }
 
 type Open = Record<string, boolean>
@@ -118,7 +119,7 @@ function TextSection({ sec, colors, ids }: { sec: Sec; colors: string[]; ids: st
   const t = textState(liveStage())
   const [fontMenu, setFontMenu] = useState<MenuAnchor | null>(null)
   if (!t) return null
-  const fonts = [...new Set([t.family, ...FONTS])]
+  const fonts = [...new Set([t.family, ...FONT_NAMES])]
   const anchor = anchorOf(ids)
   return (
     <Section title="Text" {...sec}>
@@ -127,7 +128,7 @@ function TextSection({ sec, colors, ids }: { sec: Sec; colors: string[]; ids: st
           {t.mixed.has('family') ? 'Mixed' : t.family}
         </button>
         <Menu open={!!fontMenu} anchor={fontMenu} label="Font" search="Find a font" onClose={() => setFontMenu(null)}
-          items={fonts.map((f) => ({ label: f, selected: f === t.family, run: () => formatRuns({ 'font-family': `${f},sans-serif` }, 'Font') }))} />
+          items={fonts.map((f) => ({ label: f, selected: f === t.family, run: () => formatRuns({ 'font-family': fontStack(f) }, 'Font') }))} />
       </Row>
       <Row label="Size">
         <NumberField label="pt" name="Font size, points" mixed={t.mixed.has('size')} value={t.sizePt} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(1, Math.min(400, v)) }} onCommit={(v) => formatRuns({ 'font-size': `${v}pt` }, 'Font size')} hint="Use a size like 24" />
@@ -619,7 +620,7 @@ function DesignSection({ deck, sec, colors }: { deck: Deck; sec: Sec; colors: st
           <div className={s.stack}>
             {fonts.map((f) => (
               <button key={f} type="button" className={s.select} style={{ fontFamily: f }} aria-haspopup="menu" title={`Replace ${f} everywhere`}
-                onClick={(e) => open(e, `Replace ${f} with`, FONTS.filter((x) => x !== f).map((x) => ({ label: x, run: () => replaceFont(f, x) })), true)}>{f}</button>
+                onClick={(e) => open(e, `Replace ${f} with`, FONT_NAMES.filter((x) => x !== f).map((x) => ({ label: x, run: () => replaceFont(f, x) })), true)}>{f}</button>
             ))}
           </div>
         </Row>

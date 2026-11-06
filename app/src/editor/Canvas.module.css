@@ -6,7 +6,7 @@
 }
 .viewport:focus { outline: none; }
 .viewport:focus-visible { box-shadow: 0 0 0 1px var(--hair), inset 0 0 0 2px var(--select); }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .viewport[data-space] { cursor: grab; }
 .world { position: relative; }
 .paper {

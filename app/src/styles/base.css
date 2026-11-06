@@ -24,6 +24,13 @@ h1, h2, h3, p { margin: 0; }
 :focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
 ::selection { background: var(--select-soft); }
 
+/* Scrollbars: thin and quiet, the thumb only (macOS-style), in the theme's ink. */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 22%, transparent) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 99px; background: color-mix(in srgb, var(--ink) 22%, transparent) padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--ink) 38%, transparent); }
+::-webkit-scrollbar-corner, ::-webkit-scrollbar-button { display: none; }
+
 /* Shared glass recipe (DESIGN.md §4) */
 .glass {
   background: var(--glass);

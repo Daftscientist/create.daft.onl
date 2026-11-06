@@ -3,6 +3,7 @@
 // gestures preview on the stage's DOM and land here once, at gesture end.
 import { getLibrary } from '../data/library'
 import type { Deck, SlideDoc } from '../data/types'
+import { fontStack } from '../slides/fonts'
 import { boxOf, groupPayload, isGroup, members, setBox, unionBox, type Box } from './geometry'
 import { transact } from './history'
 import { parseSlide, topNodes } from './irdiff'
@@ -535,7 +536,7 @@ export function replaceFont(from: string, to: string) {
     const root = parseSlide(sl.html)
     let changed = false
     for (const el of root.querySelectorAll<HTMLElement>('[style*="font-family"]')) {
-      if (norm(el.style.fontFamily) === norm(from)) { el.style.fontFamily = `${to}, sans-serif`; changed = true }
+      if (norm(el.style.fontFamily) === norm(from)) { el.style.fontFamily = fontStack(to); changed = true }
     }
     return changed ? { ...sl, html: root.outerHTML } : sl
   }))
