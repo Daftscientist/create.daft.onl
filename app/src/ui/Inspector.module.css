@@ -20,7 +20,8 @@
 .num:focus-within { box-shadow: inset 0 0 0 1.5px var(--select); background: var(--paper); }
 .num[data-bad] { box-shadow: inset 0 -2px 0 var(--danger); }
 .num[data-disabled] { opacity: 0.5; }
-.numLabel { padding: 0 2px 0 8px; font-size: 11.5px; font-weight: 600; color: var(--ink-3); cursor: ew-resize; user-select: none; flex: none; }
+.numLabel { padding: 0 2px 0 8px; font-size: 11.5px; font-weight: 600; color: var(--ink-3); user-select: none; flex: none; }
+.numLabel[data-scrub] { cursor: ew-resize; }
 .numInput { width: 100%; min-width: 0; height: 100%; padding: 0 8px 0 4px; font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink); background: none; border: 0; outline: none; }
 .numInput::placeholder { color: var(--ink-3); }
 .numHint { position: absolute; left: 0; top: calc(100% + 4px); z-index: 2; font-size: 11.5px; color: var(--danger); white-space: nowrap; background: var(--paper); padding: 2px 6px; border-radius: var(--r-xs); box-shadow: var(--shadow-float); }

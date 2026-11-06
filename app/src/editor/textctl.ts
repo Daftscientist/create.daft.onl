@@ -2,7 +2,8 @@
 // saves after 600ms idle (and on blur) without adding history; ending the edit records one transaction.
 // Formatting has three targets (spec): the selected range, the caret (style for what's typed next),
 // or, when no text is being edited, every run of the selected objects.
-import { getLibrary, markUnsaved, updateSlides } from '../data/library'
+import { getLibrary, markUnsaved, onRemoteDeck, updateSlides } from '../data/library'
+import { toast } from '../data/toasts'
 import type { SlideDoc } from '../data/types'
 import { transact } from './history'
 import { cleanForStore, editSlide, find, openDeck, parasOf, removeObjects, runsOf, setBeforeEdit, setParaStyle, setRunStyle, textHost, type Css } from './ops'
@@ -64,6 +65,13 @@ export function beginEdit(stage: HTMLElement, id: string, at?: { x: number; y: n
   const root = stage.getRootNode() as ShadowRoot
   host.setAttribute('contenteditable', 'true')
   host.setAttribute('spellcheck', 'true')
+  // A labelled, multiline textbox for screen readers; the rest of the stage stays described by the
+  // editor's object list.
+  host.setAttribute('role', 'textbox')
+  host.setAttribute('data-ream-textbox', '')
+  host.setAttribute('aria-multiline', 'true')
+  stage.removeAttribute('aria-hidden')
+  for (const other of stage.querySelectorAll('.domoxml-slide > *')) if (!other.contains(host) && !other.hasAttribute('aria-hidden')) { other.setAttribute('data-ream-muted', ''); other.setAttribute('aria-hidden', 'true') }
   host.setAttribute('data-ream-host', '')
   el.setAttribute('data-ream-editing', '')
   const l: Live = { id, slideId, el, host, root, from: deck.slides, pending: null, bookmark: null, timer: 0, composing: false, dispose: () => {}, hist: [], pos: -1, histTimer: 0 }
@@ -164,8 +172,16 @@ function step(l: Live, by: 1 | -1) {
   saveSoon(l)
   emit()
 }
+/** The edit's own undo/redo, for the header buttons (the same steps as ⌘Z inside the text). */
+export function textHistory(): { canUndo: boolean; canRedo: boolean } | null {
+  const l = live
+  if (!l) return null
+  return { canUndo: l.pos > 0 || l.host.innerHTML !== l.hist[l.pos]?.html, canRedo: l.pos < l.hist.length - 1 }
+}
+export function textUndo(by: 1 | -1) { if (live) step(live, by) }
+
 /** Formatting is a step in the edit's history too. */
-const formatted = (l: Live) => { record(l); saveSoon(l); emit() }
+const formatted = (l: Live) => { record(l); grow(l); saveSoon(l); emit() }
 
 type CaretDoc = Document & { caretPositionFromPoint?: (x: number, y: number, o?: { shadowRoots: ShadowRoot[] }) => { offsetNode: Node; offset: number } | null; caretRangeFromPoint?: (x: number, y: number) => Range | null }
 function placeCaret(l: Live, at?: { x: number; y: number }) {
@@ -192,10 +208,16 @@ function placeCaret(l: Live, at?: { x: number; y: number }) {
 
 /** Boxes inserted in Ream grow with their text (PowerPoint's "resize shape to fit text"). */
 function grow(l: Live) {
-  if (!l.el.hasAttribute('data-ream-autogrow')) return
-  const pad = parseFloat(getComputedStyle(l.el).paddingTop) + parseFloat(getComputedStyle(l.el).paddingBottom)
-  const h = Math.ceil([...l.host.children].reduce((n, c) => n + (c as HTMLElement).offsetHeight, 0) + pad)
-  if (h > 0) l.el.style.height = `${h}px`
+  const h = fitHeight(l.el)
+  if (h) l.el.style.height = `${h}px`
+}
+/** The height an auto-growing box needs for its text, or null for boxes that keep their size. */
+export function fitHeight(el: HTMLElement): number | null {
+  if (!el.hasAttribute('data-ream-autogrow')) return null
+  const host = textHost(el) ?? el
+  const cs = getComputedStyle(el)
+  const h = Math.ceil([...host.children].reduce((n, c) => n + (c as HTMLElement).offsetHeight + parseFloat(getComputedStyle(c).marginTop) + parseFloat(getComputedStyle(c).marginBottom), 0) + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom))
+  return h > 0 ? h : null
 }
 
 function saveSoon(l: Live) {
@@ -254,6 +276,17 @@ function commitNow() {
   setEditor({ sel: [id] })
 }
 
+// A change from another device to the slide being typed on: the edit wins (local wins), and once it
+// ends a notice offers their version of the slide instead.
+let theirs: { deckId: string; slideId: string; slide: SlideDoc } | null = null
+onRemoteDeck((deckId) => {
+  const l = live
+  if (!l) return
+  const d = getLibrary().entries[deckId]
+  const slide = d?.type === 'deck' ? d.slides.find((s) => s.id === l.slideId) : undefined
+  if (slide && openDeck()?.id === deckId) theirs = { deckId, slideId: l.slideId, slide }
+})
+
 export function endEdit(opts: { keepSession?: boolean } = {}) {
   const l = live
   if (!l) return
@@ -272,12 +305,25 @@ export function endEdit(opts: { keepSession?: boolean } = {}) {
   }
   l.host.removeAttribute('contenteditable')
   l.host.removeAttribute('spellcheck')
+  if (l.host.hasAttribute('data-ream-textbox')) { l.host.removeAttribute('role'); l.host.removeAttribute('data-ream-textbox'); l.host.removeAttribute('aria-multiline') }
+  const stageEl = l.root.querySelector('.stage')
+  stageEl?.setAttribute('aria-hidden', 'true')
+  for (const m of l.root.querySelectorAll('[data-ream-muted]')) { m.removeAttribute('data-ream-muted'); m.removeAttribute('aria-hidden') }
   l.host.removeAttribute('data-ream-host')
   l.el.removeAttribute('data-ream-editing')
   document.getSelection()?.removeAllRanges()
   if (!opts.keepSession && getEditor().editing === l.id) setEditor({ editing: null })
   const empty = (l.host.textContent ?? '').trim() === ''
   ending = false
+  if (theirs && theirs.slideId === l.slideId) {
+    const t = theirs
+    theirs = null
+    toast({ message: 'This slide also changed on another device. Your edit was kept.', duration: 12000, action: { label: 'Use theirs', run: () => {
+      const d = getLibrary().entries[t.deckId]
+      if (d?.type !== 'deck') return
+      transact(t.deckId, d.slides.map((s) => (s.id === t.slideId ? t.slide : s)), { label: 'Use the other device’s version' })
+    } } })
+  }
   if (empty && l.el.hasAttribute('data-ream-autogrow') && !l.el.hasAttribute('data-ream-placeholder')) removeObjects([l.id], 'Delete empty text box')
   emit()
 }
@@ -347,7 +393,7 @@ export function shiftIndent(by: 1 | -1) {
 }
 
 /** What the text controls show: the style at the caret (editing) or of the first run (object). */
-export type TextState = { family: string; sizePt: number; bold: boolean; italic: boolean; underline: boolean; color: string; align: string; list: 'ul' | 'ol' | null; lineHeight: number; before: number; after: number }
+export type TextState = { family: string; sizePt: number; bold: boolean; italic: boolean; underline: boolean; color: string; align: string; list: 'ul' | 'ol' | null; lineHeight: number; before: number; after: number; mixed: Set<string> }
 export function textState(stage: HTMLElement | null): TextState | null {
   const l = live
   let node: Element | null = null
@@ -382,7 +428,30 @@ export function textState(stage: HTMLElement | null): TextState | null {
     lineHeight: (() => { const lh = (para as HTMLElement | null)?.style.lineHeight; const v = lh ? parseFloat(lh) : NaN; return Number.isFinite(v) && !/px|pt/.test(lh!) ? Math.round((v / 1.2) * 100) / 100 : 1 })(),
     before: para ? Math.round(parseFloat(getComputedStyle(para).marginTop) * 0.75 * 10) / 10 : 0,
     after: para ? Math.round(parseFloat(getComputedStyle(para).marginBottom) * 0.75 * 10) / 10 : 0,
+    mixed: l || !stage ? new Set() : mixedAcross(stage),
   }
+}
+
+/** Which text properties differ across every run of the selected objects (shown as "Mixed"). */
+function mixedAcross(stage: HTMLElement): Set<string> {
+  const out = new Set<string>()
+  const seen: Record<string, Set<string>> = { family: new Set(), size: new Set(), bold: new Set(), italic: new Set(), underline: new Set(), color: new Set(), align: new Set() }
+  for (const id of getEditor().sel) {
+    const el = find(stage, id)
+    if (!el) continue
+    for (const r of runsOf(el).slice(0, 200)) {
+      const cs = getComputedStyle(r)
+      seen.family.add(cs.fontFamily.split(',')[0].replace(/["']/g, '').trim())
+      seen.size.add(cs.fontSize)
+      seen.bold.add(String(parseInt(cs.fontWeight) >= 600))
+      seen.italic.add(cs.fontStyle)
+      seen.underline.add(String(cs.textDecorationLine.includes('underline')))
+      seen.color.add(cs.color)
+    }
+    for (const p of parasOf(el)) seen.align.add(getComputedStyle(p).textAlign)
+  }
+  for (const [k, v] of Object.entries(seen)) if (v.size > 1) out.add(k)
+  return out
 }
 
 /** Plain-HTML helpers for ops that build text (new text boxes). */

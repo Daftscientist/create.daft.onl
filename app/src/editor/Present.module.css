@@ -30,3 +30,6 @@
 .pFoot { display: flex; justify-content: center; gap: 12px; padding: 12px; border-top: 1px solid rgb(255 255 255 / 0.08); }
 .pNav { width: 56px; height: 40px; display: grid; place-items: center; border-radius: var(--r-pill); background: rgb(255 255 255 / 0.1); color: #fff; }
 .pNav:hover { background: rgb(255 255 255 / 0.18); }
+@media (pointer: coarse) { .exit { height: 44px; padding: 0 16px; top: max(12px, env(safe-area-inset-top)); } }
+.touchNav { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; translate: -50% 0; display: flex; gap: 12px; z-index: 3; }
+.touchNav button { width: 56px; height: 44px; display: grid; place-items: center; border-radius: var(--r-pill); background: #17171c; color: #fff; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.25); }

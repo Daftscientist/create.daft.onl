@@ -15,7 +15,7 @@ export type EditorCommand = { id: string; title: string; hint?: string; keywords
 
 export function editorCommands(): EditorCommand[] {
   const st = getEditor()
-  if (!st.deckId) return []
+  if (!st.deckId || st.readOnly) return []
   const sel = st.sel
   const deckId = st.deckId
   const slide = st.slideId

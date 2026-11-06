@@ -33,9 +33,10 @@ import { copyFormat, hasFormat, pasteFormat } from '../editor/painter'
 import { Rail } from '../editor/Rail'
 import { getEditor, setEditor, useEditor, type Column } from '../editor/session'
 import { TextBar } from '../editor/TextBar'
-import { endEdit } from '../editor/textctl'
+import { endEdit, onTextChange, textHistory } from '../editor/textctl'
 import s from './DeckPage.module.css'
 
+const kept = new Map<string, { slideId: string | null; sel: string[]; scope: string | null; zoom: number | 'fit' }>()
 const COL_KEY = 'ream.editor.column'
 const WIDTH_KEY = 'ream.editor.columnWidth'
 const coarse = matchMedia('(pointer: coarse)')
@@ -59,7 +60,10 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const column = useEditor((e) => e.column)
   const presenting = useEditor((e) => e.presenting)
   const save = useSaveState()
-  const hist = useHistory(deckId)
+  const deckHist = useHistory(deckId)
+  useEditor((e) => e.editing)
+  const th = textHistory()
+  const hist = th ? { canUndo: th.canUndo, canRedo: th.canRedo, undoLabel: 'typing', redoLabel: 'typing' } : deckHist
   const [colW, setColW] = useState(() => Math.min(520, Math.max(300, Number(read(WIDTH_KEY)) || 340)))
   const [askMounted, setAskMounted] = useState(false)
   const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuItem[]; label: string } | null>(null)
@@ -73,10 +77,13 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     const start = d.slides[Math.min(slide ?? d.lastSlide ?? 0, d.slides.length - 1)]?.id ?? null
     const saved = read(COL_KEY) as Column | 'none' | null
     const col: Column = saved === 'none' ? null : saved === 'ask' || saved === 'format' ? saved : innerWidth >= 1100 ? 'format' : null
-    setEditor({ deckId, slideId: start, sel: [], scope: null, editing: null, railSel: start ? [start] : [], railAnchor: start, zoom: 'fit', column: col, locked: [], presenting: false })
+    // Coming back (a resize across the phone layout, browser zoom): the same slide, selection and zoom.
+    const back = kept.get(deckId)
+    const slideOk = back && d.slides.some((x) => x.id === back.slideId)
+    setEditor({ deckId, slideId: slideOk ? back.slideId : start, sel: slideOk ? back.sel : [], scope: slideOk ? back.scope : null, editing: null, railSel: start ? [slideOk ? back.slideId! : start] : [], railAnchor: start, zoom: back?.zoom ?? 'fit', column: col, locked: [], presenting: false, readOnly: coarse.matches })
     touchDeck(deckId)
     void import('../engine').then((m) => m.warmEngine()) // a deck is open: have the engine ready for export
-    return () => { endEdit(); setEditor({ deckId: null, slideId: null, sel: [], editing: null }) }
+    return () => { endEdit(); const st = getEditor(); kept.set(deckId, { slideId: st.slideId, sel: st.sel, scope: st.scope, zoom: st.zoom }); setEditor({ deckId: null, slideId: null, sel: [], editing: null }) }
   }, [deckId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const d = isDeck ? deck : null
@@ -86,6 +93,9 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   useEffect(() => { if (d && slideId && !d.slides.some((x) => x.id === slideId)) setEditor({ slideId: d.slides[Math.min(index, d.slides.length - 1)]?.id ?? null, sel: [] }) })
   useEffect(() => { if (d) setLastSlide(d.id, index) }, [d?.id, index]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (column === 'ask') setAskMounted(true) }, [column])
+  useEffect(() => { setEditor({ readOnly: viewer }) }, [viewer])
+  const [, bump] = useState(0)
+  useEffect(() => onTextChange(() => bump((n) => n + 1)), [])
   // Local version history: a copy when the deck opens, then at most every 10 minutes of editing.
   useEffect(() => { if (d) void maybeKeep(d, !keptOnOpen.current); keptOnOpen.current = true }, [d?.slides]) // eslint-disable-line react-hooks/exhaustive-deps
   const keptOnOpen = useRef(false)
@@ -193,7 +203,8 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
 
   const size = d.size ?? { w: 1280, h: 720 }
   const iconOnly = width < 1280
-  const overlay = width < 1100
+  // The column docks only while the stage keeps room for a 640px slide plus handle clearance.
+  const overlay = width - 216 - colW < 640 + 96
   const compactRail = false
   const showColumn = !viewer && !!column
   const askOn = ai && column === 'ask'
@@ -221,6 +232,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const pic = async (at?: { x: number; y: number }) => { const f = await pickPicture(); if (f) await insertPicture(f, at ?? visibleCentre(), size) }
   const dragInsert = (kind: string) => (e: React.DragEvent) => { e.dataTransfer.setData('application/x-ream-insert', kind); e.dataTransfer.effectAllowed = 'copy' }
   const onDrop = (e: React.DragEvent) => {
+    if (viewer) return
     const kind = e.dataTransfer.getData('application/x-ream-insert')
     const at = slidePoint(e.clientX, e.clientY)
     if (kind) {

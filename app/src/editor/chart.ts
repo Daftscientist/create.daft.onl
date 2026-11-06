@@ -53,16 +53,20 @@ export function chartSvg(spec: ChartSpec, w: number, h: number): string {
   }
   const pad = { l: 44, r: 16, t: 14, b: 26 + legendH }
   const pw = Math.max(10, w - pad.l - pad.r), ph = Math.max(10, h - pad.t - pad.b)
-  const max = niceMax(Math.max(0, ...spec.series.flatMap((x) => x.values)))
+  // Signed axes: bars grow from zero both ways, as in PowerPoint.
+  const vals = spec.series.flatMap((x) => x.values)
+  const hi = niceMax(Math.max(0, ...vals)), lo = -niceMax(Math.max(0, ...vals.map((v) => -v))) || 0
+  const span = hi - lo || 1
   const ticks = 5
+  const at = (v: number) => (v - lo) / span // 0..1 along the value axis
   for (let i = 0; i <= ticks; i++) {
-    const v = (max / ticks) * i
+    const v = lo + (span / ticks) * i
     if (spec.type === 'bar') {
       const x = pad.l + (pw * i) / ticks
-      parts.push(`<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t + ph}" stroke="#D9D9D9" stroke-width="0.75"/><text x="${x}" y="${pad.t + ph + 16}" font-size="11" text-anchor="middle" fill="#595959" ${font}>${+v.toFixed(2)}</text>`)
+      parts.push(`<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${pad.t + ph}" stroke="${Math.abs(v) < 1e-9 ? '#8C8C8C' : '#D9D9D9'}" stroke-width="0.75"/><text x="${x}" y="${pad.t + ph + 16}" font-size="11" text-anchor="middle" fill="#595959" ${font}>${+v.toFixed(2)}</text>`)
     } else {
       const y = pad.t + ph - (ph * i) / ticks
-      parts.push(`<line x1="${pad.l}" y1="${y}" x2="${pad.l + pw}" y2="${y}" stroke="#D9D9D9" stroke-width="0.75"/><text x="${pad.l - 6}" y="${y + 4}" font-size="11" text-anchor="end" fill="#595959" ${font}>${+v.toFixed(2)}</text>`)
+      parts.push(`<line x1="${pad.l}" y1="${y}" x2="${pad.l + pw}" y2="${y}" stroke="${Math.abs(v) < 1e-9 ? '#8C8C8C' : '#D9D9D9'}" stroke-width="0.75"/><text x="${pad.l - 6}" y="${y + 4}" font-size="11" text-anchor="end" fill="#595959" ${font}>${+v.toFixed(2)}</text>`)
     }
   }
   const n = spec.categories.length, m = spec.series.length
@@ -73,17 +77,20 @@ export function chartSvg(spec: ChartSpec, w: number, h: number): string {
   })
   if (spec.type === 'line') {
     spec.series.forEach((s, si) => {
-      const pts = s.values.map((v, ci) => `${pad.l + slot * (ci + 0.5)},${pad.t + ph - (ph * Math.max(0, v)) / max}`)
+      const pts = s.values.map((v, ci) => `${pad.l + slot * (ci + 0.5)},${pad.t + ph - ph * at(v)}`)
       parts.push(`<polyline points="${pts.join(' ')}" fill="none" stroke="${color(si)}" stroke-width="2.25" stroke-linejoin="round"/>`)
     })
   } else {
     const group = slot * 0.7, bw = group / Math.max(1, m)
     spec.series.forEach((s, si) => s.values.forEach((v, ci) => {
-      const len = ((spec.type === 'bar' ? pw : ph) * Math.max(0, v)) / max
-      const at = slot * ci + (slot - group) / 2 + bw * si
-      parts.push(spec.type === 'bar'
-        ? `<rect x="${pad.l}" y="${pad.t + at}" width="${len}" height="${bw}" fill="${color(si)}"/>`
-        : `<rect x="${pad.l + at}" y="${pad.t + ph - len}" width="${bw}" height="${len}" fill="${color(si)}"/>`)
+      const off = slot * ci + (slot - group) / 2 + bw * si
+      if (spec.type === 'bar') {
+        const a = pad.l + pw * at(Math.min(0, v)), b = pad.l + pw * at(Math.max(0, v))
+        parts.push(`<rect x="${a}" y="${pad.t + off}" width="${b - a}" height="${bw}" fill="${color(si)}"/>`)
+      } else {
+        const top = pad.t + ph - ph * at(Math.max(0, v)), bottom = pad.t + ph - ph * at(Math.min(0, v))
+        parts.push(`<rect x="${pad.l + off}" y="${top}" width="${bw}" height="${bottom - top}" fill="${color(si)}"/>`)
+      }
     }))
   }
   parts.push(legend(spec.series.map((s, i) => [s.name, color(i)]), w, h, font))

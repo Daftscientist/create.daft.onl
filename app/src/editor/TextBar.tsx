@@ -41,7 +41,11 @@ export function TextBar() {
     })
     const above = r.top - bar.height - 10, below = r.bottom + 10
     const fitsAbove = above > 70, fitsBelow = below + bar.height < innerHeight - 8
-    const pick = fitsAbove && (!hits(above) || !fitsBelow || hits(below)) ? above : fitsBelow ? below : Math.max(70, above)
+    // Neither side clear: the ground above or below the slide, if it has room.
+    const stageRect = document.querySelector('[data-region="stage"]')?.getBoundingClientRect()
+    const ground = stageRect ? [stageRect.top + 8, stageRect.bottom - bar.height - 52] : []
+    const clear = [above, below, ...ground].find((t) => t > 64 && t + bar.height < innerHeight - 8 && !hits(t) && !(t < r.bottom && t + bar.height > r.top))
+    const pick = clear ?? (fitsAbove ? above : fitsBelow ? below : Math.max(70, above))
     const top = Math.round(pick)
     if (pos?.left !== left || pos?.top !== top) setPos({ left, top })
   })
@@ -62,7 +66,7 @@ export function TextBar() {
   const back = (e: React.KeyboardEvent) => { if (e.key === 'Escape' && ref.current?.contains(document.activeElement)) requestAnimationFrame(refocus) }
   return (
     <div ref={ref} className={`${s.bar} glass`} role="toolbar" aria-label="Text formatting" style={pos ?? { visibility: 'hidden' }} onKeyDownCapture={back}>
-      <NumberField label="pt" width={70} value={t.sizePt} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(1, Math.min(400, v)) }} onCommit={(v) => { refocus(); formatRuns({ 'font-size': `${v}pt` }) }} hint="Use a size like 24" />
+      <NumberField label="pt" name="Font size, points" width={70} value={t.sizePt} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(1, Math.min(400, v)) }} onCommit={(v) => { refocus(); formatRuns({ 'font-size': `${v}pt` }) }} hint="Use a size like 24" />
       <span className={s.sep} />
       <Toggle label="Bold" hint="⌘B" on={t.bold} onClick={() => formatRuns({ 'font-weight': t.bold ? '400' : '700' })}><TextB size={15} weight="bold" /></Toggle>
       <Toggle label="Italic" hint="⌘I" on={t.italic} onClick={() => formatRuns({ 'font-style': t.italic ? 'normal' : 'italic' })}><TextItalic size={15} /></Toggle>

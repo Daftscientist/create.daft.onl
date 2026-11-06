@@ -580,8 +580,13 @@ export function applyRemote(change: { upserts: Entry[]; deletes: string[] }) {
   const entries = { ...state.entries }
   for (const e of change.upserts) entries[e.id] = e
   for (const id of change.deletes) delete entries[id]
+  const before = state
   commit({ ...state, entries }, true, 'remote')
+  // The editor reconciles changes to the deck it has open (editor spec, contract 6).
+  for (const e of change.upserts) if (e.type === 'deck' && before.entries[e.id] !== e) remoteListeners.forEach((l) => l(e.id, before.entries[e.id] as Deck | undefined))
 }
+const remoteListeners = new Set<(deckId: string, before: Deck | undefined) => void>()
+export const onRemoteDeck = (l: (deckId: string, before: Deck | undefined) => void) => { remoteListeners.add(l); return () => { remoteListeners.delete(l) } }
 
 /** Keeps this device's version of a deck that also changed elsewhere, as a visible copy. */
 export function addConflictCopy(d: Deck, deviceName: string) {

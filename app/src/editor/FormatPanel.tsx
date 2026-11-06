@@ -6,7 +6,7 @@ import {
   TextAlignJustify, TextAlignLeft, TextAlignRight, TextB, TextItalic, TextOutdent, TextIndent, TextUnderline, X,
   ArrowsInLineHorizontal, ArrowsInLineVertical, ClockCounterClockwise, Selection as SelectionIcon, SelectionSlash, Image as ImageIcon,
 } from '@phosphor-icons/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLibrary } from '../data/library'
 import type { Deck, SlideDoc } from '../data/types'
 import { IconButton, Button } from '../ui/Button'
@@ -14,7 +14,7 @@ import { ColorWell, KeptChip, NumberField, Row, Section, toHex } from '../ui/Ins
 import { Menu, type MenuAnchor, type MenuItem } from '../ui/Menu'
 import { Tooltip } from '../ui/Tooltip'
 import { liveStage } from './Canvas'
-import { boxOf, isGroup, members, unionBox, type Box } from './geometry'
+import { bounds, boxOf, isGroup, members, setBox, unionBox, type Box } from './geometry'
 import { readPicture, pickPicture } from './insert'
 import { align, animOf, deckFonts, distribute, replaceColour, replaceFont, setSlideSize, editSlide, find, group, hasText, moveToIndex, notesOf, reorder, setAnchor, setAnimation, setBackground, setBoxes, setNotes, setObjectStyle, setSlideAttrs, textHost, toggleAttr, ungroup, type Align } from './ops'
 import { select, setEditor, useEditor } from './session'
@@ -90,6 +90,8 @@ export function FormatPanel({ deck, slide, index, onClose }: { deck: Deck; slide
         <IconButton label="Close Format" hint="⌥⌘I" size="sm" tone="plain" onClick={onClose}><X size={14} /></IconButton>
       </header>
       <div className={s.body}>
+        {/* One object navigator, always first and always mounted, so picking a row keeps it in place. */}
+        <Section title="Objects on this slide" open={open['all.objects'] ?? true} onToggle={() => setOpen((o) => { const n = { ...o, 'all.objects': !(o['all.objects'] ?? true) }; try { localStorage.setItem(OPEN_KEY, JSON.stringify(n)) } catch { /* ok */ } return n })}><ObjectList /></Section>
         {!els.length && <SlidePanel deck={deck} slide={slide} sec={sec} colors={deckColors} />}
         {kinds[0] === 'preserved' && els.length === 1 && <p className={s.note}>Kept exactly as in PowerPoint. You can move, resize and reorder it.</p>}
         {els.length > 1 && <ArrangeSection sec={sec('arrange')} els={els} ids={sel} size={deck.size ?? { w: 1280, h: 720 }} />}
@@ -105,7 +107,6 @@ export function FormatPanel({ deck, slide, index, onClose }: { deck: Deck; slide
         {els.length > 0 && <AnimateSection sec={sec('animate', false)} els={els} ids={sel} />}
         {els.length === 1 && (kinds[0] === 'picture' || kinds[0] === 'chart' || kinds[0] === 'preserved' || kinds[0] === 'shape' || kinds[0] === 'svg') && <AltTextSection sec={sec('alt', false)} el={els[0]} id={sel[0]} />}
         {els.length === 1 && <CommentsSection slide={slide} objectId={sel[0]} objectName={objectName(els[0]).split(':')[0].toLowerCase()} sec={sec('comments', !!slide.comments?.some((c) => c.objectId === sel[0] && !c.resolved))} />}
-        {els.length > 0 && <Section title="Objects on this slide" {...sec('objects-in-object', false)}><ObjectList /></Section>}
       </div>
     </aside>
   )
@@ -122,25 +123,25 @@ function TextSection({ sec, colors, ids }: { sec: Sec; colors: string[]; ids: st
   return (
     <Section title="Text" {...sec}>
       <Row label="Font">
-        <button type="button" className={s.select} aria-haspopup="menu" aria-expanded={!!fontMenu} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setFontMenu({ x: r.left, y: r.bottom + 4 }) }} style={{ fontFamily: t.family }}>
-          {t.family}
+        <button type="button" className={s.select} aria-haspopup="menu" aria-expanded={!!fontMenu} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setFontMenu({ x: r.left, y: r.bottom + 4 }) }} style={{ fontFamily: t.mixed.has('family') ? undefined : t.family }}>
+          {t.mixed.has('family') ? 'Mixed' : t.family}
         </button>
         <Menu open={!!fontMenu} anchor={fontMenu} label="Font" search="Find a font" onClose={() => setFontMenu(null)}
           items={fonts.map((f) => ({ label: f, selected: f === t.family, run: () => formatRuns({ 'font-family': `${f},sans-serif` }, 'Font') }))} />
       </Row>
       <Row label="Size">
-        <NumberField label="pt" value={t.sizePt} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(1, Math.min(400, v)) }} onCommit={(v) => formatRuns({ 'font-size': `${v}pt` }, 'Font size')} hint="Use a size like 24" />
-        <ColorWell label="Text colour" value={t.color} colors={colors} onChange={(c) => c && formatRuns({ color: c }, 'Text colour')} />
+        <NumberField label="pt" name="Font size, points" mixed={t.mixed.has('size')} value={t.sizePt} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(1, Math.min(400, v)) }} onCommit={(v) => formatRuns({ 'font-size': `${v}pt` }, 'Font size')} hint="Use a size like 24" />
+        <ColorWell label="Text colour" value={t.color} mixed={t.mixed.has('color')} colors={colors} onChange={(c) => c && formatRuns({ color: c }, 'Text colour')} />
       </Row>
       <Row label="Style">
-        <Toggle label="Bold" hint="⌘B" on={t.bold} onClick={() => formatRuns({ 'font-weight': t.bold ? '400' : '700' }, 'Bold')}><TextB size={15} weight="bold" /></Toggle>
-        <Toggle label="Italic" hint="⌘I" on={t.italic} onClick={() => formatRuns({ 'font-style': t.italic ? 'normal' : 'italic' }, 'Italic')}><TextItalic size={15} /></Toggle>
-        <Toggle label="Underline" hint="⌘U" on={t.underline} onClick={() => formatRuns({ 'text-decoration-line': t.underline ? null : 'underline' }, 'Underline')}><TextUnderline size={15} /></Toggle>
+        <Toggle label="Bold" hint="⌘B" on={t.mixed.has('bold') ? 'mixed' : t.bold} onClick={() => formatRuns({ 'font-weight': t.bold && !t.mixed.has('bold') ? '400' : '700' }, 'Bold')}><TextB size={15} weight="bold" /></Toggle>
+        <Toggle label="Italic" hint="⌘I" on={t.mixed.has('italic') ? 'mixed' : t.italic} onClick={() => formatRuns({ 'font-style': t.italic ? 'normal' : 'italic' }, 'Italic')}><TextItalic size={15} /></Toggle>
+        <Toggle label="Underline" hint="⌘U" on={t.mixed.has('underline') ? 'mixed' : t.underline} onClick={() => formatRuns({ 'text-decoration-line': t.underline ? null : 'underline' }, 'Underline')}><TextUnderline size={15} /></Toggle>
       </Row>
       <Row label="Align">
         {(['left', 'center', 'right', 'justify'] as const).map((a) => {
           const Icon = { left: TextAlignLeft, center: TextAlignCenter, right: TextAlignRight, justify: TextAlignJustify }[a]
-          return <Toggle key={a} label={`Align ${a === 'center' ? 'centre' : a}`} on={t.align === a} onClick={() => formatParas({ 'text-align': a })}><Icon size={15} /></Toggle>
+          return <Toggle key={a} label={`Align ${a === 'center' ? 'centre' : a}`} on={!t.mixed.has('align') && t.align === a} onClick={() => formatParas({ 'text-align': a })}><Icon size={15} /></Toggle>
         })}
       </Row>
       <Row label="Vertical">
@@ -149,11 +150,11 @@ function TextSection({ sec, colors, ids }: { sec: Sec; colors: string[]; ids: st
         <Toggle label="Bottom" on={anchor === 'bottom'} onClick={() => setAnchor(ids, 'bottom')}><AlignBottom size={15} /></Toggle>
       </Row>
       <Row label="Line spacing">
-        <NumberField label="×" value={t.lineHeight} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0.5, Math.min(5, v)) }} onCommit={(v) => formatParas({ 'line-height': `${Math.round(v * 1.2 * 1000) / 1000}` })} step={0.1} hint="A multiple, like 1.15" />
+        <NumberField label="×" name="Line spacing, multiple" value={t.lineHeight} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0.5, Math.min(5, v)) }} onCommit={(v) => formatParas({ 'line-height': `${Math.round(v * 1.2 * 1000) / 1000}` })} step={0.1} hint="A multiple, like 1.15" />
       </Row>
       <Row label="Paragraph">
-        <NumberField label="before" value={t.before} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(200, v)) }} onCommit={(v) => formatParas({ 'margin-top': v ? `${v}pt` : null })} hint="Points, like 6" />
-        <NumberField label="after" value={t.after} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(200, v)) }} onCommit={(v) => formatParas({ 'margin-bottom': v ? `${v}pt` : null })} hint="Points, like 6" />
+        <NumberField label="before" name="Space before paragraph, points" value={t.before} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(200, v)) }} onCommit={(v) => formatParas({ 'margin-top': v ? `${v}pt` : null })} hint="Points, like 6" />
+        <NumberField label="after" name="Space after paragraph, points" value={t.after} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(200, v)) }} onCommit={(v) => formatParas({ 'margin-bottom': v ? `${v}pt` : null })} hint="Points, like 6" />
       </Row>
       <Row label="Lists">
         <Toggle label="Bullets" on={t.list === 'ul'} onClick={() => list('ul')}><ListBullets size={15} /></Toggle>
@@ -165,7 +166,7 @@ function TextSection({ sec, colors, ids }: { sec: Sec; colors: string[]; ids: st
   )
 }
 
-export function Toggle({ label, hint, on, onClick, children }: { label: string; hint?: string; on: boolean; onClick: () => void; children: React.ReactNode }) {
+export function Toggle({ label, hint, on, onClick, children }: { label: string; hint?: string; on: boolean | 'mixed'; onClick: () => void; children: React.ReactNode }) {
   // mousedown is prevented so a click never takes focus (or the selection) from text being edited.
   return <IconButton label={label} hint={hint} size="sm" tone="plain" aria-pressed={on} onMouseDown={(e) => e.preventDefault()} onClick={onClick}>{children}</IconButton>
 }
@@ -209,11 +210,11 @@ function FillSection({ sec, els, ids, colors }: { sec: Sec; els: HTMLElement[]; 
       </Row>
       <Row label="Border">
         <ColorWell label="Border colour" value={bc} colors={colors} none="No border" onChange={(c) => setObjectStyle(ids, c ? { 'border-style': 'solid', 'border-color': c, 'border-width': bw ? `${bw}px` : '2px' } : { 'border-style': null, 'border-color': null, 'border-width': null }, 'Border')} />
-        <NumberField label="pt" value={pt(bw)} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(100, v)) }} onCommit={(v) => setObjectStyle(ids, v ? { 'border-style': 'solid', 'border-width': `${Math.round((v / 0.75) * 100) / 100}px`, 'border-color': bc ?? 'rgba(23,23,28,1)' } : { 'border-style': null, 'border-width': null }, 'Border width')} hint="Use a width like 2" />
+        <NumberField label="pt" name="Border width, points" value={pt(bw)} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(100, v)) }} onCommit={(v) => setObjectStyle(ids, v ? { 'border-style': 'solid', 'border-width': `${Math.round((v / 0.75) * 100) / 100}px`, 'border-color': bc ?? 'rgba(23,23,28,1)' } : { 'border-style': null, 'border-width': null }, 'Border width')} hint="Use a width like 2" />
       </Row>
       {isRect && els.every((e) => !isGroup(e)) && (
         <Row label="Corners">
-          <NumberField label="px" value={parseFloat(st.borderTopLeftRadius) || 0} format={(v) => `${Math.round(v)}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, v) }} onCommit={(v) => setObjectStyle(ids, { 'border-radius': v ? `${v}px` : null }, 'Corner radius')} />
+          <NumberField label="px" name="Corner radius, pixels" value={parseFloat(st.borderTopLeftRadius) || 0} format={(v) => `${Math.round(v)}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, v) }} onCommit={(v) => setObjectStyle(ids, { 'border-radius': v ? `${v}px` : null }, 'Corner radius')} />
         </Row>
       )}
     </Section>
@@ -227,7 +228,7 @@ function EffectsSection({ sec, els, ids }: { sec: Sec; els: HTMLElement[]; ids: 
   return (
     <Section title="Effects" {...sec}>
       <Row label="Opacity">
-        <NumberField label="%" value={op} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(100, Math.round(v))) }} onCommit={(v) => setObjectStyle(ids, { opacity: v >= 100 ? null : `${v / 100}` }, 'Opacity')} hint="Use 0 to 100" />
+        <NumberField label="%" name="Opacity, percent" value={op} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(100, Math.round(v))) }} onCommit={(v) => setObjectStyle(ids, { opacity: v >= 100 ? null : `${v / 100}` }, 'Opacity')} hint="Use 0 to 100" />
       </Row>
       <Row label="Shadow">
         {shadow === 'custom'
@@ -298,7 +299,8 @@ function PictureSection({ sec, el, id }: { sec: Sec; el: HTMLElement; id: string
 function ArrangeSection({ sec, els, ids, size }: { sec: Sec; els: HTMLElement[]; ids: string[]; size: { w: number; h: number } }) {
   const unit = localUnit()
   const single = els.length === 1
-  const b: Box = single ? boxOf(els[0]) : unionBox(els.map(boxOf))
+  // Several objects: the union of their visible bounds, the same frame the canvas draws.
+  const b: Box = single ? boxOf(els[0]) : unionBox(els.map((e) => bounds(boxOf(e))))
   const locked = els.some((e) => e.hasAttribute('data-ream-locked'))
   const fmt = (v: number) => formatLength(v, unit)
   const parse = (x: string, c: number) => parseLength(x, c, unit)
@@ -309,22 +311,24 @@ function ArrangeSection({ sec, els, ids, size }: { sec: Sec; els: HTMLElement[];
     const k = patch.w !== undefined && b.w ? patch.w / b.w : patch.h !== undefined && b.h ? patch.h / b.h : 1
     const nb = { ...b, ...patch, w: b.w * k, h: b.h * k }
     const sx = k, sy = k
-    setBoxes(new Map(els.map((e, i) => { const m = boxOf(e); return [ids[i], { ...m, x: nb.x + (m.x - b.x) * sx, y: nb.y + (m.y - b.y) * sy, w: m.w * sx, h: m.h * sy }] as const })), 'Arrange')
+    setBoxes(new Map(els.map((e, i) => { const m = boxOf(e), mb = bounds(m); const cx = nb.x + (mb.x + mb.w / 2 - b.x) * sx, cy = nb.y + (mb.y + mb.h / 2 - b.y) * sy; return [ids[i], { ...m, w: m.w * sx, h: m.h * sy, x: cx - (m.w * sx) / 2, y: cy - (m.h * sy) / 2 }] as const })), 'Arrange')
   }
   const al = (a: Align) => align(ids, a, size)
+  // Scrubbing previews on the live stage; the change lands once, on release.
+  const preview = (patch: Partial<Box>) => { const st = liveStage(); if (single && st) { const el = find(st, ids[0]); if (el) setBox(el, { ...b, ...patch }) } }
   return (
     <Section title="Arrange" {...sec}>
       <Row label="Position">
-        <NumberField label="X" value={b.x} format={fmt} parse={parse} onCommit={(x) => commit({ x })} scrub={1} step={0.1} disabled={locked} />
-        <NumberField label="Y" value={b.y} format={fmt} parse={parse} onCommit={(y) => commit({ y })} step={0.1} disabled={locked} />
+        <NumberField label="X" name="Horizontal position" onPreview={(x) => preview({ x })} value={b.x} format={fmt} parse={parse} onCommit={(x) => commit({ x })} scrub={1} step={0.1} disabled={locked} />
+        <NumberField label="Y" name="Vertical position" onPreview={(y) => preview({ y })} value={b.y} format={fmt} parse={parse} onCommit={(y) => commit({ y })} step={0.1} disabled={locked} />
       </Row>
       <Row label="Size">
-        <NumberField label="W" value={b.w} format={fmt} parse={(x, c) => { const v = parse(x, c); return v === null ? null : Math.max(1, v) }} onCommit={(w) => commit({ w })} step={0.1} disabled={locked} />
-        <NumberField label="H" value={b.h} format={fmt} parse={(x, c) => { const v = parse(x, c); return v === null ? null : Math.max(1, v) }} onCommit={(h) => commit({ h })} step={0.1} disabled={locked} />
+        <NumberField label="W" name="Width" onPreview={(w) => preview({ w })} value={b.w} format={fmt} parse={(x, c) => { const v = parse(x, c); return v === null ? null : Math.max(1, v) }} onCommit={(w) => commit({ w })} step={0.1} disabled={locked} />
+        <NumberField label="H" name="Height" onPreview={(h) => preview({ h })} value={b.h} format={fmt} parse={(x, c) => { const v = parse(x, c); return v === null ? null : Math.max(1, v) }} onCommit={(h) => commit({ h })} step={0.1} disabled={locked} />
       </Row>
       {single && !isGroup(els[0]) && (
         <Row label="Angle">
-          <NumberField label="°" value={Math.round(b.rot * 10) / 10} format={(v) => `${v}°`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : ((v % 360) + 360) % 360 }} onCommit={(rot) => commit({ rot })} disabled={locked} hint="Use an angle like 45" />
+          <NumberField label="°" name="Rotation, degrees" value={Math.round(b.rot * 10) / 10} format={(v) => `${v}°`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : ((v % 360) + 360) % 360 }} onCommit={(rot) => commit({ rot })} disabled={locked} hint="Use an angle like 45" />
         </Row>
       )}
       <Row label={single ? 'To slide' : 'Align'}>
@@ -375,9 +379,6 @@ function SlidePanel({ deck, slide, sec, colors }: { deck: Deck; slide: SlideDoc;
       </Section>
       <TransitionSection slide={slide} deck={deck} sec={sec('transition', false)} />
       <DesignSection deck={deck} sec={sec('design', false)} colors={colors} />
-      <Section title="Objects on this slide" {...sec('objects')}>
-        <ObjectList />
-      </Section>
       <Section title="Speaker notes" {...sec('notes', false)}>
         <NotesField slide={slide} />
       </Section>
@@ -453,7 +454,7 @@ function TransitionSection({ slide, deck, sec }: { slide: SlideDoc; deck: Deck; 
     <Section title="Transition" {...sec}>
       <Row label="Effect">
         <button type="button" className={s.select} aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom + 4 }) }}>{cap(type)}</button>
-        <Menu open={!!menu} anchor={menu} label="Transition" onClose={() => setMenu(null)} items={TRANSITIONS.map((t) => ({ label: cap(t), selected: t === type, run: () => set(t === 'none' ? { 'data-transition': null, 'data-transition-duration': null, 'data-transition-direction': null } : { 'data-transition': t }) }))} />
+        <Menu open={!!menu} anchor={menu} label="Transition" onClose={() => setMenu(null)} items={TRANSITIONS.map((t) => ({ label: t === 'morph' ? 'Morph (plays as a fade here; exports as Morph)' : cap(t), selected: t === type, run: () => set(t === 'none' ? { 'data-transition': null, 'data-transition-duration': null, 'data-transition-direction': null } : { 'data-transition': t }) }))} />
       </Row>
       {type !== 'none' && type !== 'cut' && (
         <Row label="Duration">
@@ -644,6 +645,8 @@ function ObjectList() {
   const objects = root ? ([...root.children].filter((c) => c.hasAttribute('data-domoxml-node-id')) as HTMLElement[]) : []
   const [drag, setDrag] = useState<number | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
+  const list = useRef<HTMLOListElement>(null)
+  useEffect(() => { list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }) }, [sel])
   if (!objects.length) return <p className={s.note}>Nothing on this slide yet. Add text, a shape or a picture from the header.</p>
   const rename = (id: string, name: string) => {
     setRenaming(null)
@@ -651,7 +654,7 @@ function ObjectList() {
   }
   return (
     <>
-      <ol className={s.objects} aria-label="Objects, front to back">
+      <ol ref={list} className={s.objects} aria-label="Objects, front to back">
         {[...objects].reverse().map((el, ri) => {
           const i = objects.length - 1 - ri
           const id = el.getAttribute('data-domoxml-node-id')!

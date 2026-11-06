@@ -52,7 +52,8 @@ const EDITOR_CSS = `:host{overflow:visible}.stage>.domoxml-slide{overflow:visibl
 img{-webkit-user-drag:none;user-drag:none}
 [data-ream-hidden]{visibility:visible!important;opacity:.35}
 [data-ream-empty][data-ream-placeholder]::after{content:attr(data-ream-placeholder);position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(23,23,28,.38);font:500 28px/1.2 'Instrument Sans',sans-serif;pointer-events:none}
-[data-ream-empty][data-ream-editing]::after{content:none}`
+[data-ream-empty][data-ream-editing]::after{content:none}
+::highlight(ream-find){background-color:rgba(255,213,74,.75);color:inherit}`
 
 export function SlideView({ slide, size = DEFAULT, css = '', className, interactive = false, label, editor = false, hold = false, onStage }: {
   slide: SlideDoc
@@ -78,6 +79,7 @@ export function SlideView({ slide, size = DEFAULT, css = '', className, interact
     const root = el.shadowRoot ?? el.attachShadow({ mode: 'open' })
     root.innerHTML = `<style>${base(size)}${scopedCss(css)}${editor ? EDITOR_CSS : ''}</style><div class="stage" part="stage"></div>`
     stage.current = root.querySelector('.stage')
+    if (editor) stage.current!.setAttribute('aria-hidden', 'true')
     stage.current!.style.transform = `scale(${el.clientWidth / size.w})`
     onStage?.(stage.current)
   }, [size.w, size.h, css, editor]) // size compared by value; eslint-disable-line react-hooks/exhaustive-deps
@@ -106,7 +108,9 @@ export function SlideView({ slide, size = DEFAULT, css = '', className, interact
       ref={host}
       className={`${s.slide} ${className ?? ''}`}
       data-slide-id={slide.id}
-      {...(interactive ? { role: 'img', 'aria-label': label ?? slideText(slide) } : { 'aria-hidden': true })}
+      // The editor stage: the slide is described by the editor's object list, and its text becomes
+      // a labelled textbox while edited (textctl), so the host itself carries nothing.
+      {...(editor ? {} : interactive ? { role: 'img', 'aria-label': label ?? slideText(slide) } : { 'aria-hidden': true })}
     />
   )
 }

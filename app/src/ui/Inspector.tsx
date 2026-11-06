@@ -23,14 +23,22 @@ export function Section({ title, open, onToggle, children, aside }: { title: str
 }
 
 export function Row({ label, children }: { label?: ReactNode; children: ReactNode }) {
-  return <div className={s.row}>{label !== undefined && <span className={s.rowLabel}>{label}</span>}<div className={s.rowControls}>{children}</div></div>
+  const id = useId()
+  return (
+    <div className={s.row}>
+      {label !== undefined && <span className={s.rowLabel} id={id}>{label}</span>}
+      <div className={s.rowControls} role="group" aria-labelledby={label !== undefined ? id : undefined}>{children}</div>
+    </div>
+  )
 }
 
 /** A number field. `format` shows the value; `parse` reads typed text (units, arithmetic) or returns null.
  *  Enter or blur commits, Esc reverts, arrows step (⇧ ×10), dragging the label scrubs with a live preview
  *  (`onPreview`), committed once on release. */
-export function NumberField({ label, value, format, parse, onCommit, onPreview, step = 1, scrub = 1, mixed, width, hint = 'Use a number like 2.5cm', disabled }: {
+export function NumberField({ label, name, value, format, parse, onCommit, onPreview, step = 1, scrub = 1, mixed, width, hint = 'Use a number like 2.5cm', disabled }: {
   label: string
+  /** The full name screen readers hear ("Font size, points"); `label` is the short visible one. */
+  name?: string
   value: number
   format: (v: number) => string
   parse: (text: string, current: number) => number | null
@@ -54,19 +62,29 @@ export function NumberField({ label, value, format, parse, onCommit, onPreview, 
     setBad(false); setText(null)
     if (v !== value) onCommit(v)
   }
+  // Dragging the label scrubs with a live preview, through the same parsing and limits as typing;
+  // Esc puts the value back. Only fields that can preview offer it.
   const scrubStart = (e: React.PointerEvent) => {
-    if (disabled || e.button !== 0) return
+    if (disabled || e.button !== 0 || !onPreview) return
     e.preventDefault()
     const x0 = e.clientX
     let last = value
-    const move = (m: PointerEvent) => { last = value + Math.round((m.clientX - x0) / 2) * scrub; onPreview?.(last) }
-    const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); if (last !== value) onCommit(last) }
+    const move = (m: PointerEvent) => {
+      const v = parse(String(value + Math.round((m.clientX - x0) / 2) * scrub), value)
+      if (v !== null) { last = v; onPreview(v) }
+    }
+    const stop = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('keydown', key, true); removeEventListener('pointercancel', cancel) }
+    const up = () => { stop(); if (last !== value) onCommit(last) }
+    const cancel = () => { stop(); onPreview(value) }
+    const key = (k: KeyboardEvent) => { if (k.key === 'Escape') { k.preventDefault(); k.stopPropagation(); cancel() } }
     addEventListener('pointermove', move)
     addEventListener('pointerup', up)
+    addEventListener('pointercancel', cancel)
+    addEventListener('keydown', key, true)
   }
   return (
     <label className={s.num} htmlFor={id} style={width ? { width } : undefined} data-bad={bad || undefined} data-disabled={disabled || undefined}>
-      <span className={s.numLabel} onPointerDown={scrubStart} title={`Drag to change ${label}`}>{label}</span>
+      <span className={s.numLabel} data-scrub={onPreview ? '' : undefined} onPointerDown={scrubStart} title={onPreview ? `Drag to change ${name ?? label}` : undefined}>{label}</span>
       <input
         id={id}
         className={s.numInput}
@@ -74,7 +92,7 @@ export function NumberField({ label, value, format, parse, onCommit, onPreview, 
         placeholder={mixed ? 'Mixed' : undefined}
         disabled={disabled}
         aria-invalid={bad || undefined}
-        aria-label={label}
+        aria-label={name ?? label}
         onChange={(e) => { setText(e.target.value); setBad(false) }}
         onBlur={commit}
         onKeyDown={(e) => {

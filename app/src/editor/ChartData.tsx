@@ -11,7 +11,7 @@ export function ChartData({ id, spec, onClose }: { id: string; spec: ChartSpec; 
   const [cats, setCats] = useState(spec.categories)
   const [series, setSeries] = useState(spec.series.map((x) => ({ ...x, text: x.values.map(String) })))
   const pie = spec.type === 'pie'
-  const bad = series.some((x) => x.text.some((t) => t.trim() === '' || !Number.isFinite(Number(t))))
+  const bad = series.some((x) => x.text.some((t) => t.trim() === '' || !Number.isFinite(Number(t)) || (pie && Number(t) < 0)))
   const save = () => {
     if (bad) return
     setChart(id, { ...spec, categories: cats, series: series.map(({ text, ...x }) => ({ ...x, values: text.map(Number) })) })
@@ -57,7 +57,7 @@ export function ChartData({ id, spec, onClose }: { id: string; spec: ChartSpec; 
                 </th>
                 {series.map((x, si) => {
                   const t = x.text[ci] ?? ''
-                  const invalid = t.trim() === '' || !Number.isFinite(Number(t))
+                  const invalid = t.trim() === '' || !Number.isFinite(Number(t)) || (pie && Number(t) < 0)
                   return <td key={si}><input inputMode="decimal" aria-label={`${x.name}, ${c}`} aria-invalid={invalid || undefined} data-cell={`${ci},${si + 1}`} value={t} onKeyDown={move} onChange={(e) => setSeries(series.map((y, j) => (j === si ? { ...y, text: y.text.map((v, k) => (k === ci ? e.target.value : v)) } : y)))} /></td>
                 })}
               </tr>
@@ -65,7 +65,7 @@ export function ChartData({ id, spec, onClose }: { id: string; spec: ChartSpec; 
           </tbody>
         </table>
         <Button variant="ghost" icon={<Plus size={14} />} onClick={() => { setCats([...cats, `Item ${cats.length + 1}`]); setSeries(series.map((x) => ({ ...x, text: [...x.text, '0'] }))) }}>Add category</Button>
-        {bad && <p className={s.error} role="alert">Every value needs to be a number.</p>}
+        {bad && <p className={s.error} role="alert">{pie ? 'Every value needs to be a number of zero or more (a pie can’t show negatives).' : 'Every value needs to be a number.'}</p>}
       </div>
     </Dialog>
   )

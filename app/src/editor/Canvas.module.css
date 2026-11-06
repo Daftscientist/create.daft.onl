@@ -66,3 +66,5 @@
 @media (prefers-reduced-motion: reduce) { .guide { animation: none; } }
 .endpoint { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; cursor: move; touch-action: none; }
 .endpoint::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: #fff; border: 1.5px solid var(--select); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.9), 0 1px 2px rgb(0 0 0 / 0.25); }
+.overflow { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 1.5px var(--warn), var(--shadow-tile); pointer-events: auto; cursor: help; }
+.overflow::after { content: "+"; position: absolute; inset: 0; display: grid; place-items: center; font: 700 13px/1 var(--font); color: var(--warn); }

@@ -8,7 +8,7 @@ import { copySelection } from './clipboard'
 import { redo, undo } from './history'
 import { duplicateObjects, find, group, newSlide, nudge, removeObjects, reorder, toggleAttr, ungroup } from './ops'
 import { getEditor, select, setEditor } from './session'
-import { editingLive, endEdit, formatRuns, textState } from './textctl'
+import { editingLive, endEdit, formatRuns, textHistory, textState, textUndo } from './textctl'
 import { isGroup, members } from './geometry'
 import { copyFormat, pasteFormat } from './painter'
 
@@ -24,6 +24,8 @@ export function focusRegion(r: string) {
 }
 
 export function applyUndo(deckId: string, which: 'undo' | 'redo') {
+  // While text is being edited, the header's Undo is the text's own (as ⌘Z inside it).
+  if (textHistory()) { textUndo(which === 'undo' ? -1 : 1); return }
   endEdit()
   const r = which === 'undo' ? undo(deckId) : redo(deckId)
   if (!r.ok) { toast({ message: r.reason }); return }
@@ -61,8 +63,8 @@ export function useEditorKeys(o: Opts) {
         return
       }
       if (e.key === 'F5') { e.preventDefault(); endEdit(); o.onPresent(!e.shiftKey && !e.altKey, e.altKey); return }
-      if (mod && k === 'f' && !inField) { e.preventDefault(); endEdit(); o.onFind(e.altKey); return }
-      if (mod && e.shiftKey && k === 'h' && !inField) { e.preventDefault(); endEdit(); o.onFind(true); return }
+      if (mod && k === 'f' && !inField && !o.readOnly) { e.preventDefault(); endEdit(); o.onFind(e.altKey); return }
+      if (mod && e.shiftKey && k === 'h' && !inField && !o.readOnly) { e.preventDefault(); endEdit(); o.onFind(true); return }
 
       // ---- text being edited: the text first ----
       if (inText) {

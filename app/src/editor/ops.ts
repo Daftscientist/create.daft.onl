@@ -27,8 +27,13 @@ export function currentSlide(): { deck: Deck; slide: SlideDoc; index: number } |
 export const find = (root: Element, id: string) => root.querySelector<HTMLElement>(`[data-domoxml-node-id="${CSS.escape(id)}"]`)
 
 /** Editor-only attributes never reach the stored HTML. */
-const EDITOR_ATTRS = ['contenteditable', 'spellcheck', 'data-ream-editing']
+const EDITOR_ATTRS = ['contenteditable', 'spellcheck', 'data-ream-editing', 'aria-multiline', 'data-ream-textbox']
 export function cleanForStore(el: Element) {
+  // Accessibility state set only while editing (textctl) comes off with its markers.
+  for (const x of [el, ...el.querySelectorAll('[data-ream-textbox], [data-ream-muted]')]) {
+    if (x.hasAttribute('data-ream-textbox')) x.removeAttribute('role')
+    if (x.hasAttribute('data-ream-muted')) { x.removeAttribute('aria-hidden'); x.removeAttribute('data-ream-muted') }
+  }
   for (const a of EDITOR_ATTRS) { el.removeAttribute(a); for (const x of el.querySelectorAll(`[${a}]`)) x.removeAttribute(a) }
 }
 
@@ -41,6 +46,7 @@ export const setBeforeEdit = (fn: () => void) => { beforeEdit = fn }
 
 /** Changes one slide as one transaction. `sel`: the selection afterwards (default: unchanged). */
 export function editSlide(label: string, mutate: Mutate, opts: { slideId?: string; sel?: string[] } = {}): boolean {
+  if (getEditor().readOnly) return false
   beforeEdit?.()
   const deck = openDeck()
   if (!deck) return false
@@ -62,6 +68,7 @@ export function editSlide(label: string, mutate: Mutate, opts: { slideId?: strin
 
 /** Changes the deck's slide list as one transaction (new, duplicate, delete, reorder, background). */
 export function editSlides(label: string, fn: (slides: SlideDoc[]) => SlideDoc[] | false, after?: { slideId?: string; railSel?: string[] }) {
+  if (getEditor().readOnly) return
   beforeEdit?.()
   const deck = openDeck()
   if (!deck) return

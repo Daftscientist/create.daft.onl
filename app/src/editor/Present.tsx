@@ -14,7 +14,9 @@ import s from './Present.module.css'
 type Step = { el: HTMLElement; effect: string; step: number; delay: number; duration: number }
 const ENTRANCE = new Set(['appear', 'fade'])
 const EXIT = new Set(['disappear', 'fade-out'])
-const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+// The app's own Reduce motion setting counts as much as the system's.
+const coarse = () => matchMedia('(pointer: coarse)').matches
+const reduced = () => document.documentElement.dataset.motion === 'reduce' || matchMedia('(prefers-reduced-motion: reduce)').matches
 
 function stepsOf(stage: HTMLElement): Step[] {
   const out: Step[] = []
@@ -189,7 +191,11 @@ export function Present({ deck, start, onExit, presenter = false }: { deck: Deck
           <div ref={frame} className={s.slide} style={{ zIndex: 1 }}><SlideView key={cur.sl.id} slide={cur.sl} size={size} css={deck.css} interactive onStage={(st) => { stage.current = st }} /></div>
         </div>
       )}
-      {windowed && <button type="button" className={s.exit} onClick={exit}><X size={14} /> Exit</button>}
+      {(windowed || coarse()) && <button type="button" className={s.exit} onClick={exit}><X size={14} /> Exit</button>}
+      {coarse() && <div className={s.touchNav}>
+        <button type="button" aria-label="Previous" onClick={(e) => { e.stopPropagation(); prev() }}><CaretLeft size={20} /></button>
+        <button type="button" aria-label="Next" onClick={(e) => { e.stopPropagation(); next() }}><CaretRight size={20} /></button>
+      </div>}
       {inline && panel && <div className={s.inlinePresenter} onClick={(e) => e.stopPropagation()}>{panel}</div>}
       {popup && panel && createPortal(panel, popup.root)}
       <span className={s.count} aria-live="polite">{(cur?.i ?? 0) + 1} / {deck.slides.length}</span>

@@ -9,7 +9,8 @@ import { editSlide, find, hasText, setBoxes, textHost } from './ops'
 import { isLine, lineEnds, setLineEnds, type Pt } from './line'
 import { getEditor, select, setEditor, useEditor } from './session'
 import { snapEdges, snapMove, type Guide } from './snap'
-import { beginEdit, editingLive, endEdit, onTextChange } from './textctl'
+import { beginEdit, editingLive, endEdit, fitHeight, onTextChange } from './textctl'
+import { updateSlides } from '../data/library'
 import { formatLength, localUnit } from './units'
 import s from './Canvas.module.css'
 
@@ -349,6 +350,23 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
     setAnnounce(els.length === 1 ? `${describe(els[0])}, selected` : els.length ? `${els.length} objects selected` : '')
   }, [sel.join(','), stage]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-growing boxes keep fitting their text after any change (formatting from the Format column,
+  // undo, the AI): the height is corrected in place, without a history entry of its own.
+  useEffect(() => {
+    if (!stage || dragging || editingLive()) return
+    const fixes = new Map<string, number>()
+    for (const el of stage.querySelectorAll<HTMLElement>('[data-ream-autogrow]')) {
+      const h = fitHeight(el)
+      if (h && Math.abs(h - parseFloat(el.style.height)) > 1) fixes.set(idOf(el), h)
+    }
+    if (!fixes.size) return
+    const cur = deck.slides.find((x) => x.id === slide.id)
+    if (!cur) return
+    const root = new DOMParser().parseFromString(`<body>${cur.html}</body>`, 'text/html').body.querySelector('.domoxml-slide')!
+    for (const [id, h] of fixes) { const el = root.querySelector<HTMLElement>(`[data-domoxml-node-id="${CSS.escape(id)}"]`); if (el) el.style.height = `${h}px` }
+    updateSlides(deck.id, deck.slides.map((x) => (x.id === slide.id ? { ...x, html: root.outerHTML } : x)))
+  }, [slide.html, stage, dragging]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Text editing follows the session (Enter, double-click, a new text box).
   useEffect(() => {
     if (!stage) return
@@ -444,6 +462,11 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
             </div>
           ))}
           {marquee && <div className={s.marquee} style={scr(marquee)} />}
+          {/* Fixed-size boxes whose text runs past them (spec: imported boxes keep their size). */}
+          {!dragging && pickable().filter((el) => !el.hasAttribute('data-ream-autogrow') && overflows(el)).map((el) => {
+            const b = boxOf(el)
+            return <span key={idOf(el)} className={s.overflow} style={{ left: (b.x + b.w) * z - 10, top: (b.y + b.h) * z - 10 }} title="This text doesn’t fit its box. Make the box bigger or the text smaller." />
+          })}
         </div>
       </div>
       {locked && !readOnly && <div className={s.lockNote} role="status">Ream is editing this slide</div>}
@@ -494,4 +517,10 @@ function describe(el: HTMLElement): string {
     : el.tagName === 'IMG' ? 'Picture' : el.tagName === 'TABLE' ? 'Table' : isLine(el) ? 'Line' : el.querySelector('.domoxml-text, li') ? 'Text box' : 'Shape'
   const text = (el.getAttribute('aria-label') || el.getAttribute('alt') || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80)
   return `${kind}${el.hasAttribute('data-ream-locked') ? ' (locked)' : ''}${text ? `: ${text}` : ''}`
+}
+
+/** Whether a text box's text runs past its bottom. */
+function overflows(el: HTMLElement): boolean {
+  if (el.tagName !== 'DIV' || !el.querySelector('.domoxml-text, li') || el.style.overflow === 'hidden') return false
+  return el.scrollHeight > el.clientHeight + 3
 }

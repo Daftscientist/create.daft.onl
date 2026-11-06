@@ -8,21 +8,57 @@ import { IconButton } from '../ui/Button'
 import { parseSlide, topNodes } from './irdiff'
 import { editSlides } from './ops'
 import { setEditor } from './session'
+import { liveStage } from './Canvas'
 import s from './FindBar.module.css'
 
 /** One match: its object, and which match it is inside that object (so Replace changes exactly it). */
+/** One match: its object, and which match it is inside that object (so Replace changes exactly it). */
 type Hit = { slideId: string; slideIndex: number; objectId: string; occ: number }
-const TEXT = '.domoxml-text, li, td, th'
+const BLOCKS = '.domoxml-text, li, td, th'
 
-function textNodesOf(root: Element): Text[] {
-  const out: Text[] = []
-  for (const block of root.querySelectorAll(TEXT)) {
+/** A paragraph's text as one string, with where each text node starts in it. A word split across
+ *  formatting runs is found (and replaced) like any other. */
+type Para = { nodes: Text[]; starts: number[]; text: string }
+function parasOf(root: Element): Para[] {
+  const out: Para[] = []
+  for (const block of root.querySelectorAll(BLOCKS)) {
+    if (block.matches('td, th') && block.querySelector('.domoxml-text, li')) continue
+    const nodes: Text[] = []
     const w = block.ownerDocument.createTreeWalker(block, NodeFilter.SHOW_TEXT)
-    for (let n = w.nextNode(); n; n = w.nextNode()) if (!out.includes(n as Text)) out.push(n as Text)
+    // Text belongs to its nearest paragraph (an item's nested list has paragraphs of its own).
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (n.parentElement?.closest(BLOCKS) === block) nodes.push(n as Text)
+    const starts: number[] = []
+    let text = ''
+    for (const n of nodes) { starts.push(text.length); text += n.data }
+    if (text) out.push({ nodes, starts, text })
   }
   return out
 }
+function matches(p: Para, re: RegExp): [number, number][] {
+  const out: [number, number][] = []
+  re.lastIndex = 0
+  for (let m = re.exec(p.text); m; m = re.exec(p.text)) { out.push([m.index, m.index + m[0].length]); if (!m[0].length) re.lastIndex++ }
+  return out
+}
+/** Where character `i` of a paragraph lives. */
+function charAt(p: Para, i: number): [Text, number] {
+  for (let k = p.nodes.length - 1; k >= 0; k--) if (p.starts[k] <= i) return [p.nodes[k], i - p.starts[k]]
+  return [p.nodes[0], 0]
+}
+/** Replaces characters [s, e) of a paragraph; the replacement takes the first run's formatting. */
+function replaceRange(p: Para, s: number, e: number, rep: string) {
+  p.nodes.forEach((n, k) => {
+    const ns = p.starts[k], ne = ns + n.data.length
+    if (ne <= s || ns >= e) return
+    const a = Math.max(s, ns) - ns, b = Math.min(e, ne) - ns
+    n.data = n.data.slice(0, a) + (ns <= s ? rep : '') + n.data.slice(b)
+  })
+}
 const escapeRe = (q: string) => q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+type Highlights = { set: (k: string, v: unknown) => void; delete: (k: string) => void }
+const highlights = () => (CSS as unknown as { highlights?: Highlights }).highlights
+declare const Highlight: { new (...r: Range[]): unknown } | undefined
 
 export function FindBar({ deck, replace: startReplace, onClose }: { deck: Deck; replace: boolean; onClose: () => void }) {
   const [q, setQ] = useState('')
@@ -41,10 +77,7 @@ export function FindBar({ deck, replace: startReplace, onClose }: { deck: Deck; 
     deck.slides.forEach((sl, slideIndex) => {
       for (const [objectId, el] of topNodes(parseSlide(sl.html))) {
         let occ = 0
-        for (const t of textNodesOf(el)) {
-          const n = t.data.match(re)?.length ?? 0
-          for (let i = 0; i < n; i++) out.push({ slideId: sl.id, slideIndex, objectId, occ: occ++ })
-        }
+        for (const p of parasOf(el)) for (let n = matches(p, re).length; n > 0; n--) out.push({ slideId: sl.id, slideIndex, objectId, occ: occ++ })
       }
     })
     return out
@@ -57,7 +90,26 @@ export function FindBar({ deck, replace: startReplace, onClose }: { deck: Deck; 
     setAt(k)
     const h = hits[k]
     setEditor({ slideId: h.slideId, railSel: [h.slideId], railAnchor: h.slideId, sel: [h.objectId], scope: null, editing: null })
+    requestAnimationFrame(() => requestAnimationFrame(() => mark(h)))
   }
+
+  /** Highlights the current match on the live slide (CSS Custom Highlights; skipped where unsupported). */
+  const mark = (h: Hit) => {
+    const hl = highlights(), stage = liveStage()
+    if (!hl || typeof Highlight === 'undefined' || !stage || !re) return
+    const el = stage.querySelector(`[data-domoxml-node-id="${CSS.escape(h.objectId)}"]`)
+    if (!el) return
+    let occ = 0
+    for (const p of parasOf(el)) for (const [a, b] of matches(p, re)) {
+      if (occ++ !== h.occ) continue
+      const r = document.createRange()
+      const [sn, so] = charAt(p, a), [en, eo] = charAt(p, b)
+      r.setStart(sn, so); r.setEnd(en, eo)
+      hl.set('ream-find', new Highlight(r))
+      return
+    }
+  }
+  useEffect(() => () => highlights()?.delete('ream-find'), [])
 
   /** Replaces in text nodes (a match split across two runs isn't found, as in most editors). */
   const replaceIn = (only: Hit | null) => {
@@ -70,9 +122,13 @@ export function FindBar({ deck, replace: startReplace, onClose }: { deck: Deck; 
       for (const [id, el] of topNodes(root)) {
         if (only && id !== only.objectId) continue
         let occ = 0
-        for (const t of textNodesOf(el)) {
-          const next = t.data.replace(re, (m) => { const mine = !only || occ === only.occ; occ++; if (!mine) return m; count++; return rep })
-          if (next !== t.data) { t.data = next; changed = true }
+        for (const p of parasOf(el)) {
+          // Right to left, so earlier offsets stay valid as text changes length.
+          const found = matches(p, re).map((m) => [m, occ++] as const)
+          for (const [[a, b], k] of found.reverse()) {
+            if (only && k !== only.occ) continue
+            replaceRange(p, a, b, rep); count++; changed = true
+          }
         }
       }
       return changed ? { ...sl, html: root.outerHTML } : sl

@@ -8,6 +8,7 @@ import { FolderSheet } from '../compositions/FolderSheet'
 import { setLastSlide, useLibrary } from '../data/library'
 import { back, navigate } from '../lib/router'
 import { SlideView } from '../slides/SlideView'
+import { Present } from '../editor/Present'
 import { Button, IconButton } from '../ui/Button'
 import { EmptyState } from '../compositions/PageHeader'
 import s from './Viewer.module.css'
@@ -16,6 +17,8 @@ export function MobileViewer({ deckId, slide }: { deckId: string; slide?: number
   const lib = useLibrary()
   const deck = lib.entries[deckId]
   const strip = useRef<HTMLDivElement>(null)
+  // Present is the same show as on desktop (animations, transitions, Exit, contained slide).
+  const [presenting, setPresenting] = useState(false)
   const [index, setIndex] = useState(() => slide ?? (deck?.type === 'deck' ? deck.lastSlide : 0))
   const [chrome, setChrome] = useState(true)
   const [sheet, setSheet] = useState<'actions' | 'move' | null>(null)
@@ -27,7 +30,7 @@ export function MobileViewer({ deckId, slide }: { deckId: string; slide?: number
   useEffect(() => { void import('../engine').then((m) => m.warmEngine()) }, []) // a deck is open: have the engine ready for export
   useEffect(() => { if (deck?.type === 'deck') setLastSlide(deck.id, index) }, [index]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const present = () => strip.current?.parentElement?.requestFullscreen?.().catch(() => {})
+    const present = () => setPresenting(true)
     document.addEventListener('office:present', present)
     return () => document.removeEventListener('office:present', present)
   }, [])
@@ -73,13 +76,14 @@ export function MobileViewer({ deckId, slide }: { deckId: string; slide?: number
             <div className={s.dots} aria-hidden>
               {deck.slides.map((_, i) => <i key={i} data-on={i === index || undefined} />)}
             </div>
-            <Button variant="primary" size="lg" icon={<Play size={16} weight="fill" />} onClick={() => strip.current?.parentElement?.requestFullscreen?.().catch(() => {})}>Present</Button>
+            <Button variant="primary" size="lg" icon={<Play size={16} weight="fill" />} onClick={() => setPresenting(true)}>Present</Button>
           </motion.footer>
         )}
       </AnimatePresence>
       <AnimatePresence>
         {sheet === 'actions' && <ActionSheet ids={[deck.id]} ctx={{ open: () => setSheet(null), pickFolder: () => setSheet('move'), inTrash: false }} onClose={() => setSheet((x) => (x === 'actions' ? null : x))} />}
         {sheet === 'move' && <FolderSheet ids={[deck.id]} onClose={() => setSheet(null)} />}
+        {presenting && <Present deck={deck} start={index} onExit={(i) => { setPresenting(false); setIndex(i) }} />}
       </AnimatePresence>
     </div>
   )
