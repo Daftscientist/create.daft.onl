@@ -34,3 +34,14 @@ export function usageSince(days: number | null): { provider: string; model: stri
 }
 export function clearUsage() { store = {}; try { localStorage.removeItem(KEY) } catch { /* ok */ } for (const l of listeners) l() }
 export function useUsageVersion() { return useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => store) }
+
+/** Totals for each day of the last `days` days (oldest first), across every model. */
+export function usageByDay(days: number): { day: string; count: Count }[] {
+  const out = Array.from({ length: days }, (_, i) => ({ day: day(Date.now() - (days - 1 - i) * 86_400_000), count: zero() }))
+  const at = new Map(out.map((x) => [x.day, x.count]))
+  for (const byDay of Object.values(store)) for (const [d, c] of Object.entries(byDay)) {
+    const t = at.get(d)
+    if (t) for (const f of Object.keys(t) as (keyof Count)[]) t[f] += c[f] ?? 0
+  }
+  return out
+}

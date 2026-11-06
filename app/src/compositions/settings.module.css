@@ -30,3 +30,30 @@
 .usage th:first-child, .usage td:first-child { text-align: left; }
 .usage td:first-child { font-weight: 560; word-break: break-all; }
 .dim { color: var(--ink-3); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tile { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: var(--r-panel); background: var(--paper); box-shadow: 0 0 0 1px var(--hair); }
+.tile span { font-size: 12.5px; color: var(--ink-3); font-weight: 560; }
+.tile b { font-size: 26px; line-height: 32px; font-weight: 680; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.tile small { font-size: 12px; color: var(--ink-3); }
+.chartCard, .provCard { padding: 14px 16px; border-radius: var(--r-panel); background: var(--paper); box-shadow: 0 0 0 1px var(--hair); margin-bottom: 14px; }
+.chartHead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.chartHead b { font-size: 13.5px; }
+.chartHead span { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.chart { display: flex; align-items: flex-end; gap: 2px; height: 120px; border-bottom: 1px solid var(--hair); }
+.dayCol { flex: 1; height: 100%; display: flex; align-items: flex-end; padding: 0; min-width: 0; border-radius: 4px 4px 0 0; }
+.dayCol i { display: block; width: 100%; background: var(--select); border-radius: 4px 4px 0 0; opacity: 0.85; }
+.dayCol[data-on] { background: var(--fill); }
+.dayCol[data-on] i { opacity: 1; }
+.dayCol:focus-visible { outline: 2px solid var(--select); outline-offset: 1px; }
+.axis { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-3); margin-top: 6px; }
+.empty { font-size: 13px; color: var(--ink-3); margin: 6px 0 14px; }
+.provHead { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.provHead b { font-size: 14px; }
+.provHead span { margin-left: auto; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.modelBars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.modelLine { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.modelId { font-weight: 560; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modelVal { color: var(--ink-2); font-variant-numeric: tabular-nums; flex: none; }
+.track { height: 6px; border-radius: 99px; background: var(--fill); margin: 5px 0 4px; overflow: hidden; }
+.track i { display: block; height: 100%; border-radius: 99px; background: var(--select); }
+.modelMeta { font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
