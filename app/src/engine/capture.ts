@@ -6,6 +6,7 @@
 import { EMBED_FONT_URLS, SLIDE_FONT_CSS, withFamilyNames } from '../slides/fonts'
 import { RECORDER_JS, SNAPSHOT_JS } from './capture.gen'
 import { composePage } from './index'
+import { addTextPayloads } from './textPayload'
 
 export type Snapshot = { width: number; height: number; nodes: unknown[]; resources: Record<string, string> }
 
@@ -31,6 +32,7 @@ export async function captureSlide(html: string, css: string, width: number, hei
     const win = frame.contentWindow as (Window & { eval: (s: string) => unknown }) | null
     if (!win) throw new Error('The slide couldn’t be laid out.')
     await win.document.fonts.ready
+    addTextPayloads(win.document)
     const nodes = await (win.eval(`(${SNAPSHOT_JS})`) as () => unknown[] | Promise<unknown[]>)()
     // Data URIs are decoded by domOXML itself; anything else the slide loaded is fetched once here.
     const resources: Record<string, string> = {}

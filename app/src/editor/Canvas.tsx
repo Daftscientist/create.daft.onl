@@ -167,7 +167,7 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
     if (locked) return
     // No native image drag or text selection on the stage: the editor owns the pointer.
     e.preventDefault()
-    vp.current?.focus({ preventScroll: true })
+    vp.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions)
     const p = toSlide(e.clientX, e.clientY)
     if (handle && e.button === 0) {
       if (ed) endEdit()

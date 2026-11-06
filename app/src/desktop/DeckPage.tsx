@@ -263,7 +263,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
             <Tooltip label="Download HTML"><Button variant="ghost" icon={<HtmlMark />} onClick={() => { endEdit(); download([d.id], 'html') }}>HTML</Button></Tooltip>
           </> : <Button variant="ghost" icon={<DownloadSimple size={15} />} trailing={<CaretDown size={11} />} aria-haspopup="menu" onClick={downloadMenu}>Download</Button>}
           {!viewer && (ai
-            ? <Segmented<'format' | 'ask'> label="Right column" value={column === 'ask' ? 'ask' : 'format'} onChange={(v) => setColumn(column === v ? null : v)}
+            ? <Segmented<'format' | 'ask'> label="Right column" value={(column ?? '') as 'format' | 'ask'} onChange={(v) => setColumn(column === v ? null : v)}
                 options={[{ value: 'format', label: <span className={s.seg}><SlidersHorizontal size={14} />Format</span>, title: 'Format (⌥⌘I)' }, { value: 'ask', label: <span className={s.seg}><ChatCircleText size={14} />Ask</span>, title: `Ask Ream (${modKey}J)` }]} />
             : <Tooltip label="Format" hint="⌥⌘I"><Button variant={column === 'format' ? 'secondary' : 'ghost'} aria-pressed={column === 'format'} icon={<SlidersHorizontal size={15} />} onClick={() => setColumn(column === 'format' ? null : 'format')}>Format</Button></Tooltip>)}
           <span className={s.presentGroup}>

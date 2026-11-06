@@ -143,8 +143,10 @@ function TextSection({ sec, colors, ids }: { sec: Sec; colors: string[]; ids: st
         <Toggle label="Middle" on={false} onClick={() => setAnchor(ids, 'middle')}><AlignCenterVertical size={15} /></Toggle>
         <Toggle label="Bottom" on={false} onClick={() => setAnchor(ids, 'bottom')}><AlignBottom size={15} /></Toggle>
       </Row>
-      <Row label="Spacing">
-        <NumberField label="line" value={t.lineHeight} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0.5, Math.min(5, v)) }} onCommit={(v) => formatParas({ 'line-height': `${Math.round(v * 1.2 * 1000) / 1000}` })} step={0.1} hint="A multiple, like 1.15" />
+      <Row label="Line spacing">
+        <NumberField label="×" value={t.lineHeight} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0.5, Math.min(5, v)) }} onCommit={(v) => formatParas({ 'line-height': `${Math.round(v * 1.2 * 1000) / 1000}` })} step={0.1} hint="A multiple, like 1.15" />
+      </Row>
+      <Row label="Paragraph">
         <NumberField label="before" value={t.before} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(200, v)) }} onCommit={(v) => formatParas({ 'margin-top': v ? `${v}pt` : null })} hint="Points, like 6" />
         <NumberField label="after" value={t.after} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(200, v)) }} onCommit={(v) => formatParas({ 'margin-bottom': v ? `${v}pt` : null })} hint="Points, like 6" />
       </Row>
