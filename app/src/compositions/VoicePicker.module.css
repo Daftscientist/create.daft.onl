@@ -1,0 +1,20 @@
+.picker { display: flex; flex-direction: column; gap: 12px; }
+.options { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.option { width: 100%; display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: var(--r-md); text-align: left; background: var(--fill); }
+.option:hover { background: var(--fill-2); }
+.option[aria-checked="true"] { background: var(--select-soft); box-shadow: inset 0 0 0 1.5px var(--select); }
+.option:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
+.radio { width: 18px; height: 18px; border-radius: 50%; flex: none; margin-top: 1px; display: grid; place-items: center; box-shadow: inset 0 0 0 1.5px var(--ink-3); color: #fff; }
+.option[aria-checked="true"] .radio { background: var(--select); box-shadow: none; }
+.text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.text b { font-size: 14px; font-weight: 620; display: flex; align-items: center; gap: 8px; }
+.text > span { font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
+.tag { font-size: 11px; font-weight: 600; color: var(--select); background: var(--paper); padding: 1px 7px; border-radius: var(--r-pill); }
+.settings { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+.field { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 13px; }
+.field > span { color: var(--ink-2); }
+.field select, .field input { height: 34px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: var(--fill); font: inherit; font-size: 13px; color: var(--ink); outline: none; min-width: 0; }
+.field select:focus, .field input:focus { box-shadow: inset 0 0 0 1.5px var(--select); }
+.build { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); padding: 4px 2px; }
+.build:hover { color: var(--ink); text-decoration: underline; }
+.note { font-size: 13px; line-height: 19px; color: var(--ink-2); }

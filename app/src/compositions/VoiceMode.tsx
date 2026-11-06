@@ -3,11 +3,12 @@
 // voice agent in use, mute and back to typing.
 import { Microphone, MicrophoneSlash, Waveform, Keyboard, CaretDown } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
-import { activeVoiceAgent, isEcho, listen, speaker, startLive, voiceAgents, type Listener, type Live, type Speaker, type VoiceAgent } from '../data/ai/voice'
+import { activeVoiceAgent, isEcho, listen, speaker, startLive, voiceChosen, type Listener, type Live, type Speaker } from '../data/ai/voice'
+import { Popover } from '../ui/Popover'
+import { VoicePicker } from './VoicePicker'
 import { setAi, useAi, type ModelRef, type ReasoningLevel } from '../data/ai/settings'
 import { navigate } from '../lib/router'
 import { Button, IconButton } from '../ui/Button'
-import { Menu, type MenuAnchor } from '../ui/Menu'
 import s from './VoiceMode.module.css'
 
 type State = 'starting' | 'listening' | 'hearing' | 'thinking' | 'speaking' | 'working' | 'error'
@@ -23,12 +24,14 @@ export function VoiceMode({ onSend, onUser, onAssistant, onExit, onStop }: {
   onStop: () => void
 }) {
   const ai = useAi()
-  const agent = activeVoiceAgent(ai)
+  // The first time, choose how Ream talks before anything starts listening.
+  const [ready, setReady] = useState(() => voiceChosen(ai))
+  const agent = ready ? activeVoiceAgent(ai) : null
+  const [chooser, setChooser] = useState<HTMLElement | null>(null)
   const [state, setState] = useState<State>('starting')
   const [heard, setHeard] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
-  const [menu, setMenu] = useState<MenuAnchor | null>(null)
   const live = useRef<{ listener?: Listener; speaker?: Speaker; live?: Live } | null>(null)
   const lastSaid = useRef('')
   const send = useRef(onSend); send.current = onSend
@@ -85,11 +88,24 @@ export function VoiceMode({ onSend, onUser, onAssistant, onExit, onStop }: {
   const toggleMute = () => { const m = !muted; setMuted(m); live.current?.listener?.mute(m); live.current?.live?.mute(m) }
   const interrupt = () => { live.current?.speaker?.stop(); onStop() }
 
+  if (!ready) {
+    return (
+      <div className={s.bar} role="group" aria-label="Voice">
+        <b className={s.title}>How should Ream talk?</b>
+        <VoicePicker />
+        <div className={s.row}>
+          <Button variant="ghost" icon={<Keyboard size={15} />} onClick={onExit}>Type instead</Button>
+          <span className={s.spacer} />
+          <Button variant="primary" icon={<Microphone size={15} />} disabled={!activeVoiceAgent(ai)} onClick={() => { const a = activeVoiceAgent(ai); if (a) { setAi({ activeVoice: a.id }); setReady(true) } }}>Start talking</Button>
+        </div>
+      </div>
+    )
+  }
   if (!agent) {
     return (
       <div className={s.bar}>
         <p className={s.note}>This browser can’t recognise speech. Build a voice agent in Settings → AI → Voice (a speech-to-text model, a chat model and a voice).</p>
-        <div className={s.row}><Button variant="secondary" onClick={() => navigate({ name: 'settings', section: 'ai' })}>Open Settings</Button><span className={s.spacer} /><Button variant="ghost" icon={<Keyboard size={15} />} onClick={onExit}>Type instead</Button></div>
+        <div className={s.row}><Button variant="secondary" onClick={() => navigate({ name: 'settings', section: 'ai' })}>Connect a provider</Button><span className={s.spacer} /><Button variant="ghost" icon={<Keyboard size={15} />} onClick={onExit}>Type instead</Button></div>
       </div>
     )
   }
@@ -103,7 +119,7 @@ export function VoiceMode({ onSend, onUser, onAssistant, onExit, onStop }: {
         </span>
       </div>
       <div className={s.row}>
-        <button type="button" className={s.agent} aria-haspopup="menu" aria-expanded={!!menu} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.top - 6 }) }}>
+        <button type="button" className={s.agent} aria-haspopup="dialog" aria-expanded={!!chooser} onClick={(e) => setChooser(chooser ? null : e.currentTarget)}>
           {agent.name}<CaretDown size={10} weight="bold" />
         </button>
         <span className={s.spacer} />
@@ -111,11 +127,7 @@ export function VoiceMode({ onSend, onUser, onAssistant, onExit, onStop }: {
         <IconButton label={muted ? 'Unmute' : 'Mute'} size="sm" tone="fill" aria-pressed={muted} onClick={toggleMute}>{muted ? <MicrophoneSlash size={15} /> : <Microphone size={15} />}</IconButton>
         <IconButton label="Type instead" size="sm" tone="fill" onClick={onExit}><Keyboard size={15} /></IconButton>
       </div>
-      <Menu open={!!menu} anchor={menu} label="Voice agent" onClose={() => setMenu(null)} items={[
-        ...voiceAgents(ai).map((a: VoiceAgent) => ({ label: a.name, hint: a.kind === 'live' ? 'Live' : 'From parts', selected: a.id === agent.id, run: () => setAi({ activeVoice: a.id }) })),
-        { kind: 'sep' as const },
-        { label: 'Manage voice agents…', run: () => navigate({ name: 'settings', section: 'ai' }) },
-      ]} />
+      {chooser && <Popover anchor={chooser} label="How Ream talks" width={340} onClose={() => setChooser(null)}><VoicePicker onBuild={() => navigate({ name: 'settings', section: 'voice' })} /></Popover>}
     </div>
   )
 }

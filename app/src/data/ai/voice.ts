@@ -19,19 +19,43 @@ const RecognitionCtor = (): (new () => Recognition) | null => ((window as unknow
 export const browserCanListen = () => !!RecognitionCtor()
 
 export const BROWSER_AGENT: VoiceAgent = { id: 'browser', name: 'Browser voice', kind: 'parts', stt: 'browser', llm: null, tts: 'browser' }
-/** Every voice agent: the user's own, one live agent for each live voice model they turned on (so turning on
- *  GPT Live is enough to use it), and the browser's own where it can listen. */
+/** Every way Ream can talk, best first: the user's own agents, one live agent per live voice model they turned on,
+ *  one built from their provider's speech models (when they have speech to text and text to speech), and the
+ *  browser's own. Voice and thinking-model tweaks to the ready-made ones are kept per agent. */
 export function voiceAgents(s: AiSettings): VoiceAgent[] {
   const own = s.voiceAgents ?? []
-  const auto: VoiceAgent[] = modelsFor(s, 'voice').filter((m) => m.provider === 'openai' && !own.some((a) => a.kind === 'live' && a.model.id === m.id))
-    .map((m) => ({ id: `live:${m.id}`, name: `Live · ${m.id}`, kind: 'live', model: m, supervisor: null }))
-  return [...own, ...auto, ...(browserCanListen() ? [BROWSER_AGENT] : [])]
+  const live: VoiceAgent[] = modelsFor(s, 'voice').filter((m) => m.provider === 'openai' && !own.some((a) => a.kind === 'live' && a.model.id === m.id))
+    .map((m) => ({ id: `live:${m.provider}:${m.id}`, name: m.id.replace(/^gpt-/, 'GPT ').replace(/-/g, ' '), kind: 'live', model: m, supervisor: null }))
+  const stt = modelsFor(s, 'transcription')[0], tts = modelsFor(s, 'speech')[0]
+  const parts: VoiceAgent[] = stt && tts ? [{ id: 'parts:auto', name: `${providerLabel(tts.provider)} voice`, kind: 'parts', stt, llm: null, tts }] : []
+  const browser: VoiceAgent[] = browserCanListen() ? [BROWSER_AGENT] : []
+  return [...own, ...live, ...parts, ...browser].map((a) => ({ ...a, ...(s.voiceTweaks?.[a.id] ?? {}) }) as VoiceAgent)
 }
-/** The chosen agent; without a choice, the first (a live voice model when one is on, before the browser's). */
+const providerLabel = (p: string) => ({ openai: 'OpenAI', google: 'Google', xai: 'xAI', mistral: 'Mistral', groq: 'Groq', azure: 'Azure', local: 'Local' } as Record<string, string>)[p] ?? p
+
+/** What each kind of agent is like, in a line, for the chooser. */
+export function describeAgent(a: VoiceAgent): string {
+  if (a.kind === 'live') return 'Natural back-and-forth, fast replies. Hands deck work to your chat model.'
+  if (a.id === 'browser') return 'Your browser’s own voice and listening. Free and private, but sounds robotic.'
+  return `Listens with ${a.stt === 'browser' ? 'your browser' : a.stt.id}, speaks with ${a.tts === 'browser' ? 'your browser' : a.tts.id}. Clear voices, a little slower.`
+}
+
+/** The chosen agent; without a choice, the first (best). `chosen` is false until the user has picked once. */
 export function activeVoiceAgent(s: AiSettings): VoiceAgent | null {
   const all = voiceAgents(s)
   return all.find((a) => a.id === s.activeVoice) ?? all[0] ?? null
 }
+export const voiceChosen = (s: AiSettings) => !!s.activeVoice && voiceAgents(s).some((a) => a.id === s.activeVoice)
+
+/** Changes the voice or thinking model of any agent (ready-made ones keep the change as a tweak). */
+export function tweakVoiceAgent(id: string, change: { voice?: string; llm?: ModelRef | null; supervisor?: ModelRef | null; reasoning?: ReasoningLevel }) {
+  const ai = getAi()
+  const own = ai.voiceAgents ?? []
+  if (own.some((a) => a.id === id)) { setAi({ voiceAgents: own.map((a) => (a.id === id ? { ...a, ...change } as VoiceAgent : a)) }); return }
+  setAi({ voiceTweaks: { ...ai.voiceTweaks, [id]: { ...ai.voiceTweaks?.[id], ...change } } })
+}
+export const OPENAI_VOICES = ['marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']
+
 export function saveVoiceAgent(a: VoiceAgent) {
   const list = getAi().voiceAgents ?? []
   setAi({ voiceAgents: list.some((x) => x.id === a.id) ? list.map((x) => (x.id === a.id ? a : x)) : [...list, a], activeVoice: a.id })

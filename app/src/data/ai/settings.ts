@@ -30,6 +30,8 @@ export type AiSettings = {
   /** Voice agents the user built, and the one in use (ids; 'browser' is the built-in one). */
   voiceAgents?: import('./voice').VoiceAgent[]
   activeVoice?: string | null
+  /** Voice and thinking-model changes to the ready-made voice agents, by agent id. */
+  voiceTweaks?: Record<string, { voice?: string; llm?: ModelRef | null; supervisor?: ModelRef | null; reasoning?: ReasoningLevel }>
 }
 
 export type ReasoningLevel = 'provider-default' | 'none' | 'low' | 'medium' | 'high' | 'max'

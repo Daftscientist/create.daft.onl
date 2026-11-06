@@ -17,3 +17,4 @@
 .agent { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: var(--r-pill); background: var(--fill); font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .agent:hover { background: var(--fill-2); color: var(--ink); }
 .note { font-size: 13px; line-height: 19px; color: var(--ink-2); }
+.title { font-size: 14px; font-weight: 640; }

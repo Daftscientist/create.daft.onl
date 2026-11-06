@@ -1,42 +1,43 @@
 // Settings → AI → Voice: the voice agents (spec: live voice). The built-in Browser voice, then the user's own:
 // live (a realtime voice model, with a chat model doing the deck work) or built from parts (speech to text, a
 // chat model with its reasoning level, text to speech and a voice). One is active; Ask's voice mode uses it.
-import { PencilSimple, Plus, Trash } from '@phosphor-icons/react'
+import { PencilSimple, Trash } from '@phosphor-icons/react'
 import { useState } from 'react'
-import { activeVoiceAgent, browserCanListen, deleteVoiceAgent, saveVoiceAgent, voiceAgents, type VoiceAgent } from '../data/ai/voice'
-import { modelsFor, REASONING_LEVELS, setAi, useAi, type ModelRef, type ReasoningLevel } from '../data/ai/settings'
+import { browserCanListen, deleteVoiceAgent, saveVoiceAgent, type VoiceAgent } from '../data/ai/voice'
+import { VoicePicker } from './VoicePicker'
+import { modelsFor, REASONING_LEVELS, useAi, type ModelRef, type ReasoningLevel } from '../data/ai/settings'
 import { Button, IconButton } from '../ui/Button'
 import { Dialog } from '../ui/Dialog'
 import { SettingGroup, SettingRow } from '../ui/Field'
 import { Segmented } from '../ui/Segmented'
 import s from './VoiceAgents.module.css'
 
-const OPENAI_VOICES = ['marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse']
+import { OPENAI_VOICES } from '../data/ai/voice'
 const key = (m: ModelRef | 'browser' | null | undefined) => (m === 'browser' ? 'browser' : m ? `${m.provider}:${m.id}` : '')
 const parse = (v: string): ModelRef | null => { if (!v) return null; const [provider, ...id] = v.split(':'); return { provider: provider as ModelRef['provider'], id: id.join(':') } }
 
 export function VoiceAgentsSettings() {
   const ai = useAi()
-  const all = voiceAgents(ai)
-  const active = activeVoiceAgent(ai)
+  const own = ai.voiceAgents ?? []
   const [editing, setEditing] = useState<VoiceAgent | 'new' | null>(null)
   return (
-    <SettingGroup title="Voice">
-      {!all.length && <SettingRow label="No voice agents yet" description="This browser can’t recognise speech, so build one from a provider’s models." />}
-      {all.map((a) => (
-        <SettingRow key={a.id} label={<label className={s.pick}><input type="radio" name="voice-agent" checked={active?.id === a.id} onChange={() => setAi({ activeVoice: a.id })} />{a.name}</label>}
-          description={a.id === 'browser' ? 'Your browser’s speech recognition and voices, with Ask’s model. Free; no setup.' : a.kind === 'live' ? `Live · ${a.model.id}${a.supervisor ? ` · works with ${a.supervisor.id}` : ''}` : `From parts · ${a.stt === 'browser' ? 'browser' : a.stt.id} → ${a.llm?.id ?? 'Ask’s model'} → ${a.tts === 'browser' ? 'browser voice' : a.tts.id}`}>
-          {a.id !== 'browser' && <>
-            <IconButton label={`Edit ${a.name}`} size="sm" tone="plain" onClick={() => setEditing(a)}><PencilSimple size={15} /></IconButton>
-            <IconButton label={`Delete ${a.name}`} size="sm" tone="plain" onClick={() => deleteVoiceAgent(a.id)}><Trash size={15} /></IconButton>
-          </>}
-        </SettingRow>
-      ))}
-      <SettingRow label="New voice agent" description="Live: a realtime voice model talks and hands deck work to a chat model. From parts: speech to text, a chat model, then a voice.">
-        <Button variant="secondary" icon={<Plus size={15} />} onClick={() => setEditing('new')}>New…</Button>
-      </SettingRow>
+    <>
+      <p className={s.lede}>How Ream talks when you press Talk in Ask. These come from what you’ve connected; the first is usually best.</p>
+      <SettingGroup title="How Ream talks">
+        <div className={s.pickerWrap}><VoicePicker onBuild={() => setEditing('new')} /></div>
+      </SettingGroup>
+      {own.length > 0 && (
+        <SettingGroup title="Built by you">
+          {own.map((a) => (
+            <SettingRow key={a.id} label={a.name} description={a.kind === 'live' ? `Live · ${a.model.id}` : `${a.stt === 'browser' ? 'Browser' : a.stt.id} → ${a.llm?.id ?? 'Ask’s model'} → ${a.tts === 'browser' ? 'browser voice' : a.tts.id}`}>
+              <IconButton label={`Edit ${a.name}`} size="sm" tone="plain" onClick={() => setEditing(a)}><PencilSimple size={15} /></IconButton>
+              <IconButton label={`Delete ${a.name}`} size="sm" tone="plain" onClick={() => deleteVoiceAgent(a.id)}><Trash size={15} /></IconButton>
+            </SettingRow>
+          ))}
+        </SettingGroup>
+      )}
       {editing && <AgentDialog agent={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
-    </SettingGroup>
+    </>
   )
 }
 
@@ -68,7 +69,7 @@ function AgentDialog({ agent, onClose }: { agent: VoiceAgent | null; onClose: ()
   )
   const models = (list: ModelRef[]) => list.map((m) => ({ value: key(m), label: m.id }))
   return (
-    <Dialog title={agent ? `Edit ${agent.name}` : 'New voice agent'} width={480} onClose={onClose} actions={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!ok} onClick={save}>Save and use</Button></>}>
+    <Dialog title={agent ? `Edit ${agent.name}` : 'Build a voice'} width={480} onClose={onClose} actions={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" disabled={!ok} onClick={save}>Save and use</Button></>}>
       <div className={s.form}>
         <label className={s.field}><span>Name</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'live' ? 'Live voice' : 'Voice agent'} /></label>
         <Segmented label="Kind" value={kind} onChange={setKind} options={[{ value: 'live', label: 'Live', title: 'A realtime voice model' }, { value: 'parts', label: 'From parts', title: 'Speech to text, a chat model, a voice' }]} />
