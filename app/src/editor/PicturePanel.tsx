@@ -36,7 +36,7 @@ export function PicturePanel({ onFile, onPicture }: { onFile: () => void; onPict
       <Button variant="secondary" icon={<UploadSimple size={15} />} onClick={onFile}>From this device…</Button>
       <div className={s.sep}><span>or generate</span></div>
       {!model ? (
-        <p className={s.note}>Turn on a picture model to generate pictures. <button type="button" className={s.link} onClick={() => navigate({ name: 'settings', section: 'ai' })}>Settings → AI</button></p>
+        <p className={s.note}>To generate pictures, turn on a picture model (for example OpenAI’s gpt-image) with Choose models on your provider. <button type="button" className={s.link} onClick={() => navigate({ name: 'settings', section: 'ai' })}>Settings → AI</button></p>
       ) : state.kind === 'done' ? (
         <div className={s.result}>
           <img src={state.url} alt={prompt} className={s.preview} />

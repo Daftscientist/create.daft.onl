@@ -3,7 +3,7 @@ import {
   Archive, Cloud, Database, DownloadSimple, Info, Keyboard, Palette, Sparkle,
   ChartBar,
 } from '@phosphor-icons/react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { backUp, decks, isLive, useLibrary } from '../data/library'
 import { setPrefs, useDevicePrefs } from '../data/prefs'
 import {
@@ -14,7 +14,8 @@ import { bytes, count, relTimeInline } from '../lib/format'
 import { KEYMAP } from '../lib/keymap'
 import { useBrowserModel } from '../data/ai/browser'
 import { AI_PROVIDER_IDS, providerDef, type AiProviderId } from '../data/ai/providers'
-import { canSee, providerName, setAi, setModels, setProvider, useActiveModel, useAi, type ModelProvider } from '../data/ai/settings'
+import { classify } from '../data/ai/capabilities'
+import { canSee, getAi, providerName, setAi, setEnabled, setModels, setProvider, useActiveModel, useAi, type ModelProvider } from '../data/ai/settings'
 import { clearUsage, usageSince, useUsageVersion } from '../data/ai/usage'
 import { persistStorage, storage } from '../storage/client'
 import { PRODUCT } from '../ui/Brand'
@@ -244,6 +245,16 @@ function AiSettings() {
     catch (e) { setError({ id, message: (e as Error).message }) }
     finally { setBusy(null) }
   }
+  // Providers connected before the setup flow have a list saved when only chat models were kept: list them again
+  // (every model now) and offer the setup, one provider at a time.
+  const migrating = useRef(false)
+  useEffect(() => {
+    if (migrating.current || setup || busy) return
+    const stale = AI_PROVIDER_IDS.find((id) => ai.providers[id] && providerDef(id).models && !ai.enabled?.[id])
+    if (!stale) return
+    migrating.current = true
+    void load(stale).finally(() => { migrating.current = false })
+  }, [ai.providers, ai.enabled, setup, busy]) // eslint-disable-line react-hooks/exhaustive-deps
   const status = (id: AiProviderId) => {
     const n = ai.models?.[id]?.length ?? 0
     return busy === id ? 'Loading models…' : `Connected${n ? ` · ${count(n, 'model')}` : ''}`
@@ -309,7 +320,11 @@ function AiSettings() {
         })}
       </SettingGroup>
       <VoiceAgentsSettings />
-      {setup && <ModelSetup provider={setup.id} models={setup.models} onClose={() => setSetup(null)} />}
+      {setup && <ModelSetup provider={setup.id} models={setup.models} onClose={() => {
+        // Closed without choosing: keep the default (its chat models), so it isn't offered again on every visit.
+        if (!getAi().enabled?.[setup.id]) setEnabled(setup.id, setup.models.filter((m) => classify(setup.id, m) === 'text'))
+        setSetup(null)
+      }} />}
       <p className={s.note}>{sync.provider
         ? sync.encrypted ? 'Keys sync with your library, end-to-end encrypted.' : `Keys sync with your library, so ${PROVIDERS[sync.provider].name} can read them. Turn on end-to-end encryption in Sync to prevent that.`
         : 'Keys are stored in this browser’s library. If you connect sync, they go with it.'}</p>
