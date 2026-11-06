@@ -9,7 +9,9 @@
  *  (background, notes, transition) changed. `hidden`: skipped when presenting. Speaker notes,
  *  transitions and animations live in the HTML as domOXML reads them (data-notes, data-transition*,
  *  data-animate*), so they import, export and reach the AI unchanged. */
-export type SlideDoc = { id: string; html: string; ir?: string; irDirty?: string[]; irMoved?: string[]; irSlide?: boolean; irAnim?: boolean; hidden?: boolean }
+export type SlideDoc = { id: string; html: string; ir?: string; irDirty?: string[]; irMoved?: string[]; irSlide?: boolean; irAnim?: boolean; hidden?: boolean; comments?: SlideComment[] }
+/** A comment on a slide (or one object on it). Kept with the deck, so it syncs; never exported. */
+export type SlideComment = { id: string; text: string; at: number; objectId?: string; resolved?: boolean; replies?: { id: string; text: string; at: number }[] }
 /** Slide size in CSS px; 1280x720 unless an imported deck says otherwise. */
 export type SlideSize = { w: number; h: number }
 

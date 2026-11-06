@@ -8,3 +8,22 @@
 .exit:hover { background: rgb(255 255 255 / 0.24); }
 .count { position: absolute; right: 18px; bottom: 14px; font-size: 12px; color: rgb(255 255 255 / 0.45); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity var(--dur-2); }
 .present:hover .count { opacity: 1; }
+.inlinePresenter { position: absolute; inset: 0; z-index: 2; cursor: default; }
+.presenter { height: 100%; display: flex; flex-direction: column; background: #111114; color: #f2f2f5; font-family: var(--font); }
+.pHead { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid rgb(255 255 255 / 0.08); }
+.pTimer { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pClock { margin-left: 12px; font-size: 14px; color: rgb(255 255 255 / 0.6); font-variant-numeric: tabular-nums; }
+.pCount { flex: 1; text-align: center; font-size: 14px; color: rgb(255 255 255 / 0.75); }
+.pBtn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--r-pill); background: rgb(255 255 255 / 0.1); color: #fff; font-size: 13px; font-weight: 560; }
+.pBtn:hover { background: rgb(255 255 255 / 0.18); }
+.pBody { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 16px; padding: 16px; }
+.pCurrent { display: grid; place-items: center; min-height: 0; }
+.pFrame { width: 100%; background: #fff; overflow: hidden; border-radius: 4px; }
+.pSide { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.pLabel { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: rgb(255 255 255 / 0.5); }
+.pEnd { aspect-ratio: 16/9; display: grid; place-items: center; border: 1px dashed rgb(255 255 255 / 0.2); border-radius: 4px; color: rgb(255 255 255 / 0.5); font-size: 13px; }
+.pNotes { flex: 1; overflow: auto; font-size: 20px; line-height: 1.5; white-space: pre-wrap; }
+.pMuted { color: rgb(255 255 255 / 0.4); font-size: 15px; }
+.pFoot { display: flex; justify-content: center; gap: 12px; padding: 12px; border-top: 1px solid rgb(255 255 255 / 0.08); }
+.pNav { width: 56px; height: 40px; display: grid; place-items: center; border-radius: var(--r-pill); background: rgb(255 255 255 / 0.1); color: #fff; }
+.pNav:hover { background: rgb(255 255 255 / 0.18); }

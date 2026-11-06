@@ -5,7 +5,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { Deck, SlideDoc } from '../data/types'
 import { SlideView } from '../slides/SlideView'
 import { bounds, boxOf, isGroup, members, setBox, unionBox, type Box } from './geometry'
-import { hasText, setBoxes, textHost } from './ops'
+import { editSlide, find, hasText, setBoxes, textHost } from './ops'
+import { isLine, lineEnds, setLineEnds, type Pt } from './line'
 import { getEditor, select, setEditor, useEditor } from './session'
 import { snapEdges, snapMove, type Guide } from './snap'
 import { beginEdit, editingLive, endEdit, onTextChange } from './textctl'
@@ -21,6 +22,7 @@ type Gesture =
   | { kind: 'move'; start: { x: number; y: number }; orig: Map<string, Box>; moved: boolean; reselect?: string }
   | { kind: 'resize'; dir: Dir; start: { x: number; y: number }; orig: Map<string, Box>; union: Box }
   | { kind: 'rotate'; id: string; orig: Box }
+  | { kind: 'end'; id: string; which: 0 | 1; ends: [Pt, Pt] }
   | { kind: 'marquee'; start: { x: number; y: number }; base: string[] }
   | { kind: 'pan'; start: { x: number; y: number }; scroll: { l: number; t: number } }
 
@@ -171,7 +173,8 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
       if (ed) endEdit()
       const kind = handle.dataset.handle!
       const orig = new Map(sel.map((id) => [id, boxOf(live(id)!)] as const).filter(([, b]) => b))
-      if (kind === 'rotate') gesture.current = { kind: 'rotate', id: sel[0], orig: orig.get(sel[0])! }
+      if (kind === 'end0' || kind === 'end1') { const ends = lineEnds(live(sel[0])!); if (ends) gesture.current = { kind: 'end', id: sel[0], which: kind === 'end0' ? 0 : 1, ends } }
+      else if (kind === 'rotate') gesture.current = { kind: 'rotate', id: sel[0], orig: orig.get(sel[0])! }
       else gesture.current = { kind: 'resize', dir: kind as Dir, start: p, orig, union: unionBox([...orig.values()].map(bounds)) }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
       setDragging(true)
@@ -254,6 +257,23 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
       }
       setGuides(gs)
       rerender()
+    } else if (g.kind === 'end') {
+      const other = g.ends[g.which ? 0 : 1]
+      let q = { x: p.x, y: p.y }
+      if (e.shiftKey) {
+        // ⇧ keeps the line at multiples of 45°.
+        const a = Math.round(Math.atan2(q.y - other.y, q.x - other.x) / (Math.PI / 4)) * (Math.PI / 4)
+        const len = Math.hypot(q.x - other.x, q.y - other.y)
+        q = { x: other.x + Math.cos(a) * len, y: other.y + Math.sin(a) * len }
+      } else if (snapOn) {
+        const sn = snapMove({ x: q.x, y: q.y, w: 0, h: 0, rot: 0 }, others([g.id]), size, threshold)
+        q = { x: q.x + sn.dx, y: q.y + sn.dy }
+        setGuides(sn.guides)
+      }
+      const el = live(g.id)
+      if (el) setLineEnds(el, g.which ? other : q, g.which ? q : other)
+      setReadout({ x: e.clientX, y: e.clientY, text: `${formatLength(Math.hypot(q.x - other.x, q.y - other.y), unit)} · ${Math.round(((Math.atan2(other.y - q.y, q.x - other.x) * 180) / Math.PI + 360) % 360)}°` })
+      rerender()
     } else if (g.kind === 'rotate') {
       const c = { x: g.orig.x + g.orig.w / 2, y: g.orig.y + g.orig.h / 2 }
       let a = (Math.atan2(p.y - c.y, p.x - c.x) * 180) / Math.PI + 90
@@ -277,6 +297,13 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
     gesture.current = null
     setGuides([]); setMarquee(null); setReadout(null); setDragging(false)
     if (!g) return
+    if (g.kind === 'end') {
+      const el = live(g.id)
+      const ends = el && lineEnds(el)
+      if (cancel || !ends) { if (el) setLineEnds(el, g.ends[0], g.ends[1]); rerender(); return }
+      editSlide('Move line end', (root) => { const x = find(root, g.id); if (!x) return false; setLineEnds(x, ends[0], ends[1]) })
+      return
+    }
     if (g.kind === 'move' || g.kind === 'resize' || g.kind === 'rotate') {
       const ids = g.kind === 'rotate' ? [g.id] : [...g.orig.keys()]
       const orig = g.kind === 'rotate' ? new Map([[g.id, g.orig]]) : g.orig
@@ -363,7 +390,7 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
       return <span key={d} data-handle={d} className={s.handle} style={{ left: `${50 + hx * 50}%`, top: `${50 + hy * 50}%`, cursor }} />
     })
   }
-  const canRotate = single && !isGroup(single.el) && !anyLocked && !isEditing
+  const canRotate = single && !isGroup(single.el) && !isLine(single.el) && !anyLocked && !isEditing
 
   return (
     <div
@@ -391,7 +418,11 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
           {scopeBox && <div className={s.scope} style={scr(scopeBox)} />}
           {hoverBox && <div className={s.hover} style={scr(hoverBox)} />}
           {boxes.length > 1 && boxes.map((x) => <div key={x.id} className={s.member} style={scr(x.b)} />)}
-          {frame && (
+          {single && isLine(single.el) && !anyLocked && (() => {
+            const ends = lineEnds(single.el)
+            return ends && ends.map((p, i) => <span key={i} data-handle={`end${i}`} className={s.endpoint} style={{ left: p.x * z, top: p.y * z, pointerEvents: 'auto' }} />)
+          })()}
+          {frame && !(single && isLine(single.el)) && (
             <div className={s.frame} data-editing={isEditing || undefined} data-locked={anyLocked || undefined} style={scr(frame)}>
               {handles(frame)}
               {canRotate && <span data-handle="rotate" className={s.rotate} />}

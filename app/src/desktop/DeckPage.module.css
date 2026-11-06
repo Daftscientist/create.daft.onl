@@ -36,3 +36,6 @@
 .zoomValue:hover { background: var(--fill); color: var(--ink); }
 .missing { height: 100%; display: grid; place-items: center; }
 .page[data-presenting] .header, .page[data-presenting] .body { visibility: hidden; }
+.presentGroup { display: inline-flex; align-items: center; }
+.presentGroup > button:first-child { border-radius: var(--r-pill) 0 0 var(--r-pill); padding-right: 10px; }
+.presentMore { height: 34px !important; width: 26px !important; border-radius: 0 var(--r-pill) var(--r-pill) 0 !important; background: var(--ink) !important; color: var(--on-ink) !important; margin-left: 1px; }

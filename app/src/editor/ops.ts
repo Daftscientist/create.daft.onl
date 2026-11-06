@@ -505,3 +505,94 @@ export function deckTextStyle(deck: Deck): { color: string; font: string } {
   const top = (m: Map<string, number>, d: string) => [...m].sort((a, b) => b[1] - a[1])[0]?.[0] ?? d
   return { color: top(colors, 'rgba(23,23,28,1)'), font: top(fonts, 'Instrument Sans,sans-serif') }
 }
+
+// ---------- deck design (PowerPoint's Replace Fonts, theme colours, slide size) ----------
+
+const hex = (c: string) => {
+  const m = /rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/.exec(c)
+  if (m) return `#${[m[1], m[2], m[3]].map((x) => (+x).toString(16).padStart(2, '0')).join('')}`
+  return c.trim().toLowerCase()
+}
+
+/** Every run in `from` (by its first family) becomes `to`, across the deck. */
+export function replaceFont(from: string, to: string) {
+  const norm = (f: string) => f.split(',')[0].replace(/["']/g, '').trim().toLowerCase()
+  editSlides(`Replace ${from} with ${to}`, (slides) => slides.map((sl) => {
+    const root = parseSlide(sl.html)
+    let changed = false
+    for (const el of root.querySelectorAll<HTMLElement>('[style*="font-family"]')) {
+      if (norm(el.style.fontFamily) === norm(from)) { el.style.fontFamily = `${to}, sans-serif`; changed = true }
+    }
+    return changed ? { ...sl, html: root.outerHTML } : sl
+  }))
+}
+
+/** Every use of a colour (text, fills, borders, lines) becomes another, across the deck. */
+export function replaceColour(from: string, to: string) {
+  const f = hex(from)
+  editSlides('Replace colour', (slides) => slides.map((sl) => {
+    const root = parseSlide(sl.html)
+    let changed = false
+    for (const el of [root, ...root.querySelectorAll<HTMLElement>('*')]) {
+      for (const prop of ['color', 'background-color', 'border-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color']) {
+        const v = el.style?.getPropertyValue(prop)
+        if (v && hex(v) === f) { el.style.setProperty(prop, to); changed = true }
+      }
+      for (const attr of ['fill', 'stroke']) { const v = el.getAttribute(attr); if (v && hex(v) === f) { el.setAttribute(attr, to); changed = true } }
+    }
+    return changed ? { ...sl, html: root.outerHTML } : sl
+  }))
+}
+
+/** A new slide size: content scales to fit and stays centred ("Ensure fit"). Slides then export
+ *  from their HTML, since their imported IR is for the old size. */
+export function setSlideSize(w: number, h: number) {
+  const deck = openDeck()
+  if (!deck) return
+  const old = deck.size ?? { w: 1280, h: 720 }
+  if (old.w === w && old.h === h) return
+  const k = Math.min(w / old.w, h / old.h)
+  const dx = (w - old.w * k) / 2, dy = (h - old.h * k) / 2
+  const slides = deck.slides.map((sl) => {
+    const root = parseSlide(sl.html)
+    root.style.width = `${w}px`
+    root.style.height = `${h}px`
+    for (const el of topNodes(root).values()) {
+      const b = boxOf(el as HTMLElement)
+      setBox(el as HTMLElement, { x: dx + b.x * k, y: dy + b.y * k, w: b.w * k, h: b.h * k, rot: b.rot })
+      // Text scales with its box, as PowerPoint's "Ensure fit" does.
+      if (k !== 1) for (const r of el.querySelectorAll<HTMLElement>('[style*="font-size"]')) { const pt = parseFloat(r.style.fontSize); if (pt) r.style.fontSize = `${Math.round(pt * k * 10) / 10}pt` }
+    }
+    const { ir: _ir, irDirty: _d, irMoved: _m, irSlide: _s, irAnim: _a, ...rest } = sl
+    return { ...rest, html: root.outerHTML }
+  })
+  const d = getLibrary().entries[deck.id]
+  if (d?.type !== 'deck') return
+  const { slideId, sel } = getEditor()
+  transact(deck.id, slides, { label: 'Slide size', extra: { size: w === 1280 && h === 720 ? undefined : { w, h } }, selBefore: { slide: slideId!, ids: sel }, selAfter: { slide: slideId!, ids: [] } })
+  setEditor({ sel: [] })
+}
+
+export function deckFonts(deck: Deck): string[] {
+  const out = new Map<string, number>()
+  for (const sl of deck.slides) for (const m of sl.html.matchAll(/font-family:\s*([^;"]+)/g)) {
+    const f = m[1].split(',')[0].replace(/&quot;|["']/g, '').trim()
+    if (f && !f.startsWith('+')) out.set(f, (out.get(f) ?? 0) + 1)
+  }
+  return [...out].sort((a, b) => b[1] - a[1]).map(([f]) => f)
+}
+
+// ---------- comments ----------
+
+export function addComment(slideId: string, text: string, objectId?: string) {
+  editSlides('Comment', (slides) => slides.map((s) => (s.id === slideId ? { ...s, comments: [...(s.comments ?? []), { id: newId('c'), text, at: Date.now(), objectId }] } : s)))
+}
+export function replyComment(slideId: string, commentId: string, text: string) {
+  editSlides('Reply', (slides) => slides.map((s) => (s.id === slideId ? { ...s, comments: (s.comments ?? []).map((c) => (c.id === commentId ? { ...c, replies: [...(c.replies ?? []), { id: newId('r'), text, at: Date.now() }] } : c)) } : s)))
+}
+export function resolveComment(slideId: string, commentId: string, resolved: boolean) {
+  editSlides(resolved ? 'Resolve comment' : 'Reopen comment', (slides) => slides.map((s) => (s.id === slideId ? { ...s, comments: (s.comments ?? []).map((c) => (c.id === commentId ? { ...c, resolved } : c)) } : s)))
+}
+export function deleteComment(slideId: string, commentId: string) {
+  editSlides('Delete comment', (slides) => slides.map((s) => (s.id === slideId ? { ...s, comments: (s.comments ?? []).filter((c) => c.id !== commentId) } : s)))
+}

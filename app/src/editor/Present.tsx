@@ -3,8 +3,10 @@
 // If fullscreen is refused, it fills the window with a small Exit control. Hidden slides are skipped.
 // Transitions and click animations play from the same attributes PowerPoint gets (data-transition*,
 // data-animate*), so what's rehearsed here is what the exported deck does.
-import { X } from '@phosphor-icons/react'
+import { CaretLeft, CaretRight, Pause, Play, X } from '@phosphor-icons/react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { notesOf } from './ops'
 import type { Deck } from '../data/types'
 import { SlideView } from '../slides/SlideView'
 import s from './Present.module.css'
@@ -69,7 +71,7 @@ function transition(el: HTMLElement, slideRoot: Element | null) {
   el.animate(frames[type] ?? frames.fade, { duration, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' })
 }
 
-export function Present({ deck, start, onExit }: { deck: Deck; start: number; onExit: (slideIndex: number) => void }) {
+export function Present({ deck, start, onExit, presenter = false }: { deck: Deck; start: number; onExit: (slideIndex: number) => void; presenter?: boolean }) {
   const shown = deck.slides.map((sl, i) => ({ sl, i })).filter((x) => !x.sl.hidden || x.i === start)
   const [at, setAt] = useState(() => Math.max(0, shown.findIndex((x) => x.i === start)))
   const [click, setClick] = useState(0)
@@ -137,14 +139,77 @@ export function Present({ deck, start, onExit }: { deck: Deck; start: number; on
     else if (k === 'End') jump(shown.length - 1)
     else if (k === 'Escape') { e.preventDefault(); exit() }
   }
+  // Presenter view: a second window with notes, the next slide and a timer (PowerPoint's ⌥F5).
+  // If the browser blocks the window, the presenter screen takes this one instead.
+  const [popup, setPopup] = useState<{ win: Window; root: HTMLElement } | null>(null)
+  const [inline, setInline] = useState(false)
+  useEffect(() => {
+    if (!presenter) return
+    const win = window.open('', 'ream-presenter', 'width=1100,height=720')
+    if (!win) { setInline(true); return }
+    win.document.title = `${deck.name} · Presenter view`
+    for (const n of document.head.querySelectorAll('style, link[rel="stylesheet"]')) win.document.head.appendChild(n.cloneNode(true))
+    win.document.documentElement.dataset.theme = document.documentElement.dataset.theme ?? ''
+    win.document.body.style.margin = '0'
+    const root = win.document.body.appendChild(win.document.createElement('div'))
+    root.style.height = '100vh'
+    setPopup({ win, root })
+    return () => win.close()
+  }, [presenter]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!popup) return
+    const key = (e: KeyboardEvent) => onKey(e as unknown as React.KeyboardEvent)
+    popup.win.addEventListener('keydown', key)
+    return () => popup.win.removeEventListener('keydown', key)
+  })
+
   const scale = Math.min(box.w / size.w, box.h / size.h)
   const cur = shown[at]
+  const panel = presenter && cur ? <PresenterPanel deck={deck} cur={cur.sl} next={shown[at + 1]?.sl ?? null} index={cur.i} click={click} clicks={clicks(steps.current)} onNext={next} onPrev={prev} onExit={exit} /> : null
   return (
     <div ref={ref} className={s.present} tabIndex={-1} onKeyDown={onKey} role="region" aria-label={`Presenting slide ${(cur?.i ?? 0) + 1} of ${deck.slides.length}`}
       onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) next() }} onContextMenu={(e) => { e.preventDefault(); prev() }}>
       {cur && <div ref={frame} className={s.slide} style={{ width: size.w * scale, height: size.h * scale }}><SlideView key={cur.sl.id} slide={cur.sl} size={size} css={deck.css} interactive onStage={(st) => { stage.current = st }} /></div>}
       {windowed && <button type="button" className={s.exit} onClick={exit}><X size={14} /> Exit</button>}
+      {inline && panel && <div className={s.inlinePresenter} onClick={(e) => e.stopPropagation()}>{panel}</div>}
+      {popup && panel && createPortal(panel, popup.root)}
       <span className={s.count} aria-live="polite">{(cur?.i ?? 0) + 1} / {deck.slides.length}</span>
+    </div>
+  )
+}
+
+function PresenterPanel({ deck, cur, next, index, click, clicks: total, onNext, onPrev, onExit }: { deck: Deck; cur: Deck['slides'][number]; next: Deck['slides'][number] | null; index: number; click: number; clicks: number; onNext: () => void; onPrev: () => void; onExit: () => void }) {
+  const [startAt, setStartAt] = useState(() => Date.now())
+  const [paused, setPaused] = useState<number | null>(null)
+  const [, tick] = useState(0)
+  useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t) }, [])
+  const elapsed = Math.floor(((paused ?? Date.now()) - startAt) / 1000)
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, '0'), ss = String(elapsed % 60).padStart(2, '0')
+  const notes = notesOf(cur)
+  const size = deck.size ?? { w: 1280, h: 720 }
+  return (
+    <div className={s.presenter}>
+      <header className={s.pHead}>
+        <span className={s.pTimer}>{mm}:{ss}</span>
+        <button type="button" className={s.pBtn} onClick={() => { if (paused) { setStartAt(startAt + Date.now() - paused); setPaused(null) } else setPaused(Date.now()) }} aria-label={paused ? 'Resume timer' : 'Pause timer'}>{paused ? <Play size={14} /> : <Pause size={14} />}</button>
+        <button type="button" className={s.pBtn} onClick={() => { setStartAt(Date.now()); setPaused(paused ? Date.now() : null) }}>Reset</button>
+        <span className={s.pClock}>{new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+        <span className={s.pCount}>Slide {index + 1} of {deck.slides.length}{total ? ` · click ${click} of ${total}` : ''}</span>
+        <button type="button" className={s.pBtn} onClick={onExit}><X size={14} /> End show</button>
+      </header>
+      <div className={s.pBody}>
+        <div className={s.pCurrent}><div className={s.pFrame} style={{ aspectRatio: `${size.w}/${size.h}` }}><SlideView slide={cur} size={size} css={deck.css} /></div></div>
+        <aside className={s.pSide}>
+          <div className={s.pLabel}>Next</div>
+          {next ? <div className={s.pFrame} style={{ aspectRatio: `${size.w}/${size.h}` }}><SlideView slide={next} size={size} css={deck.css} /></div> : <div className={s.pEnd}>End of show</div>}
+          <div className={s.pLabel}>Notes</div>
+          <div className={s.pNotes}>{notes || <span className={s.pMuted}>No notes on this slide.</span>}</div>
+        </aside>
+      </div>
+      <footer className={s.pFoot}>
+        <button type="button" className={s.pNav} onClick={onPrev} aria-label="Previous"><CaretLeft size={18} /></button>
+        <button type="button" className={s.pNav} onClick={onNext} aria-label="Next"><CaretRight size={18} /></button>
+      </footer>
     </div>
   )
 }

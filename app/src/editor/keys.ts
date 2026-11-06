@@ -10,6 +10,7 @@ import { duplicateObjects, find, group, newSlide, nudge, removeObjects, reorder,
 import { getEditor, select, setEditor } from './session'
 import { editingLive, endEdit, formatRuns, textState } from './textctl'
 import { isGroup, members } from './geometry'
+import { copyFormat, pasteFormat } from './painter'
 
 const REGIONS = ['header', 'rail', 'stage', 'column'] as const
 export const regionOf = (el: Element | null) => (el?.closest('[data-region]') as HTMLElement | null)?.dataset.region ?? null
@@ -34,7 +35,7 @@ export function applyUndo(deckId: string, which: 'undo' | 'redo') {
   if (r.skipped) toast({ message: `${r.skipped === 1 ? 'One slide was' : `${r.skipped} slides were`} changed since and kept as they are.` })
 }
 
-type Opts = { deckId: string; slides: string[]; onPresent: (fromStart: boolean) => void; onAsk: () => void; onFormat: () => void; onLeave: () => void; fitZoom: () => number }
+type Opts = { deckId: string; slides: string[]; onPresent: (fromStart: boolean, presenter?: boolean) => void; onAsk: () => void; onFormat: () => void; onLeave: () => void; onFind: (replace: boolean) => void; fitZoom: () => number }
 
 export function useEditorKeys(o: Opts) {
   useEffect(() => {
@@ -59,7 +60,9 @@ export function useEditorKeys(o: Opts) {
         focusRegion(present[(i + (e.shiftKey ? -1 : 1) + present.length) % present.length])
         return
       }
-      if (e.key === 'F5') { e.preventDefault(); endEdit(); o.onPresent(!e.shiftKey); return }
+      if (e.key === 'F5') { e.preventDefault(); endEdit(); o.onPresent(!e.shiftKey && !e.altKey, e.altKey); return }
+      if (mod && k === 'f' && !inField) { e.preventDefault(); endEdit(); o.onFind(e.altKey); return }
+      if (mod && e.shiftKey && k === 'h' && !inField) { e.preventDefault(); endEdit(); o.onFind(true); return }
 
       // ---- text being edited: the text first ----
       if (inText) {
@@ -110,6 +113,8 @@ export function useEditorKeys(o: Opts) {
       if (mod && k === 'g') { e.preventDefault(); if (e.shiftKey) ungroup(sel); else group(sel); return }
       if (mod && e.shiftKey && k === 'l') { e.preventDefault(); toggleAttr(sel, 'data-ream-locked', 'Lock'); return }
       if (mod && k === 'x') return // native cut event (clipboard.ts)
+      if (mod && e.shiftKey && k === 'c') { e.preventDefault(); copyFormat(); return }
+      if (mod && e.shiftKey && k === 'v') { e.preventDefault(); pasteFormat(); return }
       if (mod && (k === 'b' || k === 'i' || k === 'u')) {
         e.preventDefault()
         const t = textState(liveStage())

@@ -4,31 +4,34 @@ import {
   AlignBottom, AlignCenterHorizontal, AlignCenterVertical, AlignLeft, AlignRight, AlignTop, ArrowLineDown, ArrowLineUp,
   ArrowDown, ArrowUp, DotsSixVertical, Eye, EyeSlash, ListBullets, ListNumbers, Lock, LockOpen, TextAlignCenter,
   TextAlignJustify, TextAlignLeft, TextAlignRight, TextB, TextItalic, TextOutdent, TextIndent, TextUnderline, X,
-  ArrowsInLineHorizontal, ArrowsInLineVertical, Selection as SelectionIcon, SelectionSlash, Image as ImageIcon,
+  ArrowsInLineHorizontal, ArrowsInLineVertical, ClockCounterClockwise, Selection as SelectionIcon, SelectionSlash, Image as ImageIcon,
 } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useLibrary } from '../data/library'
 import type { Deck, SlideDoc } from '../data/types'
 import { IconButton, Button } from '../ui/Button'
 import { ColorWell, KeptChip, NumberField, Row, Section, toHex } from '../ui/Inspector'
-import { Menu, type MenuAnchor } from '../ui/Menu'
+import { Menu, type MenuAnchor, type MenuItem } from '../ui/Menu'
 import { Tooltip } from '../ui/Tooltip'
 import { liveStage } from './Canvas'
 import { boxOf, isGroup, members, unionBox, type Box } from './geometry'
 import { readPicture, pickPicture } from './insert'
-import { align, animOf, distribute, editSlide, find, group, hasText, moveToIndex, notesOf, reorder, setAnchor, setAnimation, setBackground, setBoxes, setNotes, setObjectStyle, setSlideAttrs, textHost, toggleAttr, ungroup, type Align } from './ops'
+import { align, animOf, deckFonts, distribute, replaceColour, replaceFont, setSlideSize, editSlide, find, group, hasText, moveToIndex, notesOf, reorder, setAnchor, setAnimation, setBackground, setBoxes, setNotes, setObjectStyle, setSlideAttrs, textHost, toggleAttr, ungroup, type Align } from './ops'
 import { select, setEditor, useEditor } from './session'
 import { editingLive, endEdit, formatParas, formatRuns, list, onTextChange, shiftIndent, textState } from './textctl'
 import { CHART_TYPES, readSpec, setChart } from './chart'
+import { AccessibilitySection, CommentsSection, VersionsDialog } from './Review'
+import { isLine, readLine, styleLine } from './line'
 import { ChartData } from './ChartData'
 import { activeCell, borderCells, fillCells, tableOp } from './table'
 import { formatLength, localUnit, parseLength, parseNumber } from './units'
 import s from './FormatPanel.module.css'
 
-export type Kind = 'text' | 'shape' | 'picture' | 'preserved' | 'group' | 'table' | 'svg' | 'chart'
+export type Kind = 'text' | 'shape' | 'picture' | 'preserved' | 'group' | 'table' | 'svg' | 'chart' | 'line'
 export function kindOf(el: HTMLElement): Kind {
   if (isGroup(el)) return 'group'
   if (el.hasAttribute('data-chart')) return 'chart'
+  if (isLine(el)) return 'line'
   if (el.classList.contains('domoxml-preserved')) return 'preserved'
   if (el.tagName === 'IMG') return 'picture'
   if (el.tagName === 'TABLE') return 'table'
@@ -38,7 +41,7 @@ export function kindOf(el: HTMLElement): Kind {
   if (el.querySelector(':scope > img, :scope img:only-child') && !hasText(el)) return 'picture'
   return filled ? 'shape' : 'text'
 }
-const KIND_NAME: Record<Kind, string> = { text: 'Text box', shape: 'Shape', picture: 'Picture', preserved: 'Chart', group: 'Group', table: 'Table', svg: 'Shape', chart: 'Chart' }
+const KIND_NAME: Record<Kind, string> = { text: 'Text box', shape: 'Shape', picture: 'Picture', preserved: 'Chart', group: 'Group', table: 'Table', svg: 'Shape', chart: 'Chart', line: 'Line' }
 export function objectName(el: HTMLElement): string {
   const k = kindOf(el)
   const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
@@ -76,7 +79,7 @@ export function FormatPanel({ deck, slide, index, onClose }: { deck: Deck; slide
   const title = els.length > 1 ? `${els.length} objects` : els[0] ? objectName(els[0]).split(':')[0] : `Slide ${index + 1}`
   const textEls = els.filter((e) => !!e.querySelector('.domoxml-text, li') || (editing && e.getAttribute('data-domoxml-node-id') === editing))
   const showText = textEls.length > 0 && kinds.every((k) => k === 'text' || k === 'shape' || k === 'table')
-  const styleable = els.length > 0 && kinds.every((k) => k === 'text' || k === 'shape' || k === 'svg' || k === 'picture' || k === 'group')
+  const styleable = els.length > 0 && kinds.every((k) => k === 'text' || k === 'shape' || k === 'svg' || k === 'picture' || k === 'group' || k === 'chart')
 
   return (
     <aside className={s.panel} aria-label="Format" data-region="column">
@@ -92,10 +95,12 @@ export function FormatPanel({ deck, slide, index, onClose }: { deck: Deck; slide
         {styleable && kinds.some((k) => k !== 'text') && <EffectsSection sec={sec('effects', false)} els={els} ids={sel} />}
         {showText && kinds[0] !== 'text' && <TextSection sec={sec('text')} colors={deckColors} ids={sel} />}
         {els.length === 1 && kinds[0] === 'picture' && <PictureSection sec={sec('picture')} el={els[0]} id={sel[0]} />}
+        {kinds.length > 0 && kinds.every((k) => k === 'line') && <LineSection sec={sec('line')} els={els} ids={sel} colors={deckColors} />}
         {els.length === 1 && kinds[0] === 'chart' && <ChartSection sec={sec('chart')} el={els[0]} id={sel[0]} />}
         {els.length === 1 && kinds[0] === 'table' && <TableSection sec={sec('table')} el={els[0]} id={sel[0]} colors={deckColors} />}
         {els.length === 1 && (kinds[0] === 'picture' || kinds[0] === 'chart' || kinds[0] === 'preserved' || kinds[0] === 'shape' || kinds[0] === 'svg') && <AltTextSection sec={sec('alt', false)} el={els[0]} id={sel[0]} />}
         {els.length > 0 && <AnimateSection sec={sec('animate', false)} els={els} ids={sel} />}
+        {els.length === 1 && <CommentsSection slide={slide} objectId={sel[0]} objectName={objectName(els[0]).split(':')[0].toLowerCase()} sec={sec('comments', !!slide.comments?.some((c) => c.objectId === sel[0] && !c.resolved))} />}
         {els.length > 0 && <ArrangeSection sec={sec('arrange', els.length > 1 || kinds[0] === 'preserved')} els={els} ids={sel} size={deck.size ?? { w: 1280, h: 720 }} />}
       </div>
     </aside>
@@ -243,10 +248,42 @@ function PictureSection({ sec, el, id }: { sec: Sec; el: HTMLElement; id: string
       })
     } catch { /* readPicture reports */ }
   }
-  void el
+  const img = el.tagName === 'IMG' ? el : el.querySelector('img')
+  const fit = img ? getComputedStyle(img).objectFit : 'fill'
+  const [px, py] = img ? getComputedStyle(img).objectPosition.split(' ').map((v) => Math.round(parseFloat(v))) : [50, 50]
+  const setImg = (css: Record<string, string | null>, label: string) => editSlide(label, (root) => {
+    const e = find(root, id)
+    const i = e?.tagName === 'IMG' ? e : e?.querySelector('img')
+    if (!i) return false
+    for (const [k, v] of Object.entries(css)) { if (v === null) i.style.removeProperty(k); else i.style.setProperty(k, v) }
+  })
+  const natural = () => {
+    if (!img) return
+    const probe = new Image()
+    probe.onload = () => {
+      const b = boxOf(el)
+      const h = b.w * (probe.naturalHeight / probe.naturalWidth)
+      setBoxes(new Map([[id, { ...b, h }]]), 'Reset picture size')
+    }
+    probe.src = (img as HTMLImageElement).src
+  }
   return (
     <Section title="Picture" {...sec}>
-      <Row><Button variant="secondary" icon={<ImageIcon size={15} />} onClick={() => void replace()}>Replace…</Button></Row>
+      <Row label="Fit">
+        <button type="button" className={s.chipBtn} aria-pressed={fit === 'fill'} onClick={() => setImg({ 'object-fit': 'fill', 'object-position': null }, 'Stretch picture')}>Stretch</button>
+        <button type="button" className={s.chipBtn} aria-pressed={fit === 'cover'} onClick={() => setImg({ 'object-fit': 'cover' }, 'Crop picture to fill')}>Crop to fill</button>
+        <button type="button" className={s.chipBtn} aria-pressed={fit === 'contain'} onClick={() => setImg({ 'object-fit': 'contain' }, 'Fit picture')}>Fit</button>
+      </Row>
+      {fit === 'cover' && (
+        <Row label="Focus">
+          <NumberField label="X %" value={Number.isFinite(px) ? px : 50} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(100, Math.round(v))) }} onCommit={(v) => setImg({ 'object-position': `${v}% ${Number.isFinite(py) ? py : 50}%` }, 'Picture focus')} hint="0 to 100" />
+          <NumberField label="Y %" value={Number.isFinite(py) ? py : 50} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(100, Math.round(v))) }} onCommit={(v) => setImg({ 'object-position': `${Number.isFinite(px) ? px : 50}% ${v}%` }, 'Picture focus')} hint="0 to 100" />
+        </Row>
+      )}
+      <Row>
+        <Button variant="secondary" icon={<ImageIcon size={15} />} onClick={() => void replace()}>Replace…</Button>
+        <Button variant="ghost" onClick={natural}>Original shape</Button>
+      </Row>
     </Section>
   )
 }
@@ -316,6 +353,7 @@ function SlidePanel({ deck, slide, sec, colors }: { deck: Deck; slide: SlideDoc;
   const bg = root ? getComputedStyle(root).backgroundColor : '#ffffff'
   const objects = root ? ([...root.children].filter((c) => c.hasAttribute('data-domoxml-node-id')) as HTMLElement[]) : []
   const [drag, setDrag] = useState<number | null>(null)
+  const [versions, setVersions] = useState(false)
   const missing = useMissingFonts(deck)
   return (
     <>
@@ -329,6 +367,7 @@ function SlidePanel({ deck, slide, sec, colors }: { deck: Deck; slide: SlideDoc;
         {missing.map((f) => <p key={f} className={s.note}>{f} isn’t available here; showing a similar font. Exports keep {f}.</p>)}
       </Section>
       <TransitionSection slide={slide} deck={deck} sec={sec('transition', false)} />
+      <DesignSection deck={deck} sec={sec('design', false)} colors={colors} />
       <Section title="Objects on this slide" {...sec('objects')}>
         {!objects.length && <p className={s.note}>Nothing on this slide yet. Add text, a shape or a picture from the header.</p>}
         <ol className={s.objects} aria-label="Objects, front to back">
@@ -353,6 +392,12 @@ function SlidePanel({ deck, slide, sec, colors }: { deck: Deck; slide: SlideDoc;
       </Section>
       <Section title="Speaker notes" {...sec('notes', false)}>
         <NotesField slide={slide} />
+      </Section>
+      <CommentsSection slide={slide} sec={sec('comments', !!slide.comments?.some((c) => !c.resolved))} />
+      <AccessibilitySection deck={deck} sec={sec('a11y', false)} />
+      <Section title="History" {...sec('history', false)}>
+        <Row><Button variant="secondary" icon={<ClockCounterClockwise size={14} />} onClick={() => setVersions(true)}>Version history…</Button></Row>
+        {versions && <VersionsDialog deck={deck} onClose={() => setVersions(false)} />}
       </Section>
     </>
   )
@@ -541,4 +586,63 @@ const grad = (angle: number, a: string, b: string) => `linear-gradient(${angle}d
 function parseGradient(v: string): [number, string, string] | null {
   const m = /^linear-gradient\((-?[\d.]+)deg,\s*(rgba?\([^)]*\)|#[0-9a-f]{3,8}|[a-z]+),\s*(rgba?\([^)]*\)|#[0-9a-f]{3,8}|[a-z]+)\)$/i.exec(v.trim())
   return m ? [parseFloat(m[1]), m[2], m[3]] : null
+}
+
+function LineSection({ sec, els, ids, colors }: { sec: Sec; els: HTMLElement[]; ids: string[]; colors: string[] }) {
+  const c = readLine(els[0])
+  if (!c) return null
+  const { r, g, b } = c.line.color
+  const color = `rgb(${r}, ${g}, ${b})`
+  const width = Math.round((c.line.width_emu / 9525) * 0.75 * 100) / 100
+  const set = (patch: Parameters<typeof styleLine>[1], label: string) => editSlide(label, (root) => { for (const id of ids) { const e = find(root, id); if (e) styleLine(e, patch) } })
+  const arrow = { type: 'triangle', width: 'med', length: 'med' }
+  const has = (x: typeof c.line.head) => !!x && x.type !== 'none'
+  return (
+    <Section title="Line" {...sec}>
+      <Row label="Colour"><ColorWell label="Line colour" value={color} colors={colors} onChange={(v) => v && set({ color: v }, 'Line colour')} /></Row>
+      <Row label="Width"><NumberField label="pt" value={width} format={(v) => `${v}`} parse={(x, cur) => { const v = parseNumber(x, cur); return v === null ? null : Math.max(0.25, Math.min(50, v)) }} onCommit={(v) => set({ widthPx: v / 0.75 }, 'Line width')} hint="Points, like 2" /></Row>
+      <Row label="Dash">
+        {(['solid', 'dash', 'dot'] as const).map((d) => <button key={d} type="button" className={s.chipBtn} aria-pressed={(c.line.dash ?? 'solid') === d} onClick={() => set({ dash: d }, 'Line dash')}>{cap(d)}</button>)}
+      </Row>
+      <Row label="Arrows">
+        <button type="button" className={s.chipBtn} aria-pressed={has(c.line.head)} onClick={() => set({ head: has(c.line.head) ? null : arrow }, 'Arrowhead')}>Start</button>
+        <button type="button" className={s.chipBtn} aria-pressed={has(c.line.tail)} onClick={() => set({ tail: has(c.line.tail) ? null : arrow }, 'Arrowhead')}>End</button>
+      </Row>
+    </Section>
+  )
+}
+
+const SIZES: [string, number, number][] = [['Widescreen 16:9', 1280, 720], ['Standard 4:3', 960, 720], ['16:10', 1280, 800], ['A4', 1123, 794], ['Square', 1080, 1080]]
+
+/** Deck-wide design: slide size, and PowerPoint's Replace Fonts and theme colours as replacements. */
+function DesignSection({ deck, sec, colors }: { deck: Deck; sec: Sec; colors: string[] }) {
+  const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuItem[]; label: string } | null>(null)
+  const size = deck.size ?? { w: 1280, h: 720 }
+  const sizeName = SIZES.find(([, w, h]) => w === size.w && h === size.h)?.[0] ?? `${size.w} × ${size.h}`
+  const fonts = deckFonts(deck).slice(0, 6)
+  const open = (e: React.MouseEvent, label: string, items: MenuItem[], search?: boolean) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ anchor: { x: r.left, y: r.bottom + 4 }, items, label: search ? `${label}|search` : label }) }
+  return (
+    <Section title="Design" {...sec}>
+      <Row label="Slide size">
+        <button type="button" className={s.select} aria-haspopup="menu" onClick={(e) => open(e, 'Slide size', SIZES.map(([n, w, h]) => ({ label: n, selected: w === size.w && h === size.h, run: () => setSlideSize(w, h) })))}>{sizeName}</button>
+      </Row>
+      {fonts.length > 0 && (
+        <Row label="Fonts">
+          <div className={s.stack}>
+            {fonts.map((f) => (
+              <button key={f} type="button" className={s.select} style={{ fontFamily: f }} aria-haspopup="menu" title={`Replace ${f} everywhere`}
+                onClick={(e) => open(e, `Replace ${f} with`, FONTS.filter((x) => x !== f).map((x) => ({ label: x, run: () => replaceFont(f, x) })), true)}>{f}</button>
+            ))}
+          </div>
+        </Row>
+      )}
+      {colors.length > 0 && (
+        <Row label="Colours">
+          {colors.slice(0, 10).map((c) => <ColorWell key={c} label={`Replace ${c} everywhere`} value={c} colors={colors} onChange={(v) => v && toHex(v) !== toHex(c) && replaceColour(c, v)} />)}
+        </Row>
+      )}
+      <p className={s.hint}>Changing a font or colour here changes it on every slide.</p>
+      <Menu open={!!menu} anchor={menu?.anchor ?? null} items={menu?.items ?? []} label={menu?.label.split('|')[0] ?? ''} search={menu?.label.endsWith('|search') ? 'Find a font' : undefined} onClose={() => setMenu(null)} />
+    </Section>
+  )
 }

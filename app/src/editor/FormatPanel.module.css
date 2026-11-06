@@ -31,3 +31,22 @@
 }
 .notes:focus { outline: 1.5px solid var(--select); background: var(--paper); }
 .badge { font-size: 11px; font-weight: 600; color: var(--deck); background: color-mix(in srgb, var(--deck) 12%, transparent); padding: 2px 7px; border-radius: var(--r-pill); }
+.stack { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.comment { padding: 8px 10px; border-radius: var(--r-sm); background: var(--fill); display: flex; flex-direction: column; gap: 4px; }
+.comment[data-resolved] { opacity: 0.55; }
+.commentHead { display: flex; align-items: center; gap: 2px; font-size: 11.5px; color: var(--ink-3); }
+.commentHead > span { flex: 1; }
+.commentText { font-size: 13px; line-height: 1.4; color: var(--ink); white-space: pre-wrap; cursor: default; }
+.reply { font-size: 12.5px; line-height: 1.4; color: var(--ink-2); padding-left: 10px; border-left: 2px solid var(--hair); }
+.reply span { color: var(--ink-3); font-size: 11.5px; }
+.replyInput { height: 28px; padding: 0 8px; border: 0; border-radius: var(--r-xs); background: var(--paper); font: inherit; font-size: 12.5px; color: var(--ink); }
+.replyInput:focus { outline: 1.5px solid var(--select); }
+.issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.issue { display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left; padding: 6px 8px; border-radius: var(--r-xs); font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+.issue:hover { background: var(--fill); color: var(--ink); }
+.issue svg { color: var(--warn); flex: none; margin-top: 2px; }
+.versions { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow: auto; }
+.version { display: flex; align-items: center; gap: 12px; }
+.versionThumb { width: 96px; flex: none; --thumb-r: 4px; }
+.versionText { flex: 1; display: flex; flex-direction: column; font-size: 13px; }
+.versionText span { font-size: 12px; color: var(--ink-3); }

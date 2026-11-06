@@ -1,6 +1,8 @@
 // Object geometry in slide px, read from and written to normalized HTML. A top-level object is
 // absolutely positioned by left/top/width/height with an optional rotate() (domOXML's output); a
 // group is display:contents, so its box is its payload's (EMU), kept in step with its children.
+import { isLine, lineEnds, readLine, setLineEnds } from './line'
+
 export const EMU_PER_PX = 9525
 
 export type Box = { x: number; y: number; w: number; h: number; rot: number }
@@ -85,6 +87,7 @@ export function setBox(el: HTMLElement, b: Box) {
     }
     return
   }
+  if (isLine(el)) { placeLine(el, b); return }
   for (const hook of resizeHooks) hook(el, Math.max(1, b.w), Math.max(1, b.h))
   el.style.left = `${round(b.x)}px`
   el.style.top = `${round(b.y)}px`
@@ -110,4 +113,23 @@ export function bounds(b: Box): Box {
   const c = Math.abs(Math.cos(r)), s = Math.abs(Math.sin(r))
   const w = b.w * c + b.h * s, h = b.w * s + b.h * c
   return { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h, rot: 0 }
+}
+
+/** A line's ends follow its box; a bent or curved import that only moves keeps its drawing. */
+function placeLine(el: HTMLElement, b: Box) {
+  const old = boxOf(el), ends = lineEnds(el), c = readLine(el)
+  if (!ends || !c) return
+  const sx = old.w ? b.w / old.w : 1, sy = old.h ? b.h / old.h : 1
+  const map = (p: { x: number; y: number }) => ({ x: b.x + (p.x - old.x) * sx, y: b.y + (p.y - old.y) * sy })
+  if (c.kind !== 'straight' && Math.abs(sx - 1) < 1e-6 && Math.abs(sy - 1) < 1e-6) {
+    const dx = b.x - old.x, dy = b.y - old.y
+    c.start = { x: Math.round(c.start.x + dx * EMU_PER_PX), y: Math.round(c.start.y + dy * EMU_PER_PX) }
+    c.end = { x: Math.round(c.end.x + dx * EMU_PER_PX), y: Math.round(c.end.y + dy * EMU_PER_PX) }
+    el.setAttribute('data-domoxml-connector', JSON.stringify(c))
+    el.style.left = `${round(b.x)}px`
+    el.style.top = `${round(b.y)}px`
+    return
+  }
+  if (c.kind !== 'straight') { c.kind = 'straight'; el.setAttribute('data-domoxml-connector', JSON.stringify(c)) }
+  setLineEnds(el, map(ends[0]), map(ends[1]))
 }

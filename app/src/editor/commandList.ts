@@ -9,6 +9,7 @@ import { CHART_TYPES, insertChart } from './chart'
 import { insertTable } from './table'
 import { getEditor, setEditor } from './session'
 import { list } from './textctl'
+import { copyFormat, pasteFormat } from './painter'
 
 export type EditorCommand = { id: string; title: string; hint?: string; keywords?: string; run: () => void }
 
@@ -32,6 +33,8 @@ export function editorCommands(): EditorCommand[] {
       { id: 'e-hide-slide', title: 'Hide or show slide', run: () => toggleHidden([slide]) },
       { id: 'e-del-slide', title: 'Delete slide', run: () => deleteSlides([slide]) },
     ] : []),
+    { id: 'e-find', title: 'Find…', hint: '⌘F', keywords: 'search', run: () => window.dispatchEvent(new CustomEvent('ream:find', { detail: false })) },
+    { id: 'e-replace', title: 'Replace…', hint: '⌥⌘F', keywords: 'find substitute', run: () => window.dispatchEvent(new CustomEvent('ream:find', { detail: true })) },
     { id: 'e-undo', title: 'Undo', hint: '⌘Z', run: () => applyUndo(deckId, 'undo') },
     { id: 'e-redo', title: 'Redo', hint: '⇧⌘Z', run: () => applyUndo(deckId, 'redo') },
     { id: 'e-present', title: 'Present from this slide', hint: '⇧F5', keywords: 'slideshow play', run: () => setEditor({ presenting: true }) },
@@ -44,6 +47,8 @@ export function editorCommands(): EditorCommand[] {
   if (sel.length) {
     out.push(
       { id: 'e-dup', title: 'Duplicate', hint: '⌘D', run: () => duplicateObjects(sel) },
+      { id: 'e-copy-format', title: 'Copy formatting', hint: '⇧⌘C', keywords: 'format painter style', run: copyFormat },
+      { id: 'e-paste-format', title: 'Paste formatting', hint: '⇧⌘V', keywords: 'format painter style', run: pasteFormat },
       { id: 'e-del', title: 'Delete', hint: '⌫', run: () => removeObjects(sel) },
       { id: 'e-front', title: 'Bring to front', hint: '⌥⌘]', run: () => reorder(sel, 'front') },
       { id: 'e-forward', title: 'Bring forward', hint: '⌘]', run: () => reorder(sel, 'forward') },

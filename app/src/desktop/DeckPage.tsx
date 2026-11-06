@@ -27,6 +27,9 @@ import { insertTable } from '../editor/table'
 import { applyUndo, regionOf, useEditorKeys } from '../editor/keys'
 import { duplicateObjects, group, newSlide, removeObjects, reorder, toggleAttr, ungroup } from '../editor/ops'
 import { Present } from '../editor/Present'
+import { FindBar } from '../editor/FindBar'
+import { maybeKeep } from '../editor/versions'
+import { copyFormat, hasFormat, pasteFormat } from '../editor/painter'
 import { Rail } from '../editor/Rail'
 import { getEditor, setEditor, useEditor, type Column } from '../editor/session'
 import { TextBar } from '../editor/TextBar'
@@ -60,6 +63,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const [colW, setColW] = useState(() => Math.min(520, Math.max(300, Number(read(WIDTH_KEY)) || 340)))
   const [askMounted, setAskMounted] = useState(false)
   const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuItem[]; label: string } | null>(null)
+  const [find, setFind] = useState<{ replace: boolean } | null>(null)
   const page = useRef<HTMLDivElement>(null)
 
   // Open the editor session on this deck.
@@ -82,6 +86,9 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   useEffect(() => { if (d && slideId && !d.slides.some((x) => x.id === slideId)) setEditor({ slideId: d.slides[Math.min(index, d.slides.length - 1)]?.id ?? null, sel: [] }) })
   useEffect(() => { if (d) setLastSlide(d.id, index) }, [d?.id, index]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (column === 'ask') setAskMounted(true) }, [column])
+  // Local version history: a copy when the deck opens, then at most every 10 minutes of editing.
+  useEffect(() => { if (d) void maybeKeep(d, !keptOnOpen.current); keptOnOpen.current = true }, [d?.slides]) // eslint-disable-line react-hooks/exhaustive-deps
+  const keptOnOpen = useRef(false)
   // Leaving with a write in flight: the browser asks first.
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => { endEdit(); if (save !== 'saved') { e.preventDefault() } }
@@ -91,14 +98,15 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
 
   const setColumn = (c: Column) => { setEditor({ column: c }); write(COL_KEY, c ?? 'none') }
   const leave = () => { endEdit(); if (history.length > 1) back(); else navigate({ name: 'home' }) }
-  const present = useCallback((fromStart: boolean) => { endEdit(); setEditor({ presenting: true, sel: getEditor().sel }); presentFrom.current = fromStart ? 0 : null }, [])
+  const present = useCallback((fromStart: boolean, withPresenter = false) => { endEdit(); presentFrom.current = fromStart ? 0 : null; setPresenter(withPresenter); setEditor({ presenting: true, sel: getEditor().sel }) }, [])
   const presentFrom = useRef<number | null>(null)
+  const [presenter, setPresenter] = useState(false)
   const keyOpts = useMemo(() => ({
     deckId, slides: d?.slides.map((x) => x.id) ?? [],
     onPresent: present,
     onAsk: () => setColumn(getEditor().column === 'ask' ? null : 'ask'),
     onFormat: () => setColumn(getEditor().column === 'format' ? null : 'format'),
-    onLeave: leave, fitZoom: currentFit,
+    onLeave: leave, onFind: (replace: boolean) => setFind({ replace }), fitZoom: currentFit,
   }), [deckId, d?.slides, present]) // eslint-disable-line react-hooks/exhaustive-deps
   useEditorKeys(keyOpts)
 
@@ -115,6 +123,12 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     return () => { for (const t of ['copy', 'cut', 'paste'] as const) document.removeEventListener(t, on) }
   }, [d])
 
+  useEffect(() => {
+    const on = (e: Event) => setFind({ replace: (e as CustomEvent<boolean>).detail })
+    addEventListener('ream:find', on)
+    return () => removeEventListener('ream:find', on)
+  }, [])
+
   // The canvas context menu.
   useEffect(() => {
     const on = (e: Event) => {
@@ -127,6 +141,9 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         { label: 'Copy', hint: `${modKey}C`, run: () => void copySelection() },
         { label: 'Paste', hint: `${modKey}V`, run: () => void pasteFromMenu(at, size) },
         { label: 'Duplicate', hint: `${modKey}D`, run: () => duplicateObjects(sel) },
+        { kind: 'sep' },
+        { label: 'Copy formatting', hint: `⇧${modKey}C`, run: copyFormat },
+        { label: 'Paste formatting', hint: `⇧${modKey}V`, disabled: !hasFormat(), run: pasteFormat },
         { kind: 'sep' },
         { label: 'Bring to front', hint: `⌥${modKey}]`, run: () => reorder(sel, 'front') },
         { label: 'Bring forward', hint: `${modKey}]`, run: () => reorder(sel, 'forward') },
@@ -249,7 +266,14 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
             ? <Segmented<'format' | 'ask'> label="Right column" value={column === 'ask' ? 'ask' : 'format'} onChange={(v) => setColumn(column === v ? null : v)}
                 options={[{ value: 'format', label: <span className={s.seg}><SlidersHorizontal size={14} />Format</span>, title: 'Format (⌥⌘I)' }, { value: 'ask', label: <span className={s.seg}><ChatCircleText size={14} />Ask</span>, title: `Ask Ream (${modKey}J)` }]} />
             : <Tooltip label="Format" hint="⌥⌘I"><Button variant={column === 'format' ? 'secondary' : 'ghost'} aria-pressed={column === 'format'} icon={<SlidersHorizontal size={15} />} onClick={() => setColumn(column === 'format' ? null : 'format')}>Format</Button></Tooltip>)}
-          <Tooltip label="Present from this slide" hint="⇧F5"><Button variant="primary" icon={<Play size={14} weight="fill" />} onClick={() => present(false)}>Present</Button></Tooltip>
+          <span className={s.presentGroup}>
+            <Tooltip label="Present from this slide" hint="⇧F5"><Button variant="primary" icon={<Play size={14} weight="fill" />} onClick={() => present(false)}>Present</Button></Tooltip>
+            <IconButton label="More ways to present" className={s.presentMore} aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ anchor: { x: r.right, y: r.bottom + 6, align: 'end' }, label: 'Present', items: [
+              { label: 'From this slide', hint: '⇧F5', run: () => present(false) },
+              { label: 'From the beginning', hint: 'F5', run: () => present(true) },
+              { label: 'Presenter view', hint: '⌥F5', run: () => present(false, true) },
+            ] }) }}><CaretDown size={12} weight="bold" /></IconButton>
+          </span>
         </div>
       </header>
       <div className={s.body} data-column={showColumn || undefined} data-overlay={overlay || undefined} style={{ ['--col' as string]: `${colW}px` }}>
@@ -257,6 +281,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         <div className={s.stageWrap} onDragOver={(e) => { if (e.dataTransfer.types.includes('application/x-ream-insert') || e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation() } }} onDrop={onDrop}>
           <Canvas deck={d} slide={cur} label={`Slide ${index + 1} of ${d.slides.length}`} readOnly={viewer} />
           <ZoomCluster />
+          {find && <FindBar deck={d} replace={find.replace} onClose={() => { setFind(null); document.querySelector<HTMLElement>('[data-region="stage"]')?.focus() }} />}
         </div>
         {showColumn && (
           <div className={s.column}>
@@ -269,7 +294,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         )}
       </div>
       <TextBar />
-      {presenting && <Present deck={d} start={presentFrom.current ?? index} onExit={(i) => { setEditor({ presenting: false, slideId: d.slides[i]?.id ?? cur.id }); requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-region="stage"]')?.focus()) }} />}
+      {presenting && <Present deck={d} presenter={presenter} start={presentFrom.current ?? index} onExit={(i) => { setEditor({ presenting: false, slideId: d.slides[i]?.id ?? cur.id }); requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-region="stage"]')?.focus()) }} />}
       <Menu open={!!menu} anchor={menu?.anchor ?? null} items={menu?.items ?? []} label={menu?.label ?? ''} onClose={() => setMenu(null)} />
       <Toaster />
     </div>

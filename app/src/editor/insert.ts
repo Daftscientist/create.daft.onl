@@ -2,11 +2,12 @@
 // part of the slide (or placed where dropped), selected, and take the deck's text colour and font.
 import { toast } from '../data/toasts'
 import { deckTextStyle, insertObject, newId, openDeck } from './ops'
+import { lineHtml } from './line'
 
-export type ShapeKind = 'rect' | 'rounded' | 'ellipse' | 'triangle' | 'star'
+export type ShapeKind = 'rect' | 'rounded' | 'ellipse' | 'triangle' | 'star' | 'line' | 'arrow'
 export const SHAPES: { kind: ShapeKind; label: string }[] = [
   { kind: 'rect', label: 'Rectangle' }, { kind: 'rounded', label: 'Rounded rectangle' }, { kind: 'ellipse', label: 'Ellipse' },
-  { kind: 'triangle', label: 'Triangle' }, { kind: 'star', label: 'Star' },
+  { kind: 'triangle', label: 'Triangle' }, { kind: 'star', label: 'Star' }, { kind: 'line', label: 'Line' }, { kind: 'arrow', label: 'Arrow' },
 ]
 
 const esc = (t: string) => t.replace(/"/g, '&quot;')
@@ -32,6 +33,14 @@ export function insertText(at: Place) {
 
 const STAR = '50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%'
 export function insertShape(kind: ShapeKind, at: Place) {
+  if (kind === 'line' || kind === 'arrow') {
+    const deck = openDeck()
+    const hex = deck ? deckTextStyle(deck).color : 'rgba(23,23,28,1)'
+    const m = /rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/.exec(hex)
+    const color = m ? { r: +m[1], g: +m[2], b: +m[3] } : { r: 23, g: 23, b: 28 }
+    insertObject(lineHtml(newId('line'), { x: at.x - 160, y: at.y }, { x: at.x + 160, y: at.y }, color, 3, kind === 'arrow'), `Insert ${kind}`)
+    return
+  }
   const w = kind === 'rect' || kind === 'rounded' ? 320 : 240, h = 240 * (kind === 'rect' || kind === 'rounded' ? 0.75 : 1)
   const p = centred(at, w, h)
   const fill = 'rgba(232,96,60,1)'
