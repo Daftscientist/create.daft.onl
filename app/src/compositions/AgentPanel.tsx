@@ -56,6 +56,8 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   const ready = !!useActiveModel()
 
   useEffect(() => { input.current?.focus() }, [])
+  // The box grows with what you type and shrinks back once it's sent.
+  useEffect(() => { if (!draft && input.current) input.current.style.height = '' }, [draft])
   useEffect(() => { try { localStorage.setItem(key(deck.id), JSON.stringify(turns.map((t) => (t.state === 'running' ? { ...t, state: 'stopped' } : t)))) } catch { /* ok */ } }, [turns, deck.id])
   useEffect(() => { if (atBottom.current) thread.current?.scrollTo({ top: thread.current.scrollHeight }) }, [turns, line])
 

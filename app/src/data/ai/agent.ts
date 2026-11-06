@@ -228,6 +228,11 @@ export async function runAgent(opts: {
     tools,
     reasoning: reasoningFor(ai, chosen),
     stopWhen: isStepCount(16),
+    // Rate limits (tokens per minute) are common on long runs: retry with backoff before giving up.
+    maxRetries: 5,
+    // Each step re-sends the conversation. Slide HTML the model already wrote or read is replaced by a short
+    // note in all but the latest step, so long runs stay small (and fast, and under rate limits).
+    prepareStep: ({ messages }) => ({ messages: compact(messages) }),
     abortSignal: opts.signal,
   })
 
@@ -253,10 +258,35 @@ export async function runAgent(opts: {
   return { before, after: deck(opts.deckId).slides }
 }
 
+/** Older slide HTML in tool calls and results becomes a placeholder; the last assistant turn and its results stay. */
+export function compact(messages: ModelMessage[]): ModelMessage[] {
+  const keepFrom = messages.map((m) => m.role).lastIndexOf('assistant')
+  const note = (s: string) => `[${s.length} characters of slide HTML, sent earlier. Use read_slide to see the current version.]`
+  return messages.map((m, i) => {
+    if (i >= keepFrom || typeof m.content === 'string') return m
+    if (m.role === 'assistant') {
+      return { ...m, content: m.content.map((p) => {
+        if (p.type !== 'tool-call' || !p.input || typeof p.input !== 'object') return p
+        const input = p.input as Record<string, unknown>
+        return typeof input.html === 'string' && input.html.length > 400 ? { ...p, input: { ...input, html: note(input.html) } } : p
+      }) }
+    }
+    if (m.role === 'tool') {
+      return { ...m, content: m.content.map((p) => {
+        if (p.type !== 'tool-result' || p.output.type !== 'json') return p
+        const v = p.output.value as Record<string, unknown> | null
+        return v && typeof v === 'object' && !Array.isArray(v) && typeof v.html === 'string' && v.html.length > 400
+          ? { ...p, output: { ...p.output, value: { ...v, html: note(v.html) } } } : p
+      }) }
+    }
+    return m
+  })
+}
+
 function errorText(e: unknown): string {
   const m = (e as { message?: string })?.message ?? String(e)
   if (/401|invalid.*key|unauthori/i.test(m)) return 'The provider didn’t accept your API key. Check it in Settings → AI.'
-  if (/429|rate/i.test(m)) return 'The provider is rate limiting requests. Wait a moment and try again.'
+  if (/429|rate/i.test(m)) return 'Your provider’s rate limit was reached (too much sent in a short time), even after retrying. What was done so far is kept: wait a minute, then ask it to carry on.'
   if (/fetch|network/i.test(m)) return 'Couldn’t reach the provider. Check your connection.'
   return m
 }
