@@ -7,6 +7,7 @@ import { claimOwnership, ownInMemory, persistStorage, storage } from '../storage
 import type { Mutation } from '../storage/protocol'
 import { blankSlide, SAMPLE_IDS, sampleLibrary, sampleSlides } from './fixtures'
 import { withFamilyNames } from '../slides/fonts'
+import { dropStalePayloads } from '../editor/payloads'
 import { slideText as textOf } from '../slides/SlideView'
 import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideDoc } from './types'
 import { deviceId, noteLocalChange } from './sync'
@@ -257,7 +258,13 @@ export function openDeck(deckId: string) {
  *  export captures the slide as it is now instead of shipping the stale original. */
 function settleIr(prev: SlideDoc[], next: SlideDoc[]): SlideDoc[] {
   const before = new Map(prev.map((sl) => [sl.id, sl.html]))
-  return next.map((sl) => (sl.ir && before.has(sl.id) && before.get(sl.id) !== sl.html ? (({ ir: _ir, ...rest }) => rest)(sl) : sl))
+  return next.map((sl) => {
+    const old = before.get(sl.id)
+    if (old === undefined || old === sl.html) return sl
+    const html = dropStalePayloads(old, sl.html)
+    const { ir: _ir, ...rest } = sl
+    return { ...rest, html }
+  })
 }
 
 export function updateSlide(deckId: string, index: number, slide: SlideDoc) {

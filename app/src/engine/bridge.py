@@ -84,6 +84,16 @@ def export_pptx(payload):
         extracted = extract_slide(rendered)
         irs.append(extracted.slide)
         warnings.extend(w.message for w in extracted.warnings)
+    # Imported slides keep their exact EMU size (e.g. 12188825 wide), while captures come from the
+    # rounded CSS px size. A .pptx has one slide size, so captures take the imported size.
+    kept = next((ir for ir, s in zip(irs, p["slides"]) if s.get("ir")), None)
+    if kept is not None:
+        irs = [
+            ir.model_copy(update={"width": kept.width, "height": kept.height})
+            if abs(ir.width - kept.width) <= kept.width * 0.01 and abs(ir.height - kept.height) <= kept.height * 0.01
+            else ir
+            for ir in irs
+        ]
     faces, font_warnings = resolve_faces(irs, captured_fonts=fonts)
     warnings.extend(w.message for w in font_warnings)
     return json.dumps({"pptx": base64.b64encode(build_pptx(irs, faces=faces)).decode(), "warnings": warnings})
@@ -91,3 +101,35 @@ def export_pptx(payload):
 
 def ping():
     return True
+
+
+def patch_ir(ir_json, ops_json):
+    """Applies geometry and stacking edits to a slide's IR, so a moved or reordered slide keeps
+    exporting exactly (charts and other preserved payloads stay native).
+
+    ops: [{"op": "geometry", "id", "x", "y", "w", "h" (px), "rotation" (deg)}, {"op": "order", "ids": [...]}]
+    Returns the new IR JSON, or None when an op names a node the IR doesn't have at the top level
+    (the caller then drops the IR and the slide is captured on export).
+    """
+    from domoxml.core.units import px_to_emu
+
+    data = json.loads(ir_json)
+    contents = data["contents"]
+    by_id = {node.get("node_id"): node for node in contents}
+    for op in json.loads(ops_json):
+        if op["op"] == "geometry":
+            node = by_id.get(op["id"])
+            if node is None or "box" not in node:
+                return None
+            node["box"] = {"x": px_to_emu(op["x"]), "y": px_to_emu(op["y"]), "width": max(1, px_to_emu(op["w"])), "height": max(1, px_to_emu(op["h"]))}
+            if "transform" in node or op.get("rotation"):
+                transform = node.get("transform") or {}
+                transform["rotation_deg"] = float(op.get("rotation") or 0.0)
+                node["transform"] = transform
+        elif op["op"] == "order":
+            if sorted(op["ids"]) != sorted(by_id) or None in by_id:
+                return None
+            data["contents"] = contents = [by_id[i] for i in op["ids"]]
+        else:
+            return None
+    return SlideIR.model_validate(data).model_dump_json()
