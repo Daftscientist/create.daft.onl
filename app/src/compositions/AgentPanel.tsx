@@ -1,12 +1,12 @@
 // AI co-editing panel (docs/design/specs/ai-panel.md + both review rounds), driving the real agent
 // (data/ai/agent.ts). Activity lines hold ≥1.6s, queue at most one, and flush when the answer starts.
-import { ArrowUp, Check, Eye, NotePencil, Paperclip, Stop, X } from '@phosphor-icons/react'
+import { ArrowUp, Check, Eye, Microphone, NotePencil, Paperclip, Stop, Waveform, X } from '@phosphor-icons/react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import type { ModelMessage } from 'ai'
 import { runAgent, type Attachment } from '../data/ai/agent'
 import { takePendingAsk } from '../data/ai/pending'
-import { canSee, modelLabel, providerName, setAi, useActiveModel, useAi } from '../data/ai/settings'
+import { type ModelRef, type ReasoningLevel, canSee, modelLabel, providerName, setAi, useActiveModel, useAi } from '../data/ai/settings'
 import { useBrowserModel } from '../data/ai/browser'
 import { AI_PROVIDER_IDS } from '../data/ai/providers'
 import { getEditor } from '../editor/session'
@@ -25,6 +25,7 @@ import { modKey } from '../lib/shell'
 import { IconButton } from '../ui/Button'
 import { DeckThumb } from './DeckThumb'
 import { ModelPicker, ReasoningPicker } from './ModelPicker'
+import { VoiceMode } from './VoiceMode'
 import { Dialog } from '../ui/Dialog'
 import { Button } from '../ui/Button'
 import s from './AgentPanel.module.css'
@@ -39,6 +40,8 @@ type Turn = {
   slide: number
   steps: Step[]
   log?: Item[]
+  /** Said aloud (voice mode). */
+  voice?: boolean
   /** Names of the files attached to the message. */
   files?: string[]
   text: string
@@ -65,6 +68,9 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   const atBottom = useRef(true)
   const running = turns.some((t) => t.state === 'running')
   const ready = !!useActiveModel()
+  const busy = useRef(false)
+  const [voice, setVoice] = useState(false)
+  const liveAt = useRef(0)
   const [files, setFiles] = useState<Attachment[]>([])
   // The model asked to see slides it can't: the run waits on the user's choice here.
   const visionWait = useRef<((c: 'retry' | 'continue') => void) | null>(null)
@@ -102,9 +108,12 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   const patchLast = (fn: (t: Turn) => Turn) => setTurns((ts) => ts.map((t, i) => (i === ts.length - 1 ? fn(t) : t)))
 
   const abort = useRef<AbortController | null>(null)
-  const send = async (prompt: string, withFiles?: Attachment[]) => {
+  /** Runs one turn; resolves with its final reply (voice speaks it). */
+  const send = async (prompt: string, withFiles?: Attachment[], o: { model?: ModelRef | null; reasoning?: ReasoningLevel; voice?: boolean } = {}): Promise<string> => {
     const text = prompt.trim()
-    if (!text || running || !ready) return
+    if (!text || busy.current || !ready) return busy.current ? 'Still working on the last request.' : ''
+    busy.current = true
+    let reply = ''
     setDraft('')
     const target = slide
     const attached = withFiles ?? files
@@ -117,7 +126,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
       editsSince: userEditsSince(deck.id, mark.current),
     }
     const history: ModelMessage[] = turns.flatMap((t) => [{ role: 'user' as const, content: t.prompt }, ...(t.text ? [{ role: 'assistant' as const, content: t.text }] : [])])
-    setTurns((ts) => [...ts, { prompt: text, slide: target, steps: [], log: [], files: attached.map((f) => f.name), text: '', state: 'running', startedAt: Date.now() }])
+    setTurns((ts) => [...ts, { prompt: text, slide: target, steps: [], log: [], files: attached.map((f) => f.name), voice: o.voice, text: '', state: 'running', startedAt: Date.now() }])
     const ac = new AbortController()
     abort.current = ac
     // A slide the agent has changed is read-only on the canvas until the run ends (editor spec, contract 6).
@@ -139,7 +148,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
     })
     try {
       const { before, after } = await runAgent({
-        deckId: deck.id, context, files: attached, prompt: text, history, signal: ac.signal,
+        deckId: deck.id, context, files: attached, prompt: text, history, signal: ac.signal, model: o.model, reasoning: o.reasoning, voice: o.voice,
         on: (ev) => {
           if (ev.type === 'thinking') {
             if (ev.on) show('Thinking')
@@ -149,7 +158,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
             if (ev.live) return
             patchLast((t) => ({ ...t, steps: [...t.steps, { label: ev.label, ms: 0 }] }))
             log({ kind: 'step', label: ev.label })
-          } else if (ev.type === 'text') { flush(); patchLast((t) => ({ ...t, text: t.text + ev.delta })); log({ kind: 'text', text: ev.delta }) }
+          } else if (ev.type === 'text') { flush(); reply += ev.delta; patchLast((t) => ({ ...t, text: t.text + ev.delta })); log({ kind: 'text', text: ev.delta }) }
           else if (ev.type === 'edit') { lock(ev.slides); patchLast((t) => ({ ...t, edited: ev.slides })) }
           else if (ev.type === 'changed') dispatchEvent(new CustomEvent('ream:ai-edit', { detail: ev }))
           else if (ev.type === 'need-vision') { flush(); visionWait.current = ev.resolve; setVision(true) }
@@ -167,8 +176,10 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
       abort.current = null
       mark.current = historyMark()
       chooseVision('continue')
+      busy.current = false
       if (lockedIds.size) setEditor((e) => ({ locked: e.locked.filter((x) => !lockedIds.has(x)) }))
     }
+    return reply
   }
 
   /** Files for the next message: text files as text, pictures and PDFs as data URLs (20 MB each at most). */
@@ -230,7 +241,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
         )}
         {turns.map((t, i) => (
           <div key={i} className={s.turn}>
-            <div className={s.user}>{t.prompt}<span className={s.ctx}>Slide {t.slide + 1}{t.files?.length ? ` · ${t.files.join(', ')}` : ''}</span></div>
+            <div className={s.user}>{t.voice && <Microphone size={12} weight="bold" className={s.mic} aria-label="Said aloud" />}{t.prompt}<span className={s.ctx}>Slide {t.slide + 1}{t.files?.length ? ` · ${t.files.join(', ')}` : ''}</span></div>
             {t.log ? <Log turn={t} line={line} /> : <>
               {t.state === 'running' && !t.text ? <Activity line={line} /> : t.steps.length > 0 && (
                 <details className={s.steps}>
@@ -255,36 +266,47 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
       {vision && <VisionCard onChoice={chooseVision} />}
       </div>
 
-      <form className={s.composer} onSubmit={(e) => { e.preventDefault(); void send(draft) }}
-        onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation() } }}
-        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); e.stopPropagation(); void attach(e.dataTransfer.files) } }}
-        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}>
-        <span className={s.chips}>
-          <span className={s.chip}>Slide {slide + 1}</span>
-          {files.map((f, i) => <span key={i} className={s.fileChip}>{f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}><X size={10} weight="bold" /></button></span>)}
-        </span>
-        <span className={s.pickers}>
-          <IconButton label="Attach files" size="sm" tone="plain" type="button" onClick={() => picker.current?.click()}><Paperclip size={15} /></IconButton>
-          <input ref={picker} type="file" multiple hidden accept="image/*,.pdf,.txt,.md,.csv,.json,.html,.xml" onChange={(e) => { if (e.target.files) void attach(e.target.files); e.target.value = '' }} />
-          <ModelPicker variant="chip" /><ReasoningPicker />
-        </span>
-        <textarea
-          ref={input}
-          rows={1}
-          value={draft}
-          placeholder="Ask Ream to change this deck"
-          aria-label="Message"
-          onChange={(e) => { setDraft(e.target.value); e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(160, e.currentTarget.scrollHeight)}px` }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(draft) }
-            if (e.key === 'Escape' && !draft) { e.preventDefault(); (document.querySelector('[data-stage]') as HTMLElement | null)?.focus() }
-            e.stopPropagation()
-          }}
+      {voice ? (
+        <VoiceMode
+          onSend={(text, o) => send(text, undefined, o)}
+          onUser={(text) => { liveAt.current = Date.now(); setTurns((ts) => [...ts, { prompt: text, slide, steps: [], log: [], voice: true, text: '', state: 'done', startedAt: liveAt.current }]) }}
+          onAssistant={(text) => setTurns((ts) => ts.map((t) => (t.startedAt === liveAt.current && t.voice ? { ...t, text, log: [{ kind: 'text', text }] } : t)))}
+          onExit={() => setVoice(false)}
+          onStop={() => abort.current?.abort()}
         />
-        {running
-          ? <IconButton label="Stop" size="sm" tone="fill" type="button" onClick={() => abort.current?.abort()}><Stop size={14} weight="fill" /></IconButton>
-          : <IconButton label="Send" hint="↵" size="sm" tone="fill" type="submit" disabled={!draft.trim()} className={s.send}><ArrowUp size={15} weight="bold" /></IconButton>}
-      </form>
+      ) : (
+      <form className={s.composer} onSubmit={(e) => { e.preventDefault(); void send(draft) }}
+          onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation() } }}
+          onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); e.stopPropagation(); void attach(e.dataTransfer.files) } }}
+          onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}>
+          <span className={s.chips}>
+            <span className={s.chip}>Slide {slide + 1}</span>
+            {files.map((f, i) => <span key={i} className={s.fileChip}>{f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}><X size={10} weight="bold" /></button></span>)}
+          </span>
+          <span className={s.pickers}>
+            <IconButton label="Attach files" size="sm" tone="plain" type="button" onClick={() => picker.current?.click()}><Paperclip size={15} /></IconButton>
+            <input ref={picker} type="file" multiple hidden accept="image/*,.pdf,.txt,.md,.csv,.json,.html,.xml" onChange={(e) => { if (e.target.files) void attach(e.target.files); e.target.value = '' }} />
+            <ModelPicker variant="chip" /><ReasoningPicker />
+          </span>
+          <IconButton label="Talk to Ream" size="sm" tone="plain" type="button" className={s.talk} onClick={() => setVoice(true)}><Waveform size={16} weight="bold" /></IconButton>
+          <textarea
+            ref={input}
+            rows={1}
+            value={draft}
+            placeholder="Ask Ream to change this deck"
+            aria-label="Message"
+            onChange={(e) => { setDraft(e.target.value); e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(160, e.currentTarget.scrollHeight)}px` }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(draft) }
+              if (e.key === 'Escape' && !draft) { e.preventDefault(); (document.querySelector('[data-stage]') as HTMLElement | null)?.focus() }
+              e.stopPropagation()
+            }}
+          />
+          {running
+            ? <IconButton label="Stop" size="sm" tone="fill" type="button" onClick={() => abort.current?.abort()}><Stop size={14} weight="fill" /></IconButton>
+            : <IconButton label="Send" hint="↵" size="sm" tone="fill" type="submit" disabled={!draft.trim()} className={s.send}><ArrowUp size={15} weight="bold" /></IconButton>}
+        </form>
+      )}
     </aside>
   )
 }

@@ -21,7 +21,7 @@ import { parseSlide, topNodes } from '../../editor/irdiff'
 import { providerDef, type AiProviderId } from './providers'
 import { makePicture, pictureModel } from './images'
 import { recordUsage } from './usage'
-import { canSee, getActiveModel, getAi, reasoningFor, type ModelRef } from './settings'
+import { canSee, getActiveModel, getAi, reasoningFor, type ModelRef, type ReasoningLevel } from './settings'
 
 export type AgentEvent =
   | { type: 'thinking'; on: boolean; summary?: string }
@@ -182,13 +182,18 @@ export { canSee }
 export async function runAgent(opts: {
   deckId: string
   context: EditorContext
+  /** A voice agent's own chat model and reasoning (otherwise the chosen model and its remembered level). */
+  model?: ModelRef | null
+  reasoning?: ReasoningLevel
+  /** A spoken conversation: replies short and easy to say. */
+  voice?: boolean
   prompt: string
   files?: Attachment[]
   history: ModelMessage[]
   signal: AbortSignal
   on: (e: AgentEvent) => void
 }): Promise<{ before: SlideDoc[]; after: SlideDoc[] }> {
-  const chosen = getActiveModel()
+  const chosen = opts.model ?? getActiveModel()
   if (!chosen) throw new Error('Choose a model in Settings → AI.')
   const slim = chosen.provider === 'browser'
   const before = deck(opts.deckId).slides
@@ -509,7 +514,7 @@ export async function runAgent(opts: {
   }
 
   const d0 = deck(opts.deckId)
-  const sys = system(d0, slim)
+  const sys = system(d0, slim) + (opts.voice ? '\n\nThis is a spoken conversation: your words are read aloud. Keep every message short and natural to say (no lists, markdown or HTML in what you say).' : '')
   const context = brief(d0, opts.context, assets, slim)
 
   if (slim) {
@@ -552,7 +557,7 @@ export async function runAgent(opts: {
     system: sys,
     messages: [...opts.history, { role: 'user', content }],
     tools: pictureModel() ? tools : (({ generate_picture: _, ...rest }) => rest)(tools),
-    reasoning: reasoningFor(ai, chosen),
+    reasoning: opts.reasoning ?? reasoningFor(ai, chosen),
     stopWhen: isStepCount(24),
     // Rate limits (tokens per minute) are common on long runs: retry with backoff before giving up.
     maxRetries: 5,

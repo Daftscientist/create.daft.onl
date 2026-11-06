@@ -26,6 +26,7 @@ import { useShell } from '../lib/shell'
 import { AiMark } from './AiMark'
 import { ModelSetup } from './ModelSetup'
 import { CapabilityPicker } from './CapabilityPicker'
+import { VoiceAgentsSettings } from './VoiceAgents'
 import { ModelPicker } from './ModelPicker'
 import { ProviderMark } from './ProviderMark'
 import { openSyncFlow, prepareProviders, startConnect } from './SyncFlows'
@@ -307,6 +308,7 @@ function AiSettings() {
           )
         })}
       </SettingGroup>
+      <VoiceAgentsSettings />
       {setup && <ModelSetup provider={setup.id} models={setup.models} onClose={() => setSetup(null)} />}
       <p className={s.note}>{sync.provider
         ? sync.encrypted ? 'Keys sync with your library, end-to-end encrypted.' : `Keys sync with your library, so ${PROVIDERS[sync.provider].name} can read them. Turn on end-to-end encryption in Sync to prevent that.`

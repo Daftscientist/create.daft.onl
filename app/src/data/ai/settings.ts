@@ -24,6 +24,9 @@ export type AiSettings = {
   enabled?: Partial<Record<AiProviderId, string[]>>
   /** The picture-generation model Ream uses (Picture → Generate, and Ask's tool). */
   imageModel?: ModelRef | null
+  /** Voice agents the user built, and the one in use (ids; 'browser' is the built-in one). */
+  voiceAgents?: import('./voice').VoiceAgent[]
+  activeVoice?: string | null
 }
 
 export type ReasoningLevel = 'provider-default' | 'none' | 'low' | 'medium' | 'high' | 'max'

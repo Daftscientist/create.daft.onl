@@ -1,7 +1,7 @@
 // Every AI SDK provider that works from a browser (CORS checked 2026-11-05 against each API).
 // Packages load only when that provider is used. Bedrock and Vertex need signed server credentials,
 // so they can't run client-side and aren't offered.
-import type { ImageModel, LanguageModel } from 'ai'
+import type { ImageModel, LanguageModel, SpeechModel, TranscriptionModel } from 'ai'
 
 export type ProviderConfig = { apiKey?: string; baseURL?: string }
 type Def = {
@@ -15,6 +15,9 @@ type Def = {
   make: (c: ProviderConfig, model: string) => Promise<LanguageModel>
   /** Picture generation, where the provider's SDK offers it. */
   makeImage?: (c: ProviderConfig, model: string) => Promise<ImageModel>
+  /** Text to speech and speech to text, for voice agents built from parts. */
+  makeSpeech?: (c: ProviderConfig, model: string) => Promise<SpeechModel>
+  makeTranscription?: (c: ProviderConfig, model: string) => Promise<TranscriptionModel>
 }
 
 async function list(url: string, headers: Record<string, string>, pick: (j: any) => string[]): Promise<string[]> {
@@ -36,12 +39,16 @@ export const AI_PROVIDERS = {
     name: 'OpenAI', needs: ['apiKey'], keyHint: 'sk-…', keysUrl: 'https://platform.openai.com/api-keys', models: openaiLike('https://api.openai.com/v1'),
     make: async (c, m) => (await import('@ai-sdk/openai')).createOpenAI({ apiKey: c.apiKey })(m),
     makeImage: async (c, m) => (await import('@ai-sdk/openai')).createOpenAI({ apiKey: c.apiKey }).image(m),
+    makeSpeech: async (c, m) => (await import('@ai-sdk/openai')).createOpenAI({ apiKey: c.apiKey }).speech(m),
+    makeTranscription: async (c, m) => (await import('@ai-sdk/openai')).createOpenAI({ apiKey: c.apiKey }).transcription(m),
   },
   google: {
     name: 'Google Gemini', needs: ['apiKey'], keysUrl: 'https://aistudio.google.com/apikey',
     models: (c) => list('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { 'x-goog-api-key': c.apiKey! }, (j) => j.models.filter((m: { supportedGenerationMethods: string[] }) => m.supportedGenerationMethods.includes('generateContent')).map((m: { name: string }) => m.name.replace('models/', ''))),
     make: async (c, m) => (await import('@ai-sdk/google')).createGoogleGenerativeAI({ apiKey: c.apiKey })(m),
     makeImage: async (c, m) => (await import('@ai-sdk/google')).createGoogleGenerativeAI({ apiKey: c.apiKey }).image(m),
+    makeSpeech: async (c, m) => (await import('@ai-sdk/google')).createGoogleGenerativeAI({ apiKey: c.apiKey }).speech(m),
+    makeTranscription: async (c, m) => (await import('@ai-sdk/google')).createGoogleGenerativeAI({ apiKey: c.apiKey }).transcription(m),
   },
   openrouter: {
     name: 'OpenRouter', needs: ['apiKey'], keysUrl: 'https://openrouter.ai/keys', models: openaiLike('https://openrouter.ai/api/v1'),
@@ -50,15 +57,20 @@ export const AI_PROVIDERS = {
   mistral: {
     name: 'Mistral', needs: ['apiKey'], keysUrl: 'https://console.mistral.ai/api-keys', models: openaiLike('https://api.mistral.ai/v1'),
     make: async (c, m) => (await import('@ai-sdk/mistral')).createMistral({ apiKey: c.apiKey })(m),
+    makeSpeech: async (c, m) => (await import('@ai-sdk/mistral')).createMistral({ apiKey: c.apiKey }).speech(m),
+    makeTranscription: async (c, m) => (await import('@ai-sdk/mistral')).createMistral({ apiKey: c.apiKey }).transcription(m),
   },
   xai: {
     name: 'xAI', needs: ['apiKey'], keysUrl: 'https://console.x.ai', models: openaiLike('https://api.x.ai/v1'),
     make: async (c, m) => (await import('@ai-sdk/xai')).createXai({ apiKey: c.apiKey })(m),
     makeImage: async (c, m) => (await import('@ai-sdk/xai')).createXai({ apiKey: c.apiKey }).image(m),
+    makeSpeech: async (c) => (await import('@ai-sdk/xai')).createXai({ apiKey: c.apiKey }).speechModel(),
+    makeTranscription: async (c, m) => (await import('@ai-sdk/xai')).createXai({ apiKey: c.apiKey }).transcription(m),
   },
   groq: {
     name: 'Groq', needs: ['apiKey'], keysUrl: 'https://console.groq.com/keys', models: openaiLike('https://api.groq.com/openai/v1'),
     make: async (c, m) => (await import('@ai-sdk/groq')).createGroq({ apiKey: c.apiKey })(m),
+    makeTranscription: async (c, m) => (await import('@ai-sdk/groq')).createGroq({ apiKey: c.apiKey }).transcription(m),
   },
   deepseek: {
     name: 'DeepSeek', needs: ['apiKey'], keysUrl: 'https://platform.deepseek.com/api_keys', models: openaiLike('https://api.deepseek.com'),
@@ -91,12 +103,17 @@ export const AI_PROVIDERS = {
     name: 'Azure OpenAI', needs: ['apiKey', 'baseURL'], baseHint: 'https://<resource>.openai.azure.com/openai',
     make: async (c, m) => (await import('@ai-sdk/azure')).createAzure({ apiKey: c.apiKey, baseURL: c.baseURL })(m),
     makeImage: async (c, m) => (await import('@ai-sdk/azure')).createAzure({ apiKey: c.apiKey, baseURL: c.baseURL }).imageModel(m),
+    makeSpeech: async (c, m) => (await import('@ai-sdk/azure')).createAzure({ apiKey: c.apiKey, baseURL: c.baseURL }).speechModel(m),
+    makeTranscription: async (c, m) => (await import('@ai-sdk/azure')).createAzure({ apiKey: c.apiKey, baseURL: c.baseURL }).transcriptionModel(m),
   },
   local: {
     name: 'Local model (Ollama, LM Studio)', needs: ['baseURL'], baseHint: 'http://localhost:11434/v1',
     models: openaiLike('http://localhost:11434/v1'),
     make: async (c, m) => (await import('@ai-sdk/openai-compatible')).createOpenAICompatible({ name: 'local', baseURL: c.baseURL || 'http://localhost:11434/v1', apiKey: c.apiKey })(m),
     makeImage: async (c, m) => (await import('@ai-sdk/openai-compatible')).createOpenAICompatible({ name: 'local', baseURL: c.baseURL || 'http://localhost:11434/v1', apiKey: c.apiKey }).imageModel(m),
+    // Local speech servers (Whisper, Kokoro and friends) speak OpenAI's audio API.
+    makeSpeech: async (c, m) => (await import('@ai-sdk/openai')).createOpenAI({ baseURL: c.baseURL || 'http://localhost:11434/v1', apiKey: c.apiKey || 'local' }).speech(m),
+    makeTranscription: async (c, m) => (await import('@ai-sdk/openai')).createOpenAI({ baseURL: c.baseURL || 'http://localhost:11434/v1', apiKey: c.apiKey || 'local' }).transcription(m),
   },
 } satisfies Record<string, Def>
 

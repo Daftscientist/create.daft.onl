@@ -48,7 +48,7 @@
 
 .composer {
   margin: 8px; padding: 8px 8px 8px 10px; border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-tile);
-  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "chips chips" "text text" "pickers send"; gap: 6px 8px; align-items: center;
+  display: grid; grid-template-areas: "chips chips chips" "text text text" "pickers talk send"; grid-template-columns: 1fr auto auto; gap: 6px 8px; align-items: center;
 }
 .pickers { grid-area: pickers; display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: -8px; }
 .composer > button, .composer > [class*="send"] { grid-area: send; }
@@ -70,3 +70,5 @@
 .visionCard p { font-size: 13px; line-height: 19px; display: flex; gap: 8px; align-items: flex-start; }
 .visionCard p svg { flex: none; margin-top: 2px; color: var(--ink-2); }
 .visionActions { display: flex; gap: 6px; flex-wrap: wrap; }
+.composer > .talk { grid-area: talk; }
+.mic { display: inline-block; vertical-align: -1px; margin-right: 6px; color: var(--ink-3); }
