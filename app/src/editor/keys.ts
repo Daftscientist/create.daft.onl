@@ -11,6 +11,7 @@ import { getEditor, select, setEditor } from './session'
 import { editingLive, endEdit, formatRuns, textHistory, textState, textUndo } from './textctl'
 import { isGroup, members } from './geometry'
 import { copyFormat, pasteFormat } from './painter'
+import { startComment } from './CommentPins'
 
 const REGIONS = ['header', 'bar', 'stage', 'notes', 'rail', 'column'] as const
 export const regionOf = (el: Element | null) => (el?.closest('[data-region]') as HTMLElement | null)?.dataset.region ?? null
@@ -56,6 +57,9 @@ export function useEditorKeys(o: Opts) {
       if (mod && k === 'j') { e.preventDefault(); o.onAsk(); return }
       if (mod && e.altKey && !e.getModifierState('AltGraph') && (k === 'i' || e.code === 'KeyI')) { e.preventDefault(); o.onFormat(); return }
       if (e.altKey && e.key === 'F10' && !o.readOnly) { e.preventDefault(); dispatchEvent(new Event('ream:objects')); return }
+      // PowerPoint's New Comment (Ctrl+Alt+M): on the selection, or click to place one.
+      if (mod && e.altKey && !e.getModifierState('AltGraph') && (k === 'm' || e.code === 'KeyM') && !o.readOnly) { e.preventDefault(); endEdit(); startComment(); return }
+      if (e.key === 'Escape' && st.commenting) { e.preventDefault(); setEditor({ commenting: false }); return }
       if (e.key === 'F6') {
         e.preventDefault()
         const cur = regionOf(document.activeElement)

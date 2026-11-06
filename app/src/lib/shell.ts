@@ -16,3 +16,5 @@ export function useShell(): Shell {
 
 export const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
 export const modKey = isMac ? '⌘' : 'Ctrl'
+/** The New Comment shortcut as this platform writes it. */
+export const commentKey = isMac ? '⌥⌘M' : 'Ctrl+Alt+M'

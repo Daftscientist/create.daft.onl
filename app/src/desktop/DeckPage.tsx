@@ -8,7 +8,7 @@ import { useActiveModel } from '../data/ai/settings'
 import type { Deck } from '../data/types'
 import { count } from '../lib/format'
 import { back, navigate } from '../lib/router'
-import { modKey } from '../lib/shell'
+import { commentKey, modKey } from '../lib/shell'
 import { Button, IconButton } from '../ui/Button'
 import { HtmlMark, PptxMark } from '../ui/FileMarks'
 import { Menu, type MenuAnchor, type MenuItem } from '../ui/Menu'
@@ -39,7 +39,9 @@ import { maybeKeep } from '../editor/versions'
 import { copyFormat, hasFormat, pasteFormat } from '../editor/painter'
 import { Rail } from '../editor/Rail'
 import { getEditor, setEditor, useEditor, type Column } from '../editor/session'
-import { endEdit, onTextChange, textHistory } from '../editor/textctl'
+import { endEdit, formatRuns, list, onTextChange, refocus, textHistory, textState } from '../editor/textctl'
+import { startComment } from '../editor/CommentPins'
+import { toast } from '../data/toasts'
 import s from './DeckPage.module.css'
 
 const kept = new Map<string, { slideId: string | null; sel: string[]; scope: string | null; zoom: number | 'fit' }>()
@@ -148,6 +150,18 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     return () => { for (const t of ['copy', 'cut', 'paste'] as const) document.removeEventListener(t, on) }
   }, [d])
 
+  // The editor is a fixed screen: the page itself never scrolls (something briefly taller, or a scrollIntoView
+  // reaching the document, used to leave the whole editor shifted up with empty ground below).
+  useEffect(() => {
+    const html = document.documentElement
+    const was = html.style.overflow
+    html.style.overflow = 'hidden'
+    const back = () => { if (html.scrollTop || document.body.scrollTop) { html.scrollTop = 0; document.body.scrollTop = 0 } }
+    addEventListener('scroll', back, true)
+    back()
+    return () => { html.style.overflow = was; removeEventListener('scroll', back, true) }
+  }, [])
+
   // While Ask works, the stage follows it to the slide it's changing, unless you've used the editor in the
   // last few seconds (then it stays where you are; the rail shows the change).
   useEffect(() => {
@@ -175,8 +189,30 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   useEffect(() => {
     const on = (e: Event) => {
       if (coarse.matches) return
-      const { x, y } = (e as CustomEvent<{ x: number; y: number }>).detail
+      const { x, y, text } = (e as CustomEvent<{ x: number; y: number; text?: boolean }>).detail
       const sel = getEditor().sel
+      if (text) {
+        // Editing text: the clipboard and the formatting a right-click should offer (Keynote, PowerPoint).
+        const t = textState(null)
+        const keepFocus = () => requestAnimationFrame(refocus)
+        setMenu({ anchor: { x, y }, label: 'Text', items: [
+          { label: 'Cut', hint: `${modKey}X`, run: () => { refocus(); document.execCommand('cut') } },
+          { label: 'Copy', hint: `${modKey}C`, run: () => { refocus(); document.execCommand('copy') } },
+          { label: 'Paste', hint: `${modKey}V`, run: () => { void navigator.clipboard.readText().then((v) => { refocus(); document.execCommand('insertText', false, v) }).catch(() => toast({ message: `Use ${modKey}V to paste here.` })) } },
+          { label: 'Select all', hint: `${modKey}A`, run: () => { refocus(); document.execCommand('selectAll') } },
+          { kind: 'sep' },
+          { label: 'Bold', hint: `${modKey}B`, selected: !!t?.bold, run: () => { formatRuns({ 'font-weight': t?.bold ? '400' : '700' }, 'Bold'); keepFocus() } },
+          { label: 'Italic', hint: `${modKey}I`, selected: !!t?.italic, run: () => { formatRuns({ 'font-style': t?.italic ? 'normal' : 'italic' }, 'Italic'); keepFocus() } },
+          { label: 'Underline', hint: `${modKey}U`, selected: !!t?.underline, run: () => { formatRuns({ 'text-decoration-line': t?.underline ? null : 'underline' }, 'Underline'); keepFocus() } },
+          { kind: 'sep' },
+          { label: 'Bullets', selected: t?.list === 'ul', run: () => { list('ul'); keepFocus() } },
+          { label: 'Numbering', selected: t?.list === 'ol', run: () => { list('ol'); keepFocus() } },
+          { kind: 'sep' },
+          { label: 'Comment', hint: commentKey, run: () => { endEdit(); startComment() } },
+          { kind: 'note', text: 'Shift + right-click for spelling suggestions' },
+        ] })
+        return
+      }
       const size = d?.size ?? { w: 1280, h: 720 }
       const at = () => slidePoint(x, y)
       const items: MenuItem[] = sel.length ? [

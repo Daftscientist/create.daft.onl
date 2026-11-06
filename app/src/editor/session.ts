@@ -20,13 +20,15 @@ export type EditorState = {
   /** Slides the agent is changing right now: read-only on the canvas. */
   locked: string[]
   presenting: boolean
+  /** Placing a comment: the next click on the slide drops a pin there. */
+  commenting: boolean
   /** The viewer (tablets): nothing may change the deck. */
   readOnly: boolean
 }
 
 let state: EditorState = {
   deckId: null, slideId: null, sel: [], scope: null, editing: null, railSel: [], railAnchor: null,
-  zoom: 'fit', column: null, locked: [], presenting: false, readOnly: false,
+  zoom: 'fit', column: null, locked: [], presenting: false, readOnly: false, commenting: false,
 }
 const listeners = new Set<() => void>()
 

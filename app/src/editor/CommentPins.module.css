@@ -1,0 +1,27 @@
+.layer { position: absolute; inset: 0; pointer-events: none; }
+/* A speech-bubble pin whose point sits on the spot. */
+.pin {
+  position: absolute; pointer-events: auto; transform: translate(-2px, -100%);
+  min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px 12px 12px 3px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  background: var(--select); color: #fff; font: 700 11.5px/1 var(--font);
+  box-shadow: 0 0 0 2px #fff, 0 2px 8px rgb(0 0 0 / 0.25); cursor: pointer;
+}
+.pin[data-ai] { background: #6d4aff; }
+.pin[data-draft] { pointer-events: none; }
+.pin:hover, .pin[aria-expanded="true"] { filter: brightness(1.1); }
+.pin:focus-visible { outline: 2px solid var(--select); outline-offset: 3px; }
+.count { font-weight: 600; opacity: 0.85; font-size: 10.5px; }
+.layer[data-commenting] { pointer-events: none; }
+
+.compose, .thread { display: flex; flex-direction: column; gap: 8px; }
+.meta { font-size: 11.5px; color: var(--ink-3); }
+.head { display: flex; align-items: center; gap: 2px; }
+.head .meta { flex: 1; }
+.text { font-size: 13.5px; line-height: 20px; white-space: pre-wrap; }
+.reply { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 19px; padding-left: 10px; border-left: 2px solid var(--hair); white-space: pre-wrap; }
+.area, .replyInput { width: 100%; border: 0; border-radius: var(--r-xs); background: var(--fill); padding: 8px 10px; font: inherit; font-size: 13px; color: var(--ink); resize: vertical; outline: none; }
+.area:focus, .replyInput:focus { box-shadow: inset 0 0 0 1.5px var(--select); background: var(--paper); }
+.actions { display: flex; justify-content: flex-end; gap: 6px; }
+.link { align-self: flex-start; font-size: 12px; color: var(--select); }
+.link:hover { text-decoration: underline; }

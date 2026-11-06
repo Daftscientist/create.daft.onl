@@ -10,6 +10,7 @@ import { isLine, lineEnds, setLineEnds, type Pt } from './line'
 import { getEditor, select, setEditor, useEditor } from './session'
 import { snapEdges, snapMove, type Guide } from './snap'
 import { beginEdit, editingLive, endEdit, fitHeight, onTextChange } from './textctl'
+import { CommentPins, startComment } from './CommentPins'
 import { updateSlides } from '../data/library'
 import { formatLength, localUnit } from './units'
 import s from './Canvas.module.css'
@@ -50,6 +51,7 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
   const scope = useEditor((e) => e.scope)
   const editing = useEditor((e) => e.editing)
   const locked = useEditor((e) => e.locked).includes(slide.id) || readOnly
+  const commenting = useEditor((e) => e.commenting)
   const [, setTick] = useState(0)
   const rerender = useCallback(() => setTick((t) => t + 1), [])
   const gesture = useRef<Gesture | null>(null)
@@ -185,6 +187,8 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
       return
     }
     if (e.button !== 0 && e.button !== 2) return
+    // Comment mode: this click drops a comment pin here.
+    if (getEditor().commenting && e.button === 0) { e.preventDefault(); startComment(toSlide(e.clientX, e.clientY)); return }
     const target = e.target as HTMLElement
     const handle = target.closest<HTMLElement>('[data-handle]')
     const ed = editingLive()
@@ -453,13 +457,20 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
       aria-describedby="stage-objects"
       aria-activedescendant={sel[0] ? `obj-${sel[0]}` : undefined}
       data-space={space || undefined}
+      data-commenting={commenting || undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={() => finish(false)}
       onPointerCancel={() => finish(true)}
       onPointerLeave={() => setHover(null)}
       onDoubleClick={onDoubleClick}
-      onContextMenu={(e) => { if (editingLive() && e.nativeEvent.composedPath().includes(editingLive()!.host)) return; e.preventDefault(); window.dispatchEvent(new CustomEvent('ream:canvas-menu', { detail: { x: e.clientX, y: e.clientY } })) }}
+      onContextMenu={(e) => {
+        // In text being edited: our text menu (⇧ right-click keeps the browser's, for spelling suggestions).
+        const inText = !!editingLive() && e.nativeEvent.composedPath().includes(editingLive()!.host)
+        if (inText && e.shiftKey) return
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent('ream:canvas-menu', { detail: { x: e.clientX, y: e.clientY, text: inText } }))
+      }}
     >
       <div className={s.world} style={{ width: wsize.w, height: wsize.h }}>
         <div ref={host} className={s.paper} style={{ left: off.x, top: off.y, width: size.w * z, height: size.h * z }}>
@@ -493,7 +504,11 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
             return <span key={idOf(el)} className={s.overflow} style={{ left: (b.x + b.w) * z - 10, top: (b.y + b.h) * z - 10 }} title="This text doesn’t fit its box. Make the box bigger or the text smaller." />
           })}
         </div>
+        <div className={s.pinLayer} style={{ left: off.x, top: off.y, width: size.w * z, height: size.h * z }}>
+          <CommentPins slide={slide} stage={stage} z={z} readOnly={readOnly} />
+        </div>
       </div>
+      {commenting && <div className={s.lockNote} role="status">Click where the comment goes · Esc to cancel</div>}
       {locked && !readOnly && <div className={s.lockNote} role="status">Ream is editing this slide</div>}
       {/* What a screen reader gets for the stage: each object by kind and text, the selection, and a
           polite note when it changes (spec: Accessibility). */}

@@ -71,3 +71,5 @@
 /* Ask's edits landing: a soft ring that fades (no movement under reduced motion; the ring alone). */
 .glow { border-radius: 4px; box-shadow: 0 0 0 2px var(--select), 0 0 18px 4px color-mix(in srgb, var(--select) 45%, transparent); animation: glow 1.4s var(--ease-out) forwards; }
 @keyframes glow { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
+.pinLayer { position: absolute; pointer-events: none; z-index: 2; }
+.viewport[data-commenting] { cursor: crosshair; }

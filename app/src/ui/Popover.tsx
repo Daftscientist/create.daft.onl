@@ -46,7 +46,9 @@ export function Popover({ anchor, label, onClose, children, width = 280, onClose
   }, [anchor, width])
 
   useEffect(() => {
-    const first = ref.current?.querySelector<HTMLElement>('[data-autofocus], [data-tile], [role=grid], input:not([type=range]), button:not(:disabled), [tabindex="0"], input')
+    // In priority order (one selector list would take whichever comes first on the page).
+    const first = ['[data-autofocus]', '[data-tile]', '[role=grid]', 'input:not([type=range]), textarea', 'button:not(:disabled), [tabindex="0"], input']
+      .map((q) => ref.current?.querySelector<HTMLElement>(q)).find(Boolean)
     ;(first ?? ref.current)?.focus({ preventScroll: true })
     const down = (e: PointerEvent) => {
       const t = e.target as Element
@@ -70,6 +72,10 @@ export function Popover({ anchor, label, onClose, children, width = 280, onClose
       tabIndex={-1}
       data-ream-layer=""
       className={`${s.popover} ${className ?? ''}`}
+      // Portalled, but React still bubbles its events to whoever rendered it (a popover opened from the canvas
+      // would otherwise start a canvas gesture and swallow the click).
+      onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}
       style={{ width, left: pos?.left ?? -9999, top: pos?.top ?? 0, maxHeight: pos?.maxHeight }}
       onKeyDown={(e) => {
         if (e.key !== 'Escape') return

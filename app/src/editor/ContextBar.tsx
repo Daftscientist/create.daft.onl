@@ -3,7 +3,7 @@
 // Buttons with ▾ open paper popovers holding the property sections, laid flat. Text controls keep the text edit
 // alive and return to its caret. A click outside a popover closes it.
 import {
-  CaretDown, ChatCircle, DotsThree, Function as FnIcon, ListBullets, ListNumbers, Selection as SelectionIcon, SelectionSlash,
+  CaretDown, ChatCircle, ChatCircleDots as ChatCirclePlus, DotsThree, Function as FnIcon, ListBullets, ListNumbers, Selection as SelectionIcon, SelectionSlash,
   Sparkle, Stack, TextAlignCenter, TextAlignJustify, TextAlignLeft, TextAlignRight, TextAa, TextB, TextItalic, TextUnderline, FilmStrip, ArrowsOutCardinal,
   TextIndent, TextOutdent, Shapes as ShapesIcon, AlignTop, AlignCenterVertical, AlignBottom, Drop, Image as ImageIcon, Table as TableIcon, ChartBar, LineSegment,
 } from '@phosphor-icons/react'
@@ -16,6 +16,7 @@ import { Menu, type MenuAnchor } from '../ui/Menu'
 import { Popover } from '../ui/Popover'
 import { Toolbar, type ToolbarHandle } from '../ui/Toolbar'
 import { Tooltip } from '../ui/Tooltip'
+import { commentKey } from '../lib/shell'
 import { liveStage } from './Canvas'
 import { ChartData } from './ChartData'
 import { readSpec } from './chart'
@@ -24,6 +25,7 @@ import { find, group, plainText, setAnchor, setBackground, ungroup } from './ops
 import { CommentsSection } from './Review'
 import { ShapesGallery } from './InsertGallery'
 import { changeShape } from './insert'
+import { startComment } from './CommentPins'
 import {
   AltTextSection, AnimateSection, ArrangeSection, ChartSection, EffectsSection, FillSection, FLAT, LineSection, ObjectList, PictureSection,
   TableSection, Toggle, TransitionSection, anchorOf, colorsOf, kindOf, objectName,
@@ -114,7 +116,7 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
     line: kinds.length > 0 && kinds.every((k) => k === 'line') ? { label: 'Line', body: () => <LineSection sec={FLAT} els={els} ids={sel} colors={colors} /> } : undefined,
     arrange: els.length ? { label: els.length > 1 ? 'Arrange and align' : 'Arrange', body: () => <ArrangeSection sec={FLAT} els={els} ids={sel} size={size} /> } : undefined,
     animate: els.length ? { label: 'Animate', body: () => <AnimateSection sec={FLAT} els={els} ids={sel} /> } : undefined,
-    more: els.length === 1 || collapse ? { label: 'More', width: 300, body: () => <>
+    more: els.length >= 1 ? { label: 'More', width: 300, body: () => <>
       {collapse && <>
         {kinds.every((k) => k === 'shape') && els.every((e) => e.tagName === 'DIV') && <Section title="Change shape" {...FLAT}><ShapesGallery lines={false} current={els[0].getAttribute('data-ream-shape') ?? undefined} onDrag={() => {}} onPick={(k) => { changeShape(sel, k); setPop(null) }} /></Section>}
         {styleable && kinds.some((k) => k !== 'text') && <EffectsSection sec={FLAT} els={els} ids={sel} />}
@@ -122,7 +124,7 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
         <AnimateSection sec={FLAT} els={els} ids={sel} />
       </>}
       {els.length === 1 && (one === 'picture' || one === 'chart' || one === 'preserved' || one === 'shape' || one === 'svg') && <AltTextSection sec={FLAT} el={els[0]} id={sel[0]} />}
-      {els.length === 1 && <CommentsSection slide={slide} objectId={sel[0]} objectName={objectName(els[0]).split(':')[0].toLowerCase()} sec={FLAT} />}
+      {els.length >= 1 && <CommentsSection slide={slide} objectIds={sel} objectName={els.length > 1 ? `${els.length} objects` : objectName(els[0]).split(':')[0].toLowerCase()} sec={FLAT} />}
     </> } : undefined,
   }
   const open = pop && panels[pop.key] ? pop : null
@@ -155,7 +157,8 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
         {!els.length && !editing && <span className={s.slot}>
           <SlideBackground deck={deck} colors={colors} />
           {btn('transition', 'Transition', <FilmStrip size={15} />)}
-          {btn('slideComments', slide.comments?.some((c) => !c.resolved) ? `Comments (${slide.comments.filter((c) => !c.resolved).length})` : 'Comments', <ChatCircle size={15} />)}
+          <BarButton label="Add comment" icon={<ChatCirclePlus size={15} />} showLabel={labels} onClick={() => startComment()} />
+          {slide.comments?.length ? btn('slideComments', slide.comments.some((c) => !c.resolved) ? `Comments (${slide.comments.filter((c) => !c.resolved).length})` : 'Comments', <ChatCircle size={15} />) : null}
         </span>}
 
         {t && <span className={s.slot}>
@@ -196,6 +199,7 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
         {els.length > 0 && <span className={`${s.slot} ${s.end}`}>
           {!collapse && btn('arrange', 'Arrange', <ArrowsOutCardinal size={15} />)}
           {!collapse && btn('animate', 'Animate', <Sparkle size={15} />)}
+          <Tooltip label="Comment on this" hint={commentKey}><button type="button" className={s.btn} aria-label="Comment on this" onClick={() => startComment()}><ChatCirclePlus size={15} /></button></Tooltip>
           {panels.more && <BarButton pop="more" label="More" icon={<DotsThree size={16} weight="bold" />} showLabel={false} expanded={open?.key === 'more'} onClick={toggle('more')} />}
         </span>}
       </Toolbar>

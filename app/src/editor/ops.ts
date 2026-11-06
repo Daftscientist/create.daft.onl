@@ -619,9 +619,13 @@ export function deckFonts(deck: Deck): string[] {
 
 // ---------- comments ----------
 
-export function addComment(slideId: string, text: string, objectId?: string) {
-  editSlides('Comment', (slides) => slides.map((s) => (s.id === slideId ? { ...s, comments: [...(s.comments ?? []), { id: newId('c'), text, at: Date.now(), objectId }] } : s)))
+/** A comment on the slide, pinned to a point (slide px), or attached to one or more objects. */
+export function addComment(slideId: string, text: string, target: { objectIds?: string[]; pin?: { x: number; y: number } } = {}) {
+  const objectIds = target.objectIds?.length ? target.objectIds : undefined
+  editSlides('Comment', (slides) => slides.map((s) => (s.id === slideId ? { ...s, comments: [...(s.comments ?? []), { id: newId('c'), text, at: Date.now(), by: 'user' as const, objectIds, pin: objectIds ? undefined : target.pin }] } : s)))
 }
+/** The objects a comment is attached to (the older single-object form included). */
+export const commentTargets = (c: { objectId?: string; objectIds?: string[] }) => [...(c.objectIds ?? []), ...(c.objectId && !c.objectIds?.includes(c.objectId) ? [c.objectId] : [])]
 export function replyComment(slideId: string, commentId: string, text: string) {
   editSlides('Reply', (slides) => slides.map((s) => (s.id === slideId ? { ...s, comments: (s.comments ?? []).map((c) => (c.id === commentId ? { ...c, replies: [...(c.replies ?? []), { id: newId('r'), text, at: Date.now() }] } : c)) } : s)))
 }

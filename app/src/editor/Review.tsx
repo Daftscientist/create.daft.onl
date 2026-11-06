@@ -10,7 +10,7 @@ import { Row, Section } from '../ui/Inspector'
 import { DeckThumb } from '../compositions/DeckThumb'
 import { checkDeck } from './a11y'
 import { transact } from './history'
-import { addComment, deleteComment, replyComment, resolveComment } from './ops'
+import { addComment, commentTargets, deleteComment, replyComment, resolveComment } from './ops'
 import { getEditor, setEditor } from './session'
 import { listVersions, type Version } from './versions'
 import s from './Sections.module.css'
@@ -25,21 +25,21 @@ function useDraft(key: string): [string, (v: string) => void] {
   return [v, (x: string) => { if (x) drafts.set(key, x); else drafts.delete(key); setV(x) }]
 }
 
-export function CommentsSection({ slide, sec, objectId, objectName }: { slide: SlideDoc; sec: Sec; objectId?: string; objectName?: string }) {
-  const [text, setText] = useDraft(`${slide.id}:${objectId ?? ''}`)
+export function CommentsSection({ slide, sec, objectIds, objectName }: { slide: SlideDoc; sec: Sec; objectIds?: string[]; objectName?: string }) {
+  const [text, setText] = useDraft(`${slide.id}:${objectIds?.join(',') ?? ''}`)
   const all = slide.comments ?? []
-  const shown = objectId ? all.filter((c) => c.objectId === objectId) : all
+  const shown = objectIds?.length ? all.filter((c) => commentTargets(c).some((id) => objectIds.includes(id))) : all
   const open = shown.filter((c) => !c.resolved)
   return (
     <Section title="Comments" {...sec} aside={open.length ? <span className={s.badge}>{open.length}</span> : undefined}>
       {shown.map((c) => (
         <div key={c.id} className={s.comment} data-resolved={c.resolved || undefined}>
           <div className={s.commentHead}>
-            <span>{relTimeInline(c.at)}{c.objectId && !objectId ? ' · on an object' : ''}</span>
+            <span>{relTimeInline(c.at)}{commentTargets(c).length && !objectIds?.length ? ` · on ${commentTargets(c).length === 1 ? 'an object' : `${commentTargets(c).length} objects`}` : c.pin && !objectIds?.length ? ' · pinned' : ''}{c.by === 'ai' ? ' · Ream' : ''}</span>
             <IconButton label={c.resolved ? 'Reopen' : 'Resolve'} size="sm" tone="plain" onClick={() => resolveComment(slide.id, c.id, !c.resolved)}>{c.resolved ? <ArrowCounterClockwise size={13} /> : <Check size={13} />}</IconButton>
             <IconButton label="Delete comment" size="sm" tone="plain" onClick={() => deleteComment(slide.id, c.id)}><Trash size={13} /></IconButton>
           </div>
-          <p className={s.commentText} onClick={() => c.objectId && setEditor({ sel: [c.objectId], scope: null })}>{c.text}</p>
+          <p className={s.commentText} onClick={() => commentTargets(c).length && setEditor({ sel: commentTargets(c), scope: null })}>{c.text}</p>
           {(c.replies ?? []).map((r) => <p key={r.id} className={s.reply}>{r.text}<span> · {relTimeInline(r.at)}</span></p>)}
           {!c.resolved && (
             <ReplyField slideId={slide.id} commentId={c.id} />
@@ -47,8 +47,8 @@ export function CommentsSection({ slide, sec, objectId, objectName }: { slide: S
         </div>
       ))}
       <textarea className={s.notes} style={{ minHeight: 56 }} value={text} placeholder={objectName ? `Comment on ${objectName}` : 'Comment on this slide'} aria-label="New comment" onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim()) { addComment(slide.id, text.trim(), objectId); setText('') } }} />
-      <Row><Button variant="secondary" icon={<ChatCircle size={14} />} disabled={!text.trim()} onClick={() => { addComment(slide.id, text.trim(), objectId); setText('') }}>Comment</Button></Row>
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim()) { addComment(slide.id, text.trim(), { objectIds }); setText('') } }} />
+      <Row><Button variant="secondary" icon={<ChatCircle size={14} />} disabled={!text.trim()} onClick={() => { addComment(slide.id, text.trim(), { objectIds }); setText('') }}>Comment</Button></Row>
     </Section>
   )
 }
