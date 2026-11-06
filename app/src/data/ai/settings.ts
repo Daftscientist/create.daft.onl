@@ -15,6 +15,10 @@ export type AiSettings = {
   model: ModelRef | null
   /** The reasoning level last chosen for each model (`provider:id`); absent = the provider's default. */
   reasoning?: Record<string, ReasoningLevel>
+  /** A model that can see pictures, used to describe slides to a chosen model that can't. */
+  visionModel?: ModelRef | null
+  /** Per model (`provider:id`): whether it can take pictures, when the user has said so. */
+  vision?: Record<string, boolean>
 }
 
 export type ReasoningLevel = 'provider-default' | 'none' | 'low' | 'medium' | 'high' | 'max'
@@ -22,7 +26,19 @@ export const REASONING_LEVELS: { level: ReasoningLevel; label: string }[] = [
   { level: 'provider-default', label: 'Default' }, { level: 'none', label: 'Off' }, { level: 'low', label: 'Low' },
   { level: 'medium', label: 'Medium' }, { level: 'high', label: 'High' }, { level: 'max', label: 'Max' },
 ]
-const modelKey = (m: ModelRef) => `${m.provider}:${m.id}`
+export const modelKey = (m: ModelRef) => `${m.provider}:${m.id}`
+/** Model families known to read pictures. Anything else is treated as text-only unless the user says otherwise. */
+const SEES = /gpt-4o|gpt-4\.1|gpt-4\.5|gpt-5|gpt-6|o3|o4|chatgpt|claude-(3|sonnet|opus|haiku|4|5|fable)|gemini|gemma-3|grok-(2-vision|4|5|vision)|pixtral|mistral-(medium|small)-(2|3)|llava|llama-4|qwen.*vl|qwen3|vision|minicpm-v|moondream|kimi-k2/i
+export function canSee(s: AiSettings, m: ModelRef | null): boolean {
+  if (!m || m.provider === 'browser') return false
+  const said = s.vision?.[modelKey(m)]
+  return said ?? SEES.test(m.id)
+}
+export function setCanSee(m: ModelRef, value: boolean | null) {
+  const v = { ...getAi().vision }
+  if (value === null) delete v[modelKey(m)]; else v[modelKey(m)] = value
+  setAi({ vision: v })
+}
 export const reasoningFor = (s: AiSettings, m: ModelRef | null): ReasoningLevel => (m && s.reasoning?.[modelKey(m)]) || 'provider-default'
 export function setReasoning(m: ModelRef, level: ReasoningLevel) {
   const r = { ...getAi().reasoning }

@@ -112,3 +112,18 @@ export function useHistory(deckId: string) {
     redoLabel: redoStack.findLast((t) => t.deckId === deckId)?.label,
   }
 }
+
+/** The last transaction's id: a bookmark for `userEditsSince`. */
+export const historyMark = () => seq
+/** What the user changed by hand since `mark`, oldest first: each change's label and the slide numbers it
+ *  touched (in the deck's order now). Undone changes aren't included. */
+export function userEditsSince(deckId: string, mark: number): { label: string; slides: number[] }[] {
+  const d = deckOf(deckId)
+  if (!d) return []
+  const order = new Map(d.slides.map((x, i) => [x.id, i + 1]))
+  return undoStack.filter((t) => t.deckId === deckId && t.id > mark && t.origin === 'user').map((t) => {
+    const was = new Map(t.before.map((x) => [x.id, x.html]))
+    const touched = t.after.filter((x) => was.get(x.id) !== x.html).map((x) => order.get(x.id)).filter((n): n is number => !!n)
+    return { label: t.label, slides: [...new Set(touched)] }
+  })
+}

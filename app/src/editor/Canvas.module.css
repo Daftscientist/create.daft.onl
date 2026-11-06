@@ -68,3 +68,6 @@
 .endpoint::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: #fff; border: 1.5px solid var(--select); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.9), 0 1px 2px rgb(0 0 0 / 0.25); }
 .overflow { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 1.5px var(--warn), var(--shadow-tile); pointer-events: auto; cursor: help; }
 .overflow::after { content: "+"; position: absolute; inset: 0; display: grid; place-items: center; font: 700 13px/1 var(--font); color: var(--warn); }
+/* Ask's edits landing: a soft ring that fades (no movement under reduced motion; the ring alone). */
+.glow { border-radius: 4px; box-shadow: 0 0 0 2px var(--select), 0 0 18px 4px color-mix(in srgb, var(--select) 45%, transparent); animation: glow 1.4s var(--ease-out) forwards; }
+@keyframes glow { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }

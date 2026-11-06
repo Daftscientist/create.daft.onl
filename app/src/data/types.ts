@@ -11,7 +11,9 @@
  *  data-animate*), so they import, export and reach the AI unchanged. */
 export type SlideDoc = { id: string; html: string; ir?: string; irDirty?: string[]; irMoved?: string[]; irSlide?: boolean; irAnim?: boolean; hidden?: boolean; comments?: SlideComment[] }
 /** A comment on a slide (or one object on it). Kept with the deck, so it syncs; never exported. */
-export type SlideComment = { id: string; text: string; at: number; objectId?: string; resolved?: boolean; replies?: { id: string; text: string; at: number }[] }
+/** A comment on a slide: pinned to a point on it (`pin`, slide px), attached to objects (`objectIds`; `objectId`
+ *  is the older single form), or on the slide as a whole. `by`: who wrote it (the user, or Ask). */
+export type SlideComment = { id: string; text: string; at: number; objectId?: string; objectIds?: string[]; pin?: { x: number; y: number }; by?: 'user' | 'ai'; resolved?: boolean; replies?: { id: string; text: string; at: number; by?: 'user' | 'ai' }[] }
 /** Slide size in CSS px; 1280x720 unless an imported deck says otherwise. */
 export type SlideSize = { w: number; h: number }
 

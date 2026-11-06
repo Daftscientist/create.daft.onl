@@ -148,6 +148,23 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     return () => { for (const t of ['copy', 'cut', 'paste'] as const) document.removeEventListener(t, on) }
   }, [d])
 
+  // While Ask works, the stage follows it to the slide it's changing, unless you've used the editor in the
+  // last few seconds (then it stays where you are; the rail shows the change).
+  useEffect(() => {
+    let last = 0
+    const touch = () => { last = Date.now() }
+    const on = (e: Event) => {
+      const id = (e as CustomEvent<{ slideId: string }>).detail.slideId
+      const st = getEditor()
+      if (Date.now() - last < 4000 || st.slideId === id || st.editing) return
+      setEditor({ slideId: id, railSel: [id], railAnchor: id, sel: [], scope: null })
+    }
+    addEventListener('pointerdown', touch, true)
+    addEventListener('keydown', touch, true)
+    addEventListener('ream:ai-edit', on)
+    return () => { removeEventListener('pointerdown', touch, true); removeEventListener('keydown', touch, true); removeEventListener('ream:ai-edit', on) }
+  }, [])
+
   useEffect(() => {
     const on = (e: Event) => setFind({ replace: (e as CustomEvent<boolean>).detail })
     addEventListener('ream:find', on)

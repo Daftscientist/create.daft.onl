@@ -48,7 +48,7 @@
 
 .composer {
   margin: 8px; padding: 8px 8px 8px 10px; border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-tile);
-  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "chip chip" "text text" "pickers send"; gap: 6px 8px; align-items: center;
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "chips chips" "text text" "pickers send"; gap: 6px 8px; align-items: center;
 }
 .pickers { grid-area: pickers; display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: -8px; }
 .composer > button, .composer > [class*="send"] { grid-area: send; }
@@ -61,3 +61,12 @@
 .thought { white-space: pre-wrap; margin: 6px 0 0; font-size: 12.5px; line-height: 18px; color: var(--ink-2); }
 .error { font-size: 13px; color: var(--danger); }
 .meta { font-size: 11.5px; color: var(--ink-3); }
+.chips { grid-area: chips; display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.chips .chip { grid-area: auto; }
+.fileChip { display: inline-flex; align-items: center; gap: 4px; max-width: 200px; height: 20px; padding: 0 4px 0 8px; border-radius: var(--r-pill); background: var(--select-soft); font-size: 11.5px; font-weight: 560; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fileChip button { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; color: var(--ink-2); flex: none; }
+.fileChip button:hover { background: var(--fill-2); color: var(--ink); }
+.visionCard { margin: 0 16px 8px; padding: 12px; border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-tile); display: flex; flex-direction: column; gap: 10px; }
+.visionCard p { font-size: 13px; line-height: 19px; display: flex; gap: 8px; align-items: flex-start; }
+.visionCard p svg { flex: none; margin-top: 2px; color: var(--ink-2); }
+.visionActions { display: flex; gap: 6px; flex-wrap: wrap; }

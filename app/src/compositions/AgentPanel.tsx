@@ -1,11 +1,19 @@
 // AI co-editing panel (docs/design/specs/ai-panel.md + both review rounds), driving the real agent
 // (data/ai/agent.ts). Activity lines hold ≥1.6s, queue at most one, and flush when the answer starts.
-import { ArrowUp, Check, NotePencil, Stop, X } from '@phosphor-icons/react'
+import { ArrowUp, Check, Eye, NotePencil, Paperclip, Stop, X } from '@phosphor-icons/react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import type { ModelMessage } from 'ai'
-import { runAgent } from '../data/ai/agent'
-import { useActiveModel } from '../data/ai/settings'
+import { runAgent, type Attachment } from '../data/ai/agent'
+import { canSee, modelLabel, providerName, setAi, useActiveModel, useAi } from '../data/ai/settings'
+import { useBrowserModel } from '../data/ai/browser'
+import { AI_PROVIDER_IDS } from '../data/ai/providers'
+import { getEditor } from '../editor/session'
+import { historyMark, userEditsSince } from '../editor/history'
+import { liveStage } from '../editor/Canvas'
+import { objectName } from '../editor/Sections'
+import { find } from '../editor/ops'
+import { Menu, type MenuAnchor } from '../ui/Menu'
 import { getLibrary, updateSlides } from '../data/library'
 import { toast } from '../data/toasts'
 import type { Deck, SlideDoc } from '../data/types'
@@ -30,6 +38,8 @@ type Turn = {
   slide: number
   steps: Step[]
   log?: Item[]
+  /** Names of the files attached to the message. */
+  files?: string[]
   text: string
   thought?: string
   edited?: number[]
@@ -54,6 +64,13 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   const atBottom = useRef(true)
   const running = turns.some((t) => t.state === 'running')
   const ready = !!useActiveModel()
+  const [files, setFiles] = useState<Attachment[]>([])
+  // The model asked to see slides it can't: the run waits on the user's choice here.
+  const visionWait = useRef<((c: 'retry' | 'continue') => void) | null>(null)
+  const [vision, setVision] = useState(false)
+  const chooseVision = (c: 'retry' | 'continue') => { const r = visionWait.current; visionWait.current = null; setVision(false); r?.(c) }
+  const mark = useRef(historyMark())
+  const picker = useRef<HTMLInputElement>(null)
 
   useEffect(() => { input.current?.focus() }, [])
   // The box grows with what you type and shrinks back once it's sent.
@@ -80,8 +97,17 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
     if (!text || running || !ready) return
     setDraft('')
     const target = slide
+    const attached = files
+    setFiles([])
+    // What the user is doing: the open slide, the selection, and what they changed by hand since last time.
+    const st = getEditor(), stage = liveStage()
+    const context = {
+      slide: target,
+      selection: st.sel.map((id) => { const el = stage && find(stage, id); return { id, name: el ? objectName(el) : id } }),
+      editsSince: userEditsSince(deck.id, mark.current),
+    }
     const history: ModelMessage[] = turns.flatMap((t) => [{ role: 'user' as const, content: t.prompt }, ...(t.text ? [{ role: 'assistant' as const, content: t.text }] : [])])
-    setTurns((ts) => [...ts, { prompt: text, slide: target, steps: [], log: [], text: '', state: 'running', startedAt: Date.now() }])
+    setTurns((ts) => [...ts, { prompt: text, slide: target, steps: [], log: [], files: attached.map((f) => f.name), text: '', state: 'running', startedAt: Date.now() }])
     const ac = new AbortController()
     abort.current = ac
     // A slide the agent has changed is read-only on the canvas until the run ends (editor spec, contract 6).
@@ -103,17 +129,20 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
     })
     try {
       const { before, after } = await runAgent({
-        deckId: deck.id, slide: target, prompt: text, history, signal: ac.signal,
+        deckId: deck.id, context, files: attached, prompt: text, history, signal: ac.signal,
         on: (ev) => {
           if (ev.type === 'thinking') {
             if (ev.on) show('Thinking')
             else patchLast((t) => ({ ...t, thought: ev.summary, steps: [...t.steps, { label: 'Thinking', ms: 0 }] }))
           } else if (ev.type === 'activity') {
             show(ev.label)
+            if (ev.live) return
             patchLast((t) => ({ ...t, steps: [...t.steps, { label: ev.label, ms: 0 }] }))
             log({ kind: 'step', label: ev.label })
           } else if (ev.type === 'text') { flush(); patchLast((t) => ({ ...t, text: t.text + ev.delta })); log({ kind: 'text', text: ev.delta }) }
           else if (ev.type === 'edit') { lock(ev.slides); patchLast((t) => ({ ...t, edited: ev.slides })) }
+          else if (ev.type === 'changed') dispatchEvent(new CustomEvent('ream:ai-edit', { detail: ev }))
+          else if (ev.type === 'need-vision') { flush(); visionWait.current = ev.resolve; setVision(true) }
           else if (ev.type === 'error') { flush(); patchLast((t) => ({ ...t, error: ev.message })) }
         },
       })
@@ -126,8 +155,22 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
       patchLast((t) => ({ ...t, state: stopped ? 'stopped' : 'done', ms: Date.now() - t.startedAt, error: stopped ? undefined : (e as Error).message, edit: t.edited?.length ? { before: deck.slides, after: d.slides } : undefined, changes: t.edited?.length ? changesOf(deck.slides, d.slides) : undefined }))
     } finally {
       abort.current = null
+      mark.current = historyMark()
+      chooseVision('continue')
       if (lockedIds.size) setEditor((e) => ({ locked: e.locked.filter((x) => !lockedIds.has(x)) }))
     }
+  }
+
+  /** Files for the next message: text files as text, pictures and PDFs as data URLs (20 MB each at most). */
+  const attach = async (list: FileList) => {
+    const out: Attachment[] = []
+    for (const f of [...list].slice(0, 8)) {
+      if (f.size > 20 * 1024 * 1024) { toast({ message: `${f.name} is over 20 MB, so it wasn’t attached.` }); continue }
+      const type = f.type || (/\.(md|txt|csv|json)$/i.test(f.name) ? 'text/plain' : 'application/octet-stream')
+      const data = type.startsWith('text/') || /json|xml/.test(type) ? await f.text() : await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(f) })
+      out.push({ name: f.name, mediaType: type, data })
+    }
+    setFiles((x) => [...x, ...out])
   }
 
   const undo = (i: number) => {
@@ -177,7 +220,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
         )}
         {turns.map((t, i) => (
           <div key={i} className={s.turn}>
-            <div className={s.user}>{t.prompt}<span className={s.ctx}>Slide {t.slide + 1}</span></div>
+            <div className={s.user}>{t.prompt}<span className={s.ctx}>Slide {t.slide + 1}{t.files?.length ? ` · ${t.files.join(', ')}` : ''}</span></div>
             {t.log ? <Log turn={t} line={line} /> : <>
               {t.state === 'running' && !t.text ? <Activity line={line} /> : t.steps.length > 0 && (
                 <details className={s.steps}>
@@ -199,11 +242,22 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
             ) : null}
           </div>
         ))}
+      {vision && <VisionCard onChoice={chooseVision} />}
       </div>
 
-      <form className={s.composer} onSubmit={(e) => { e.preventDefault(); void send(draft) }}>
-        <span className={s.chip}>Slide {slide + 1}</span>
-        <span className={s.pickers}><ModelPicker variant="chip" /><ReasoningPicker /></span>
+      <form className={s.composer} onSubmit={(e) => { e.preventDefault(); void send(draft) }}
+        onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation() } }}
+        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); e.stopPropagation(); void attach(e.dataTransfer.files) } }}
+        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}>
+        <span className={s.chips}>
+          <span className={s.chip}>Slide {slide + 1}</span>
+          {files.map((f, i) => <span key={i} className={s.fileChip}>{f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}><X size={10} weight="bold" /></button></span>)}
+        </span>
+        <span className={s.pickers}>
+          <IconButton label="Attach files" size="sm" tone="plain" type="button" onClick={() => picker.current?.click()}><Paperclip size={15} /></IconButton>
+          <input ref={picker} type="file" multiple hidden accept="image/*,.pdf,.txt,.md,.csv,.json,.html,.xml" onChange={(e) => { if (e.target.files) void attach(e.target.files); e.target.value = '' }} />
+          <ModelPicker variant="chip" /><ReasoningPicker />
+        </span>
         <textarea
           ref={input}
           rows={1}
@@ -313,6 +367,28 @@ function ChangeCard({ deck, changes, undone, onUndo }: { deck: Deck; changes: Ch
           </div>
         </Dialog>
       )}
+    </div>
+  )
+}
+
+/** Shown when the model wants to look at slides but can't see pictures: pick a model that can, or carry on. */
+function VisionCard({ onChoice }: { onChoice: (c: 'retry' | 'continue') => void }) {
+  const ai = useAi()
+  const browser = useBrowserModel()
+  const active = useActiveModel()
+  const [menu, setMenu] = useState<MenuAnchor | null>(null)
+  const options = AI_PROVIDER_IDS.filter((id) => ai.providers[id]).flatMap((id) => (ai.models?.[id] ?? []).map((m) => ({ provider: id, id: m }))).filter((m) => canSee(ai, m))
+  return (
+    <div className={s.visionCard} role="group" aria-label="Choose a model that can see">
+      <p><Eye size={15} /> {active ? modelLabel(active, browser) : 'This model'} can’t see pictures, so it can’t look at your slides. Choose a model that can describe them, or continue without.</p>
+      <div className={s.visionActions}>
+        {options.length
+          ? <Button variant="primary" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.top - 6 }) }}>Choose a model</Button>
+          : <Button variant="primary" onClick={() => navigate({ name: 'settings', section: 'ai' })}>Connect one in Settings</Button>}
+        <Button variant="ghost" onClick={() => onChoice('continue')}>Continue without</Button>
+      </div>
+      <Menu open={!!menu} anchor={menu} label="Model for pictures" onClose={() => setMenu(null)} search={options.length > 10 ? 'Find a model' : undefined}
+        items={options.map((m) => ({ label: m.id, hint: providerName(m.provider, browser), run: () => { setAi({ visionModel: m }); onChoice('retry') } }))} />
     </div>
   )
 }

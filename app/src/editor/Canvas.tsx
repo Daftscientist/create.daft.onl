@@ -105,6 +105,29 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
 
   // ---------- reading the live slide ----------
   const live = (id: string) => stage?.querySelector<HTMLElement>(`[data-domoxml-node-id="${CSS.escape(id)}"]`) ?? null
+  // Ask's changes landing on this slide: new objects fade in, changed ones get a brief glow (spec: streaming edits).
+  const [glows, setGlows] = useState<{ key: number; box: Box }[]>([])
+  useEffect(() => {
+    let n = 0
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ slideId: string; nodes: string[]; added: boolean }>).detail
+      if (d.slideId !== slide.id) return
+      requestAnimationFrame(() => {
+        const calm = document.documentElement.dataset.motion === 'reduce' || matchMedia('(prefers-reduced-motion: reduce)').matches
+        const fresh: { key: number; box: Box }[] = []
+        for (const id of d.nodes.slice(0, 40)) {
+          const el = live(id)
+          if (!el) continue
+          fresh.push({ key: ++n, box: bounds(boxOf(el)) })
+          if (!calm) el.animate([{ opacity: 0, transform: `${el.style.transform || ''} translateY(8px)`.trim() }, { opacity: 1, transform: el.style.transform || 'none' }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' })
+        }
+        setGlows((g) => [...g, ...fresh])
+        setTimeout(() => setGlows((g) => g.filter((x) => !fresh.includes(x))), 1400)
+      })
+    }
+    addEventListener('ream:ai-edit', on)
+    return () => removeEventListener('ream:ai-edit', on)
+  }, [slide.id, stage]) // eslint-disable-line react-hooks/exhaustive-deps
   const slideRoot = () => stage?.querySelector<HTMLElement>('.domoxml-slide') ?? null
   const scopeEl = () => (scope ? live(scope) : null)
   /** The objects that can be picked at this level: the slide's, or the entered group's members. */
@@ -462,6 +485,7 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
             </div>
           ))}
           {marquee && <div className={s.marquee} style={scr(marquee)} />}
+          {glows.map((g) => <div key={g.key} className={s.glow} style={scr(g.box)} />)}
           {/* Fixed-size boxes whose text runs past them (spec: imported boxes keep their size). */}
           {/* Shown on the selected box only (as Keynote does), so imported decks don't fill with marks. */}
           {!dragging && boxes.map((x) => x.el).filter((el) => !el.hasAttribute('data-ream-autogrow') && overflows(el)).map((el) => {
