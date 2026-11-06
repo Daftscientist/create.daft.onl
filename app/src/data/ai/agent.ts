@@ -7,6 +7,8 @@ import { getLibrary, updateSlides } from '../library'
 import type { Deck, SlideDoc, SlideSize } from '../types'
 import { sanitize, slideText, SLIDE_H, SLIDE_W } from '../../slides/SlideView'
 import { runBrowserLoop } from './browser'
+import { normalizeHost } from '../../editor/text'
+import { plainText } from '../../editor/ops'
 import { providerDef } from './providers'
 import { getActiveModel, getAi, reasoningFor } from './settings'
 
@@ -47,6 +49,10 @@ export function normaliseSlide(html: string, size: SlideSize = { w: SLIDE_W, h: 
   root.style.height = `${size.h}px`
   for (const el of Array.from(root.children) as HTMLElement[]) {
     if (!el.dataset.domoxmlNodeId) el.dataset.domoxmlNodeId = newId()
+    // Boxes are domOXML shapes, so the editor treats them as shapes the user can type into and format.
+    if (el.tagName === 'DIV' && !el.className) el.classList.add('domoxml-shape')
+    // Its text in domOXML's paragraphs and runs, the same as text typed in the editor.
+    if (plainText(el)) normalizeHost(el)
   }
   return root.outerHTML
 }
@@ -64,6 +70,8 @@ Slides are HTML: a single root <div class="domoxml-slide"> that is exactly ${w}x
 positioned elements (position:absolute with left/top/width/height in px). Use inline styles only, no <style>, <script>, classes
 or external resources. Fonts available: "Instrument Sans" (sans, any weight; PowerPoint gets regular and bold) and "Instrument Serif" (serif).
 Keep every existing data-domoxml-node-id attribute on elements you keep; new elements may omit it (one is assigned).
+Put each separate piece of text (title, subtitle, a card's label) in its own top-level positioned element, not nested
+inside a decorative box, so the user can click it and edit it. Draw a card as a box element with a text element on top.
 Prefer edit_element for small changes and replace_slide for redesigns. Read a slide before changing it.
 Slide numbers are 1-based. The user is looking at slide ${slide + 1}. Keep text concise and fitting its box.
 Every tool call needs an "activity": at most four plain words describing what you're doing.

@@ -3,7 +3,7 @@
 // Buttons with ▾ open paper popovers holding the property sections, laid flat. Text controls keep the text edit
 // alive and return to its caret. A click outside a popover closes it.
 import {
-  CaretDown, ChatCircle, DotsThree, Function as FnIcon, ListBullets, ListNumbers, PaintBucket, Selection as SelectionIcon, SelectionSlash,
+  CaretDown, ChatCircle, DotsThree, Function as FnIcon, ListBullets, ListNumbers, Selection as SelectionIcon, SelectionSlash,
   Sparkle, Stack, TextAlignCenter, TextAlignJustify, TextAlignLeft, TextAlignRight, TextAa, TextB, TextItalic, TextUnderline, FilmStrip, ArrowsOutCardinal,
   TextIndent, TextOutdent, Shapes as ShapesIcon, AlignTop, AlignCenterVertical, AlignBottom, Drop, Image as ImageIcon, Table as TableIcon, ChartBar, LineSegment,
 } from '@phosphor-icons/react'
@@ -20,7 +20,7 @@ import { liveStage } from './Canvas'
 import { ChartData } from './ChartData'
 import { readSpec } from './chart'
 import { isGroup } from './geometry'
-import { find, group, setAnchor, setBackground, ungroup } from './ops'
+import { find, group, plainText, setAnchor, setBackground, ungroup } from './ops'
 import { CommentsSection } from './Review'
 import { ShapesGallery } from './InsertGallery'
 import { changeShape } from './insert'
@@ -46,8 +46,11 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
   useEffect(() => { const r = requestAnimationFrame(() => setT((t) => t + 1)); return () => cancelAnimationFrame(r) }, [slide.html, sel, editing])
   const root = useRef<HTMLDivElement>(null)
   const bar = useRef<ToolbarHandle>(null)
-  // Density steps down until everything fits (spec: overflow): 0 every label, 1 the text group's labels go,
-  // 2 every label goes, 3 alignment, lists and paragraph fold into Text ▾. Measured before paint.
+  // Density steps down until everything fits (spec: overflow): 0 every label; 1 the text group's labels go;
+  // 2 Arrange, Animate and the slide buttons' labels go; 3 the object buttons' labels go, except Fill, which
+  // always says what it is and shows the colour; 4 alignment, lists and paragraph fold into Text ▾; 5 the
+  // selection's name hides and the font field narrows; 6 Shape, Effects, Arrange and Animate fold into ⋯.
+  // Measured before paint; past that the bar scrolls sideways.
   const [density, setDensity] = useState(0)
   const [width, setWidth] = useState(0)
   useLayoutEffect(() => {
@@ -68,16 +71,19 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
   const colors = colorsOf(deck)
   const size = deck.size ?? { w: 1280, h: 720 }
   // Text controls whenever any selected object (or group member) has text; formatting applies to those runs.
-  const withText = !!editing || els.some((e) => !!e.querySelector('.domoxml-text, li'))
+  const withText = !!editing || els.some((e) => !!e.querySelector('.domoxml-text, li') || plainText(e))
   const textOk = withText && kinds.every((k) => k !== 'preserved' && k !== 'chart')
   const styleable = els.length > 0 && kinds.every((k) => k === 'text' || k === 'shape' || k === 'svg' || k === 'picture' || k === 'group' || k === 'chart')
   const t = textOk ? textState(stage) : null
   const textLabels = density < 1
   const labels = density < 2
-  const fold = density >= 3
+  const kindLabels = density < 3
+  const fold = density >= 4
+  const tight = density >= 5
+  const collapse = density >= 6
   useLayoutEffect(() => {
     const el = root.current?.querySelector<HTMLElement>('[data-toolbar]')
-    if (el && el.scrollWidth > el.clientWidth + 1 && density < 3) setDensity(density + 1)
+    if (el && el.scrollWidth > el.clientWidth + 1 && density < 6) setDensity(density + 1)
   })
 
   const toggle = (key: string) => (e: React.MouseEvent<HTMLElement>) => { const a = e.currentTarget; setPop((p) => (p?.key === key ? null : { key, anchor: a })) }
@@ -108,9 +114,15 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
     line: kinds.length > 0 && kinds.every((k) => k === 'line') ? { label: 'Line', body: () => <LineSection sec={FLAT} els={els} ids={sel} colors={colors} /> } : undefined,
     arrange: els.length ? { label: els.length > 1 ? 'Arrange and align' : 'Arrange', body: () => <ArrangeSection sec={FLAT} els={els} ids={sel} size={size} /> } : undefined,
     animate: els.length ? { label: 'Animate', body: () => <AnimateSection sec={FLAT} els={els} ids={sel} /> } : undefined,
-    more: els.length === 1 ? { label: 'More', width: 300, body: () => <>
-      {(one === 'picture' || one === 'chart' || one === 'preserved' || one === 'shape' || one === 'svg') && <AltTextSection sec={FLAT} el={els[0]} id={sel[0]} />}
-      <CommentsSection slide={slide} objectId={sel[0]} objectName={objectName(els[0]).split(':')[0].toLowerCase()} sec={FLAT} />
+    more: els.length === 1 || collapse ? { label: 'More', width: 300, body: () => <>
+      {collapse && <>
+        {kinds.every((k) => k === 'shape') && els.every((e) => e.tagName === 'DIV') && <Section title="Change shape" {...FLAT}><ShapesGallery lines={false} current={els[0].getAttribute('data-ream-shape') ?? undefined} onDrag={() => {}} onPick={(k) => { changeShape(sel, k); setPop(null) }} /></Section>}
+        {styleable && kinds.some((k) => k !== 'text') && <EffectsSection sec={FLAT} els={els} ids={sel} />}
+        <ArrangeSection sec={FLAT} els={els} ids={sel} size={size} />
+        <AnimateSection sec={FLAT} els={els} ids={sel} />
+      </>}
+      {els.length === 1 && (one === 'picture' || one === 'chart' || one === 'preserved' || one === 'shape' || one === 'svg') && <AltTextSection sec={FLAT} el={els[0]} id={sel[0]} />}
+      {els.length === 1 && <CommentsSection slide={slide} objectId={sel[0]} objectName={objectName(els[0]).split(':')[0].toLowerCase()} sec={FLAT} />}
     </> } : undefined,
   }
   const open = pop && panels[pop.key] ? pop : null
@@ -137,7 +149,7 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
               <Stack size={15} /><span className={s.chipLabel}>Objects</span><CaretDown size={10} weight="bold" />
             </button>
           </Tooltip>
-          <span className={s.what} aria-live="polite">{what}</span>
+          <span className={s.what} aria-live="polite" data-hide={tight || undefined}>{what}</span>
         </span>
 
         {!els.length && !editing && <span className={s.slot}>
@@ -147,7 +159,7 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
         </span>}
 
         {t && <span className={s.slot}>
-          <FontButton t={t} />
+          <FontButton t={t} narrow={tight} />
           <NumberField label="pt" name="Font size, points" width={66} mixed={t.mixed.has('size')} value={t.sizePt} format={(v) => `${v}`}
             parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(1, Math.min(400, v)) }}
             onCommit={(v) => { formatRuns({ 'font-size': `${v}pt` }, 'Font size'); if (editingLive()) requestAnimationFrame(refocus) }} hint="Use a size like 24" />
@@ -171,19 +183,19 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
           {els.length > 1 && !kinds.includes('group') && <Toggle label="Group" hint="⌘G" on={false} onClick={() => group(sel)}><SelectionIcon size={15} /></Toggle>}
           {els.some(isGroup) && <Toggle label="Ungroup" hint="⌘⇧G" on={false} onClick={() => ungroup(sel)}><SelectionSlash size={15} /></Toggle>}
           {one === 'chart' && readSpec(els[0]) && <BarButton label="Edit data" icon={<FnIcon size={15} />} showLabel onClick={() => setChartData(true)} />}
-          {btn('shape', 'Shape', <ShapesIcon size={15} />)}
-          {btn('chart', 'Chart', <ChartBar size={15} />)}
-          {btn('table', 'Table', <TableIcon size={15} />)}
-          {btn('picture', 'Picture', <ImageIcon size={15} />)}
-          {btn('line', 'Line', <LineSegment size={15} />)}
-          {btn('fill', 'Fill and border', <PaintBucket size={15} />)}
-          {btn('border', 'Border', <PaintBucket size={15} />)}
-          {btn('effects', 'Effects', <Drop size={15} />)}
+          {btn('fill', kindLabels ? 'Fill and border' : 'Fill', <FillSwatch el={els[0]} />, true)}
+          {btn('border', 'Border', <FillSwatch el={els[0]} border />, true)}
+          {btn('picture', 'Picture', <ImageIcon size={15} />, true)}
+          {btn('table', 'Table', <TableIcon size={15} />, true)}
+          {btn('line', 'Line', <LineSegment size={15} />, true)}
+          {btn('chart', 'Chart', <ChartBar size={15} />, kindLabels)}
+          {!collapse && btn('shape', 'Shape', <ShapesIcon size={15} />, kindLabels)}
+          {!collapse && btn('effects', 'Effects', <Drop size={15} />, kindLabels)}
         </span>}
 
         {els.length > 0 && <span className={`${s.slot} ${s.end}`}>
-          {btn('arrange', 'Arrange', <ArrowsOutCardinal size={15} />)}
-          {btn('animate', 'Animate', <Sparkle size={15} />)}
+          {!collapse && btn('arrange', 'Arrange', <ArrowsOutCardinal size={15} />)}
+          {!collapse && btn('animate', 'Animate', <Sparkle size={15} />)}
           {panels.more && <BarButton pop="more" label="More" icon={<DotsThree size={16} weight="bold" />} showLabel={false} expanded={open?.key === 'more'} onClick={toggle('more')} />}
         </span>}
       </Toolbar>
@@ -198,6 +210,16 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
   )
 }
 
+/** The Fill button's icon: the object's fill colour, ringed by its border colour (or a slash for none). */
+function FillSwatch({ el, border }: { el: HTMLElement; border?: boolean }) {
+  const st = getComputedStyle(el)
+  const clear = (c: string) => c === 'rgba(0, 0, 0, 0)' || c === 'transparent'
+  const fill = st.backgroundImage !== 'none' && st.backgroundImage.includes('gradient') ? st.backgroundImage : clear(st.backgroundColor) ? null : st.backgroundColor
+  const bw = parseFloat(st.borderTopWidth) || 0
+  const ring = bw ? st.borderTopColor : null
+  return <span className={s.swatch} data-none={(border ? !ring : !fill) || undefined} style={{ background: border ? 'transparent' : fill ?? undefined, boxShadow: ring ? `inset 0 0 0 2px ${ring}` : undefined }} aria-hidden />
+}
+
 function BarButton({ label, icon, showLabel, expanded, onClick, pop }: { label: string; icon: ReactNode; showLabel: boolean; expanded?: boolean; onClick: (e: React.MouseEvent<HTMLElement>) => void; pop?: string }) {
   const b = (
     <button type="button" className={s.btn} data-pop={pop} aria-label={showLabel ? undefined : label} aria-haspopup={pop ? 'dialog' : undefined} aria-expanded={pop ? !!expanded : undefined} onClick={onClick}>
@@ -209,12 +231,12 @@ function BarButton({ label, icon, showLabel, expanded, onClick, pop }: { label: 
 
 const FONT_NAMES = FONTS.map((f) => f.name)
 
-function FontButton({ t }: { t: TextState }) {
+function FontButton({ t, narrow }: { t: TextState; narrow?: boolean }) {
   const [menu, setMenu] = useState<MenuAnchor | null>(null)
   const mixed = t.mixed.has('family')
   return (
     <>
-      <button type="button" className={s.font} aria-haspopup="menu" aria-expanded={!!menu} aria-label={`Font: ${mixed ? 'mixed' : t.family}`}
+      <button type="button" className={s.font} data-narrow={narrow || undefined} aria-haspopup="menu" aria-expanded={!!menu} aria-label={`Font: ${mixed ? 'mixed' : t.family}`}
         style={{ fontFamily: mixed ? undefined : fontStack(t.family) }} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom + 4 }) }}>
         <span>{mixed ? 'Mixed' : t.family}</span><CaretDown size={10} weight="bold" />
       </button>

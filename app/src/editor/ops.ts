@@ -8,6 +8,7 @@ import { boxOf, groupPayload, isGroup, members, setBox, unionBox, type Box } fro
 import { transact } from './history'
 import { parseSlide, topNodes } from './irdiff'
 import { getEditor, setEditor } from './session'
+import { normalizeHost } from './text'
 
 export const newId = (p = 'ream') => `${p}-${Math.random().toString(36).slice(2, 10)}`
 
@@ -158,11 +159,15 @@ function styleObject(el: HTMLElement, css: Css) {
 export const runsOf = (el: Element) => [...el.querySelectorAll<HTMLElement>('.domoxml-text span, li span, td span, th span')].filter((s) => !s.querySelector('span'))
 export const parasOf = (el: Element) => [...el.querySelectorAll<HTMLElement>('.domoxml-text, li')]
 
+/** Plain HTML text becomes domOXML paragraphs and runs the first time it's formatted. */
+export function ensureParas(el: HTMLElement) {
+  if (!el.querySelector('.domoxml-text, li') && plainText(el)) normalizeHost(el)
+}
 export function setRunStyle(ids: string[], css: Css, label = 'Format text') {
-  editSlide(label, (root) => { for (const id of ids) { const el = find(root, id); if (el) for (const r of runsOf(el)) setCss(r, css) } })
+  editSlide(label, (root) => { for (const id of ids) { const el = find(root, id); if (el) { ensureParas(el); for (const r of runsOf(el)) setCss(r, css) } } })
 }
 export function setParaStyle(ids: string[], css: Css, label = 'Format paragraph') {
-  editSlide(label, (root) => { for (const id of ids) { const el = find(root, id); if (el) for (const p of parasOf(el)) setCss(p, css) } })
+  editSlide(label, (root) => { for (const id of ids) { const el = find(root, id); if (el) { ensureParas(el); for (const p of parasOf(el)) setCss(p, css) } } })
 }
 /** Vertical alignment of a text box: domOXML's flex column anchor. */
 export function setAnchor(ids: string[], anchor: 'top' | 'middle' | 'bottom') {
@@ -170,6 +175,7 @@ export function setAnchor(ids: string[], anchor: 'top' | 'middle' | 'bottom') {
     for (const id of ids) {
       const el = find(root, id)
       if (!el) continue
+      ensureParas(el)
       const host = textHost(el)
       if (!host) continue
       if (anchor === 'top') { for (const p of ['display', 'flex-direction', 'justify-content']) host.style.removeProperty(p) }
@@ -179,14 +185,28 @@ export function setAnchor(ids: string[], anchor: 'top' | 'middle' | 'bottom') {
 }
 
 /** The element holding an object's paragraphs (the shape itself in domOXML's plain layout). */
+/** Plain HTML text (written by Ask or pasted): an element holding only text and inline or block text tags, with
+ *  nothing drawn inside it, so turning it into paragraphs can't lose anything. */
+const TEXTY = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'SPAN', 'B', 'I', 'U', 'S', 'STRONG', 'EM', 'A', 'BR', 'DIV', 'SMALL', 'SUP', 'SUB', 'MARK', 'CODE', 'UL', 'OL', 'LI'])
+export function plainText(el: HTMLElement): boolean {
+  if (!TEXTY.has(el.tagName) || !(el.textContent ?? '').trim()) return false
+  for (const d of el.querySelectorAll<HTMLElement>('*')) {
+    if (!TEXTY.has(d.tagName)) return false
+    const st = d.getAttribute('style') ?? ''
+    // An inner box with its own position, fill, border or size is drawing, not text.
+    if (/position\s*:\s*absolute|background|border|(^|;)\s*(width|height)\s*:/i.test(st) || (d.tagName === 'DIV' && !(d.textContent ?? '').trim())) return false
+  }
+  return true
+}
+
 export function textHost(el: HTMLElement): HTMLElement | null {
   const first = el.querySelector<HTMLElement>('.domoxml-text, ul, ol')
-  if (!first) return el.tagName.toLowerCase() === 'div' && el.classList.contains('domoxml-shape') ? el : null
+  if (!first) return (el.tagName.toLowerCase() === 'div' && el.classList.contains('domoxml-shape')) || plainText(el) ? el : null
   let p = first.parentElement
   while (p && p !== el && (p.tagName === 'UL' || p.tagName === 'OL')) p = p.parentElement
   return p
 }
-export const hasText = (el: Element) => !!el.querySelector('.domoxml-text, li') && (el.textContent ?? '').trim().length > 0
+export const hasText = (el: Element) => (!!el.querySelector('.domoxml-text, li') || plainText(el as HTMLElement)) && (el.textContent ?? '').trim().length > 0
 
 // ---------- structure ----------
 

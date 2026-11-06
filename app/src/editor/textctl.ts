@@ -6,7 +6,7 @@ import { getLibrary, markUnsaved, onRemoteDeck, updateSlides } from '../data/lib
 import { toast } from '../data/toasts'
 import type { SlideDoc } from '../data/types'
 import { transact } from './history'
-import { cleanForStore, editSlide, find, openDeck, parasOf, removeObjects, runsOf, setBeforeEdit, setParaStyle, setRunStyle, textHost, type Css } from './ops'
+import { plainText, cleanForStore, editSlide, find, openDeck, parasOf, removeObjects, runsOf, setBeforeEdit, setParaStyle, setRunStyle, textHost, type Css } from './ops'
 import { getEditor, setEditor } from './session'
 import { editParas, styleParas, indent, insertStyled, normalizeHost, rangeIn, readParas, renderParas, restoreCaret, saveCaret, styleAt, styleRange, toggleList } from './text'
 
@@ -55,6 +55,8 @@ export function beginEdit(stage: HTMLElement, id: string, at?: { x: number; y: n
   let host = table ? cellOf(el, stage.getRootNode() as ShadowRoot, at, cell) : textHost(el)
   if (!host) return
   if (table && !host.querySelector('.domoxml-text, li')) host.insertAdjacentHTML('beforeend', '<div class="domoxml-text" style="white-space:pre-wrap;text-align:left"><span><br></span></div>')
+  // An empty shape gets a centred, white first paragraph to type into; plain HTML text is made into paragraphs.
+  if (!table && !host.querySelector('.domoxml-text, li') && plainText(host)) normalizeHost(host)
   if (!table && !host.querySelector('.domoxml-text, li')) {
     // A shape without text: give it an empty centred paragraph in the deck's text style.
     host.style.display = 'flex'; host.style.flexDirection = 'column'; host.style.justifyContent = 'center'
@@ -406,10 +408,11 @@ export function textState(stage: HTMLElement | null): TextState | null {
     para = node?.closest('.domoxml-text, li') ?? null
   } else if (stage) {
     // The first selected object that has text (a picture or empty shape in the selection doesn't count).
-    const el = getEditor().sel.map((id) => find(stage, id)).find((e): e is HTMLElement => !!e && runsOf(e).length > 0) ?? null
+    const el = getEditor().sel.map((id) => find(stage, id)).find((e): e is HTMLElement => !!e && (runsOf(e).length > 0 || plainText(e))) ?? null
     if (!el) return null
-    node = runsOf(el)[0] ?? null
-    para = parasOf(el)[0] ?? null
+    // Plain HTML text (not yet in paragraphs): its own style is the text's style.
+    node = runsOf(el)[0] ?? el
+    para = parasOf(el)[0] ?? el
   }
   const cs = styleAt(node)
   if (!cs || !node) return null
