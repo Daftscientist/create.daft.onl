@@ -19,6 +19,7 @@ import { plainText } from '../../editor/ops'
 import { chartSvg, type ChartSpec } from '../../editor/chart'
 import { parseSlide, topNodes } from '../../editor/irdiff'
 import { providerDef, type AiProviderId } from './providers'
+import { makePicture, pictureModel } from './images'
 import { canSee, getActiveModel, getAi, reasoningFor, type ModelRef } from './settings'
 
 export type AgentEvent =
@@ -468,6 +469,20 @@ export async function runAgent(opts: {
         return { ok: true }
       },
     }),
+    generate_picture: tool({
+      description: 'Make a picture with the picture model (illustrations, photos, backgrounds, icons). Returns a src to use in <img src="..."> on a slide. Reference pictures (ream-asset values) guide it when given.',
+      inputSchema: z.object({
+        prompt: z.string().describe('A detailed description of the picture'),
+        aspect: z.enum(['16:9', '4:3', '1:1', '3:4', '9:16']).optional(),
+        references: z.array(z.string()).max(4).optional().describe('ream-asset values of pictures to base it on'),
+        activity,
+      }),
+      execute: async ({ prompt, aspect, references }) => {
+        const refs = (references ?? []).map((r) => assets.expand(r)).filter((u) => u.startsWith('data:'))
+        const url = await makePicture({ prompt, aspect, references: refs, signal: opts.signal })
+        return { src: assets.ref(url), note: 'Use this src in an <img> on a slide (object-fit:cover to fill a box).' }
+      },
+    }),
     rename_deck: tool({
       description: 'Give the deck a new name (short, like a file name).',
       inputSchema: z.object({ name: z.string().min(1).max(80), activity }),
@@ -488,7 +503,7 @@ export async function runAgent(opts: {
   const FALLBACK: Record<string, string> = {
     list_slides: 'Looking through the deck', read_slides: 'Reading slides', view_slides: 'Looking at slides', replace_slide: 'Redesigning a slide',
     edit_element: 'Editing a slide', delete_elements: 'Removing elements', create_slides: 'Adding slides', delete_slides: 'Removing slides',
-    move_slide: 'Reordering slides', rename_deck: 'Naming the deck', set_slides: 'Changing slide settings', set_animation: 'Adding an animation', comment: 'Leaving a comment', set_deck_styles: 'Changing deck styles',
+    move_slide: 'Reordering slides', rename_deck: 'Naming the deck', generate_picture: 'Making a picture', set_slides: 'Changing slide settings', set_animation: 'Adding an animation', comment: 'Leaving a comment', set_deck_styles: 'Changing deck styles',
   }
 
   const d0 = deck(opts.deckId)
@@ -533,7 +548,7 @@ export async function runAgent(opts: {
     model,
     system: sys,
     messages: [...opts.history, { role: 'user', content }],
-    tools,
+    tools: pictureModel() ? tools : (({ generate_picture: _, ...rest }) => rest)(tools),
     reasoning: reasoningFor(ai, chosen),
     stopWhen: isStepCount(24),
     // Rate limits (tokens per minute) are common on long runs: retry with backoff before giving up.

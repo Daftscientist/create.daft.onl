@@ -5,7 +5,8 @@ import { Brain, CaretDown, Gear } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 import { BROWSER_MODEL_ID, useBrowserModel } from '../data/ai/browser'
 import { AI_PROVIDER_IDS, providerDef, type AiProviderId } from '../data/ai/providers'
-import { getAi, modelLabel, providerName, REASONING_LEVELS, reasoningFor, setAi, setModels, setReasoning, useActiveModel, useAi } from '../data/ai/settings'
+import { classify } from '../data/ai/capabilities'
+import { getAi, isEnabled, modelLabel, providerName, REASONING_LEVELS, reasoningFor, setAi, setModels, setReasoning, useActiveModel, useAi } from '../data/ai/settings'
 import { navigate } from '../lib/router'
 import { Menu, type MenuAnchor, type MenuItem } from '../ui/Menu'
 import { AiMark } from './AiMark'
@@ -40,7 +41,7 @@ export function ModelPicker({ variant }: { variant: 'chip' | 'field' }) {
     })
   }
   for (const id of connected) {
-    const list = ai.models?.[id] ?? []
+    const list = (ai.models?.[id] ?? []).filter((m) => classify(id, m) === 'text' && isEnabled(ai, id, m))
     const name = providerName(id, browser)
     items.push({ kind: 'header', content: <span className={s.group}>{name}</span> })
     if (!list.length) items.push({ kind: 'note', text: providerDef(id).models ? 'Loading models…' : 'Enter a model name in Settings → AI.' })

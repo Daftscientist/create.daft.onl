@@ -25,6 +25,7 @@ import { copySelection, onClipboardEvent, pasteFromMenu } from '../editor/clipbo
 import { ContextBar } from '../editor/ContextBar'
 import { NotesDrawer } from '../editor/NotesDrawer'
 import { ChartGallery, ShapesGallery, TableGallery } from '../editor/InsertGallery'
+import { PicturePanel } from '../editor/PicturePanel'
 import { DesignSection, FLAT, colorsOf, useMissingFonts } from '../editor/Sections'
 import { AccessibilitySection, VersionsDialog } from '../editor/Review'
 import { useHistory } from '../editor/history'
@@ -48,7 +49,7 @@ const kept = new Map<string, { slideId: string | null; sel: string[]; scope: str
 const COL_KEY = 'ream.editor.column'
 const WIDTH_KEY = 'ream.editor.columnWidth'
 const coarse = matchMedia('(pointer: coarse)')
-type Gallery = { kind: 'shapes' | 'table' | 'chart'; anchor: HTMLElement }
+type Gallery = { kind: 'shapes' | 'table' | 'chart' | 'picture'; anchor: HTMLElement }
 const useCoarse = () => useSyncExternalStore((l) => (coarse.addEventListener('change', l), () => coarse.removeEventListener('change', l)), () => coarse.matches)
 function useWidth() {
   const [w, setW] = useState(innerWidth)
@@ -324,7 +325,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
           <div className={s.insert} role="toolbar" aria-label="Insert">
             <InsertButton label="Text" hint="Insert a text box" iconOnly={iconOnly} icon={<TextT size={16} />} onClick={() => insertText(visibleCentre())} onDragStart={dragInsert('text')} />
             <InsertButton label="Shapes" hint="Insert a shape" iconOnly={iconOnly} icon={<Shapes size={16} />} onClick={openGallery('shapes')} onDragStart={dragInsert('rect')} expanded={gallery?.kind === 'shapes'} caret />
-            <InsertButton label="Picture" hint="Insert a picture" iconOnly={iconOnly} icon={<ImageIcon size={16} />} onClick={() => void pic()} onDragStart={dragInsert('picture')} />
+            <InsertButton label="Picture" hint="Insert or generate a picture" iconOnly={iconOnly} icon={<ImageIcon size={16} />} onClick={openGallery('picture')} onDragStart={dragInsert('picture')} expanded={gallery?.kind === 'picture'} caret />
             <InsertButton label="Table" hint="Insert a table" iconOnly={iconOnly} icon={<Table size={16} />} onClick={openGallery('table')} onDragStart={dragInsert('table')} expanded={gallery?.kind === 'table'} caret />
             <InsertButton label="Chart" hint="Insert a chart" iconOnly={iconOnly} icon={<ChartBar size={16} />} onClick={openGallery('chart')} onDragStart={dragInsert('chart')} expanded={gallery?.kind === 'chart'} caret />
           </div>
@@ -368,10 +369,11 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         {askMounted && ai && <div className={s.askHost} data-region="column" data-overlay={overlay || undefined} hidden={!askOn}><AgentPanel deck={d} slide={index} onClose={() => setColumn(null)} /></div>}
       </div>
       {gallery && (
-        <Popover anchor={gallery.anchor} label={gallery.kind === 'shapes' ? 'Shapes' : gallery.kind === 'table' ? 'Table' : 'Chart'} width={gallery.kind === 'shapes' ? 268 : gallery.kind === 'table' ? 258 : 248}
+        <Popover anchor={gallery.anchor} label={gallery.kind === 'shapes' ? 'Shapes' : gallery.kind === 'table' ? 'Table' : gallery.kind === 'picture' ? 'Picture' : 'Chart'} width={gallery.kind === 'shapes' ? 268 : gallery.kind === 'table' ? 258 : gallery.kind === 'picture' ? 320 : 248}
           className={galleryAside ? s.aside : undefined} onClose={() => setGallery(null)}>
           {gallery.kind === 'shapes' && <ShapesGallery onPick={(k) => picked(() => insertShape(k, visibleCentre()))} onDrag={(on) => { setGalleryAside(on); if (!on) setGallery(null) }} />}
           {gallery.kind === 'table' && <TableGallery onPick={(r, c) => picked(() => insertTable(r, c, visibleCentre()))} onDrag={(on) => { setGalleryAside(on); if (!on) setGallery(null) }} />}
+          {gallery.kind === 'picture' && <PicturePanel onFile={() => picked(() => void pic())} onPicture={(url, name) => picked(() => void fetch(url).then((r) => r.blob()).then((b) => insertPicture(new File([b], `${name || 'Generated picture'}.png`, { type: b.type || 'image/png' }), visibleCentre(), size)))} />}
           {gallery.kind === 'chart' && <ChartGallery onPick={(t) => picked(() => insertChart(t, visibleCentre()))} onDrag={(on) => { setGalleryAside(on); if (!on) setGallery(null) }} />}
         </Popover>
       )}

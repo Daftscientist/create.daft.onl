@@ -13,7 +13,7 @@ import { bytes, count, relTimeInline } from '../lib/format'
 import { KEYMAP } from '../lib/keymap'
 import { useBrowserModel } from '../data/ai/browser'
 import { AI_PROVIDER_IDS, providerDef, type AiProviderId } from '../data/ai/providers'
-import { providerName, setAi, setModels, setProvider, useActiveModel, useAi } from '../data/ai/settings'
+import { canSee, providerName, setAi, setModels, setProvider, useActiveModel, useAi } from '../data/ai/settings'
 import { persistStorage, storage } from '../storage/client'
 import { PRODUCT } from '../ui/Brand'
 import { Button, Keys } from '../ui/Button'
@@ -22,6 +22,8 @@ import { SettingGroup, SettingRow, Switch, TextField } from '../ui/Field'
 import { Segmented } from '../ui/Segmented'
 import { useShell } from '../lib/shell'
 import { AiMark } from './AiMark'
+import { ModelSetup } from './ModelSetup'
+import { CapabilityPicker } from './CapabilityPicker'
 import { ModelPicker } from './ModelPicker'
 import { ProviderMark } from './ProviderMark'
 import { openSyncFlow, prepareProviders, startConnect } from './SyncFlows'
@@ -228,12 +230,13 @@ function AiSettings() {
   const [adding, setAdding] = useState<AiProviderId | null>(null)
   const [busy, setBusy] = useState<AiProviderId | null>(null)
   const [error, setError] = useState<{ id: AiProviderId; message: string } | null>(null)
+  const [setup, setSetup] = useState<{ id: AiProviderId; models: string[] } | null>(null)
 
   const load = async (id: AiProviderId, config = ai.providers[id] ?? {}) => {
     const def = providerDef(id)
     if (!def.models) return
     setBusy(id); setError(null)
-    try { setModels(id, await def.models(config)) }
+    try { const list = await def.models(config); setModels(id, list); if (!ai.enabled?.[id]) setSetup({ id, models: list }) }
     catch (e) { setError({ id, message: (e as Error).message }) }
     finally { setBusy(null) }
   }
@@ -248,6 +251,12 @@ function AiSettings() {
       <SettingGroup title="Model">
         <SettingRow label="Model for Ask Ream" description={active ? providerName(active.provider, browser) : 'Add a provider below.'}>
           <ModelPicker variant="field" />
+        </SettingRow>
+        <SettingRow label="Picture generation" description="Picture → Generate in the editor, and pictures Ask makes for slides. Turn on picture models with Choose models.">
+          <CapabilityPicker cap="image" label="Picture generation model" value={ai.imageModel} onChange={(m) => setAi({ imageModel: m })} none="First one turned on" />
+        </SettingRow>
+        <SettingRow label="Seeing slides" description="When Ask’s model can’t see pictures, this model describes slides for it.">
+          <CapabilityPicker cap="text" label="Model that describes slides" value={ai.visionModel} onChange={(m) => setAi({ visionModel: m })} filter={(m) => canSee(ai, m)} none="Ask each time" />
         </SettingRow>
       </SettingGroup>
       <SettingGroup title="Providers">
@@ -269,7 +278,8 @@ function AiSettings() {
             >
               {config ? (
                 <>
-                  {def.models && <Button variant="secondary" disabled={busy === id} onClick={() => void load(id)}>Refresh models</Button>}
+                  {(ai.models?.[id]?.length ?? 0) > 0 && <Button variant="secondary" onClick={() => setSetup({ id, models: ai.models?.[id] ?? [] })}>Choose models</Button>}
+                  {def.models && <Button variant="ghost" disabled={busy === id} onClick={() => void load(id)}>Refresh</Button>}
                   <Button variant="ghost" onClick={() => setProvider(id, null)}>Remove</Button>
                 </>
               ) : open ? (
@@ -294,6 +304,7 @@ function AiSettings() {
           )
         })}
       </SettingGroup>
+      {setup && <ModelSetup provider={setup.id} models={setup.models} onClose={() => setSetup(null)} />}
       <p className={s.note}>{sync.provider
         ? sync.encrypted ? 'Keys sync with your library, end-to-end encrypted.' : `Keys sync with your library, so ${PROVIDERS[sync.provider].name} can read them. Turn on end-to-end encryption in Sync to prevent that.`
         : 'Keys are stored in this browser’s library. If you connect sync, they go with it.'}</p>

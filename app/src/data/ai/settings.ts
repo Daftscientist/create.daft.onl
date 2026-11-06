@@ -2,7 +2,8 @@
 // works on the others. Without end-to-end encryption the cloud provider can read them; the UI says so.
 import { getLibrary, setLibrarySettings, useLibrary } from '../library'
 import { BROWSER_MODEL_ID, getBrowserModel, useBrowserModel, type BrowserModel } from './browser'
-import { AI_PROVIDERS, type AiProviderId, type ProviderConfig } from './providers'
+import { AI_PROVIDERS, AI_PROVIDER_IDS, type AiProviderId, type ProviderConfig } from './providers'
+import { classify, type Capability } from './capabilities'
 
 /** A model's provider: one the user added, or the browser's built-in model. */
 export type ModelProvider = AiProviderId | 'browser'
@@ -19,6 +20,10 @@ export type AiSettings = {
   visionModel?: ModelRef | null
   /** Per model (`provider:id`): whether it can take pictures, when the user has said so. */
   vision?: Record<string, boolean>
+  /** Per provider: the models the user chose to use (from the setup flow). Absent: its chat models. */
+  enabled?: Partial<Record<AiProviderId, string[]>>
+  /** The picture-generation model Ream uses (Picture → Generate, and Ask's tool). */
+  imageModel?: ModelRef | null
 }
 
 export type ReasoningLevel = 'provider-default' | 'none' | 'low' | 'medium' | 'high' | 'max'
@@ -84,4 +89,17 @@ export function providerName(p: ModelProvider, browser: BrowserModel | null): st
 /** How a model reads in pickers: the built-in one by its real name, others by id without the vendor prefix. */
 export function modelLabel(m: ModelRef, browser: BrowserModel | null): string {
   return m.provider === 'browser' ? browser?.model ?? 'Built-in model' : m.id.split('/').pop() ?? m.id
+}
+
+/** Is this model one the user turned on? Without a choice for its provider, its chat models are. */
+export function isEnabled(s: AiSettings, provider: AiProviderId, id: string): boolean {
+  const on = s.enabled?.[provider]
+  return on ? on.includes(id) : classify(provider, id) === 'text'
+}
+/** The enabled models of a kind, across connected providers. */
+export function modelsFor(s: AiSettings, cap: Capability): ModelRef[] {
+  return AI_PROVIDER_IDS.filter((p) => s.providers[p]).flatMap((p) => (s.models?.[p] ?? []).filter((id) => classify(p, id) === cap && isEnabled(s, p, id)).map((id) => ({ provider: p, id })))
+}
+export function setEnabled(provider: AiProviderId, ids: string[]) {
+  setAi({ enabled: { ...getAi().enabled, [provider]: ids } })
 }
