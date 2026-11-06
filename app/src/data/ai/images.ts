@@ -3,6 +3,7 @@
 import { generateImage } from 'ai'
 import { providerDef, type AiProviderId } from './providers'
 import { getAi, modelsFor, type ModelRef } from './settings'
+import { recordUsage } from './usage'
 
 export const ASPECTS = ['16:9', '4:3', '1:1', '3:4', '9:16'] as const
 export type Aspect = (typeof ASPECTS)[number]
@@ -29,5 +30,6 @@ export async function makePicture(opts: { prompt: string; references?: string[];
     abortSignal: opts.signal,
     maxRetries: 2,
   })
+  recordUsage(ref.provider, ref.id, { requests: 1, pictures: 1 })
   return `data:${r.image.mediaType || 'image/png'};base64,${r.image.base64}`
 }

@@ -20,6 +20,7 @@ import { chartSvg, type ChartSpec } from '../../editor/chart'
 import { parseSlide, topNodes } from '../../editor/irdiff'
 import { providerDef, type AiProviderId } from './providers'
 import { makePicture, pictureModel } from './images'
+import { recordUsage } from './usage'
 import { canSee, getActiveModel, getAi, reasoningFor, type ModelRef } from './settings'
 
 export type AgentEvent =
@@ -246,6 +247,7 @@ export async function runAgent(opts: {
         ...shots.flatMap((s) => [{ type: 'text' as const, text: `Slide ${s.slide}:` }, { type: 'image' as const, image: s.image }]),
       ] }],
     })
+    recordUsage(vision.provider, vision.id, { requests: 1, input: r.usage.inputTokens, output: r.usage.outputTokens })
     return r.text
   }
 
@@ -531,6 +533,7 @@ export async function runAgent(opts: {
       }),
     })
     if (reply) opts.on({ type: 'text', delta: reply })
+    recordUsage('browser', chosen.id, { requests: steps })
     opts.on({ type: 'done', steps })
     return { before, after: deck(opts.deckId).slides }
   }
@@ -578,6 +581,10 @@ export async function runAgent(opts: {
       case 'error': opts.on({ type: 'error', message: errorText(part.error) }); break
     }
   }
+  try {
+    const u = await result.totalUsage
+    recordUsage(chosen.provider, chosen.id, { requests: steps, input: u.inputTokens, output: u.outputTokens, reasoning: u.outputTokenDetails?.reasoningTokens, cached: u.inputTokenDetails?.cacheReadTokens })
+  } catch { /* stopped or failed: nothing reported */ }
   opts.on({ type: 'done', steps })
   return { before, after: deck(opts.deckId).slides }
 }

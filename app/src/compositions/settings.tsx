@@ -1,6 +1,7 @@
 // Settings sections (docs/design/specs/settings.md). Both shells render these; they only frame them.
 import {
   Archive, Cloud, Database, DownloadSimple, Info, Keyboard, Palette, Sparkle,
+  ChartBar,
 } from '@phosphor-icons/react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { backUp, decks, isLive, useLibrary } from '../data/library'
@@ -13,7 +14,8 @@ import { bytes, count, relTimeInline } from '../lib/format'
 import { KEYMAP } from '../lib/keymap'
 import { useBrowserModel } from '../data/ai/browser'
 import { AI_PROVIDER_IDS, providerDef, type AiProviderId } from '../data/ai/providers'
-import { canSee, providerName, setAi, setModels, setProvider, useActiveModel, useAi } from '../data/ai/settings'
+import { canSee, providerName, setAi, setModels, setProvider, useActiveModel, useAi, type ModelProvider } from '../data/ai/settings'
+import { clearUsage, usageSince, useUsageVersion } from '../data/ai/usage'
 import { persistStorage, storage } from '../storage/client'
 import { PRODUCT } from '../ui/Brand'
 import { Button, Keys } from '../ui/Button'
@@ -38,6 +40,7 @@ export const SECTIONS: SectionDef[] = [
   { id: 'storage', label: 'Storage', group: 'Library', icon: <Database size={18} />, render: () => <Storage /> },
   { id: 'sync', label: 'Sync', group: 'Library', icon: <Cloud size={18} />, render: () => <Sync /> },
   { id: 'ai', label: 'AI', group: 'Library', icon: <Sparkle size={18} />, render: () => <AiSettings /> },
+  { id: 'usage', label: 'AI usage', group: 'Library', icon: <ChartBar size={18} />, render: () => <Usage /> },
   { id: 'about', label: `About ${PRODUCT}`, group: 'Ream', icon: <Info size={18} />, render: () => <About /> },
 ]
 /** Shortcuts only where there is a keyboard (review: it was dead UI on phones). */
@@ -308,6 +311,42 @@ function AiSettings() {
       <p className={s.note}>{sync.provider
         ? sync.encrypted ? 'Keys sync with your library, end-to-end encrypted.' : `Keys sync with your library, so ${PROVIDERS[sync.provider].name} can read them. Turn on end-to-end encryption in Sync to prevent that.`
         : 'Keys are stored in this browser’s library. If you connect sync, they go with it.'}</p>
+    </>
+  )
+}
+
+// ---------- AI usage ----------
+
+const n = (x: number) => (x >= 1e6 ? `${(x / 1e6).toFixed(1)}M` : x >= 1e4 ? `${Math.round(x / 1e3)}k` : x.toLocaleString())
+function Usage() {
+  useUsageVersion()
+  const browser = useBrowserModel()
+  const [period, setPeriod] = useState<'7' | '30' | 'all'>('30')
+  const rows = usageSince(period === 'all' ? null : Number(period))
+  const providers = [...new Set(rows.map((r) => r.provider))]
+  const sum = (list: typeof rows) => list.reduce((a, r) => ({ requests: a.requests + r.count.requests, input: a.input + r.count.input, output: a.output + r.count.output, pictures: a.pictures + r.count.pictures }), { requests: 0, input: 0, output: 0, pictures: 0 })
+  const total = sum(rows)
+  return (
+    <>
+      <p className={s.lede}>What {PRODUCT} sent to AI providers from this browser. Your provider’s dashboard has the exact bill.</p>
+      <div className={s.usageBar}>
+        <Segmented label="Period" value={period} onChange={setPeriod} options={[{ value: '7', label: '7 days', title: 'The last 7 days' }, { value: '30', label: '30 days', title: 'The last 30 days' }, { value: 'all', label: 'All time', title: 'Everything recorded in this browser' }]} />
+        <span className={s.usageTotal}>{n(total.requests)} requests · {n(total.input)} in · {n(total.output)} out{total.pictures ? ` · ${n(total.pictures)} pictures` : ''}</span>
+      </div>
+      {!rows.length && <p className={s.note}>Nothing yet in this period.</p>}
+      {providers.map((p) => {
+        const list = rows.filter((r) => r.provider === p).sort((a, b) => b.count.input + b.count.output - (a.count.input + a.count.output))
+        const t = sum(list)
+        return (
+          <SettingGroup key={p} title={`${providerName(p as ModelProvider, browser)} · ${n(t.input + t.output)} tokens`}>
+            <table className={s.usage}>
+              <thead><tr><th>Model</th><th>Requests</th><th>Input</th><th>Output</th><th>Pictures</th></tr></thead>
+              <tbody>{list.map((r) => <tr key={r.model}><td>{r.model}</td><td>{n(r.count.requests)}</td><td>{n(r.count.input)}</td><td>{n(r.count.output)}{r.count.reasoning ? <span className={s.dim}> ({n(r.count.reasoning)} thinking)</span> : null}</td><td>{r.count.pictures ? n(r.count.pictures) : '—'}</td></tr>)}</tbody>
+            </table>
+          </SettingGroup>
+        )
+      })}
+      {rows.length > 0 && <Button variant="ghost" onClick={clearUsage}>Clear these counts</Button>}
     </>
   )
 }

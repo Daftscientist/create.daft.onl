@@ -22,3 +22,11 @@
 .err { color: var(--danger); }
 .note { font-size: 13px; color: var(--ink-3); padding-left: 16px; margin-top: -12px; max-width: 64ch; }
 @media (max-width: 759px) { .keyForm { flex-direction: column; align-items: stretch; width: 100%; } .keyForm label { width: auto; } .select { width: 100%; max-width: none; height: 44px; } }
+.usageBar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+.usageTotal { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.usage { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.usage th { text-align: right; font-weight: 600; font-size: 12px; color: var(--ink-3); padding: 8px 12px; }
+.usage td { text-align: right; padding: 8px 12px; border-top: 1px solid var(--hair); }
+.usage th:first-child, .usage td:first-child { text-align: left; }
+.usage td:first-child { font-weight: 560; word-break: break-all; }
+.dim { color: var(--ink-3); }
