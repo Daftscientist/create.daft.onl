@@ -5,14 +5,16 @@
   overscroll-behavior: contain; touch-action: none;
 }
 .viewport:focus { outline: none; }
-.viewport:focus-visible { box-shadow: 0 0 0 1px var(--hair), inset 0 0 0 2px var(--deck); }
+.viewport:focus-visible { box-shadow: 0 0 0 1px var(--hair), inset 0 0 0 2px var(--select); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .viewport[data-space] { cursor: grab; }
 .world { position: relative; }
 .paper {
   position: absolute; background: #fff;
   box-shadow: 0 0 0 1px var(--hair), 0 1px 2px rgb(0 0 0 / 0.06), 0 18px 48px -18px rgb(0 0 0 / 0.25);
 }
-:global([data-theme="dark"]) .paper, :global(:root:not([data-theme="light"])) .paper { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 18px 48px -18px rgb(0 0 0 / 0.6); }
+:global([data-theme="dark"]) .paper { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 18px 48px -18px rgb(0 0 0 / 0.6); }
+@media (prefers-color-scheme: dark) { :global(:root:not([data-theme="light"])) .paper { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 18px 48px -18px rgb(0 0 0 / 0.6); } }
 .overlay { position: absolute; pointer-events: none; }
 .overlay > * { position: absolute; transform-origin: center; box-sizing: border-box; }
 
@@ -45,7 +47,7 @@
 .guide[data-axis="y"] { height: 1px; margin-top: -0.5px; background: var(--guide); box-shadow: 0 0 0 0.5px rgb(255 255 255 / 0.8); }
 .pill {
   position: absolute; left: 50%; top: 50%; translate: -50% -50%; padding: 1px 6px; border-radius: var(--r-pill);
-  background: var(--guide); color: #fff; font: 600 11px/16px var(--font); font-variant-numeric: tabular-nums; white-space: nowrap;
+  background: var(--paper); color: var(--ink); box-shadow: 0 0 0 1px var(--guide); font: 600 11px/16px var(--font); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .marquee { border: 1px solid var(--select); background: var(--select-soft); }
 

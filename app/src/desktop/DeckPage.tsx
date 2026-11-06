@@ -72,7 +72,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     const d = deck
     const start = d.slides[Math.min(slide ?? d.lastSlide ?? 0, d.slides.length - 1)]?.id ?? null
     const saved = read(COL_KEY) as Column | 'none' | null
-    const col: Column = saved === 'none' ? null : saved === 'ask' || saved === 'format' ? saved : innerWidth >= 1280 ? 'format' : null
+    const col: Column = saved === 'none' ? null : saved === 'ask' || saved === 'format' ? saved : innerWidth >= 1100 ? 'format' : null
     setEditor({ deckId, slideId: start, sel: [], scope: null, editing: null, railSel: start ? [start] : [], railAnchor: start, zoom: 'fit', column: col, locked: [], presenting: false })
     touchDeck(deckId)
     void import('../engine').then((m) => m.warmEngine()) // a deck is open: have the engine ready for export
@@ -96,18 +96,22 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     return () => removeEventListener('beforeunload', warn)
   }, [save])
 
-  const setColumn = (c: Column) => { setEditor({ column: c }); write(COL_KEY, c ?? 'none') }
+  const setColumn = (c: Column) => {
+    // Closing the column with focus inside it hands focus to the stage, not the page.
+    if (!c && document.activeElement?.closest('[data-region="column"]')) requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-region="stage"]')?.focus())
+    setEditor({ column: c }); write(COL_KEY, c ?? 'none')
+  }
   const leave = () => { endEdit(); if (history.length > 1) back(); else navigate({ name: 'home' }) }
   const present = useCallback((fromStart: boolean, withPresenter = false) => { endEdit(); presentFrom.current = fromStart ? 0 : null; setPresenter(withPresenter); setEditor({ presenting: true, sel: getEditor().sel }) }, [])
   const presentFrom = useRef<number | null>(null)
   const [presenter, setPresenter] = useState(false)
   const keyOpts = useMemo(() => ({
-    deckId, slides: d?.slides.map((x) => x.id) ?? [],
+    readOnly: viewer, deckId, slides: d?.slides.map((x) => x.id) ?? [],
     onPresent: present,
     onAsk: () => setColumn(getEditor().column === 'ask' ? null : 'ask'),
     onFormat: () => setColumn(getEditor().column === 'format' ? null : 'format'),
     onLeave: leave, onFind: (replace: boolean) => setFind({ replace }), fitZoom: currentFit,
-  }), [deckId, d?.slides, present]) // eslint-disable-line react-hooks/exhaustive-deps
+  }), [deckId, d?.slides, present, viewer]) // eslint-disable-line react-hooks/exhaustive-deps
   useEditorKeys(keyOpts)
 
   // Clipboard: the native events, while the stage is focused and no text is being edited.
@@ -115,6 +119,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     if (!d) return
     const size = d.size ?? { w: 1280, h: 720 }
     const on = (e: ClipboardEvent) => {
+      if (coarse.matches) return
       const r = regionOf(document.activeElement)
       if (r !== 'stage' && document.activeElement !== document.body) return
       onClipboardEvent(e, visibleCentre, size)
@@ -132,6 +137,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   // The canvas context menu.
   useEffect(() => {
     const on = (e: Event) => {
+      if (coarse.matches) return
       const { x, y } = (e as CustomEvent<{ x: number; y: number }>).detail
       const sel = getEditor().sel
       const size = d?.size ?? { w: 1280, h: 720 }
@@ -188,7 +194,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const size = d.size ?? { w: 1280, h: 720 }
   const iconOnly = width < 1280
   const overlay = width < 1100
-  const compactRail = width < 1100 && !!column
+  const compactRail = false
   const showColumn = !viewer && !!column
   const askOn = ai && column === 'ask'
 
@@ -239,7 +245,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         <div className={s.title}>
           <h1 title={d.name}>{d.name}</h1>
           <span>
-            {count(d.slides.length, 'slide')} · {status ?? <button type="button" className={s.notSaved} onClick={retrySave}>Not saved · Retry</button>} <SyncInline />
+            {count(d.slides.length, 'slide')} · {status ?? <><button type="button" className={s.notSaved} onClick={retrySave}>Not saved · Retry</button> · <button type="button" className={s.notSaved} onClick={() => download([d.id], 'pptx')}>Download a copy</button></>} <SyncInline />
           </span>
         </div>
         {!viewer && (
@@ -277,7 +283,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
         </div>
       </header>
       <div className={s.body} data-column={showColumn || undefined} data-overlay={overlay || undefined} style={{ ['--col' as string]: `${colW}px` }}>
-        <Rail deck={d} compact={compactRail} />
+        <Rail deck={d} compact={compactRail} readOnly={viewer} />
         <div className={s.stageWrap} onDragOver={(e) => { if (e.dataTransfer.types.includes('application/x-ream-insert') || e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.stopPropagation() } }} onDrop={onDrop}>
           <Canvas deck={d} slide={cur} label={`Slide ${index + 1} of ${d.slides.length}`} readOnly={viewer} />
           <ZoomCluster />

@@ -51,9 +51,9 @@ export function AccessibilitySection({ deck, sec }: { deck: Deck; sec: Sec }) {
   const issues = useMemo(() => (sec.open ? checkDeck(deck) : []), [deck, sec.open])
   return (
     <Section title="Accessibility" {...sec} aside={sec.open && issues.length ? <span className={s.badge}>{issues.length}</span> : undefined}>
-      {!issues.length && <p className={s.note}>No issues found. Pictures and charts have alt text, every slide has a title, and text is readable.</p>}
-      <ul className={s.issues}>
-        {issues.slice(0, 40).map((i, k) => (
+      {!issues.length && <p className={s.note}>No issues found by these checks: alt text on pictures and charts, a title on each slide, text size, and text contrast against a plain background. Text over pictures isn’t checked.</p>}
+      <ul className={s.issues} style={{ maxHeight: 320, overflowY: 'auto' }}>
+        {issues.map((i, k) => (
           <li key={k}>
             <button type="button" className={s.issue} onClick={() => setEditor({ slideId: i.slideId, railSel: [i.slideId], railAnchor: i.slideId, sel: i.objectId ? [i.objectId] : [], scope: null, editing: null })}>
               <Warning size={13} weight="fill" /><span><b>Slide {i.slideIndex + 1}</b> · {i.message}</span>

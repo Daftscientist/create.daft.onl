@@ -53,22 +53,33 @@ function play(steps: Step[], k: number) {
   }
 }
 
-/** The incoming slide's transition (PowerPoint's names; directions as PowerPoint means them). */
-function transition(el: HTMLElement, slideRoot: Element | null) {
+/** A transition between the outgoing slide and the incoming one, as PowerPoint plays it (cover slides the
+ *  new slide over the old, uncover slides the old away, push moves both). Directions as PowerPoint means them. */
+function transition(incoming: HTMLElement, outgoing: HTMLElement | null, slideRoot: Element | null, done: () => void): number {
   const type = slideRoot?.getAttribute('data-transition')
-  if (!type || type === 'none' || type === 'cut' || reduced()) return
+  if (!type || type === 'none' || type === 'cut' || reduced()) { done(); return 0 }
   const duration = Number(slideRoot?.getAttribute('data-transition-duration')) || 700
-  const dir = slideRoot?.getAttribute('data-transition-direction') ?? 'l'
-  const off = { l: 'translateX(100%)', r: 'translateX(-100%)', u: 'translateY(100%)', d: 'translateY(-100%)' }[dir as 'l'] ?? 'translateX(100%)'
-  const clip = { l: 'inset(0 0 0 100%)', r: 'inset(0 100% 0 0)', u: 'inset(100% 0 0 0)', d: 'inset(0 0 100% 0)' }[dir as 'l'] ?? 'inset(0 0 0 100%)'
-  const frames: Record<string, Keyframe[]> = {
-    fade: [{ opacity: 0 }, { opacity: 1 }], dissolve: [{ opacity: 0, filter: 'blur(6px)' }, { opacity: 1, filter: 'blur(0)' }],
-    push: [{ transform: off }, { transform: 'none' }], cover: [{ transform: off }, { transform: 'none' }],
-    uncover: [{ opacity: 0.4 }, { opacity: 1 }], wipe: [{ clipPath: clip }, { clipPath: 'inset(0)' }],
-    split: [{ clipPath: 'inset(0 50% 0 50%)' }, { clipPath: 'inset(0)' }], zoom: [{ transform: 'scale(0.6)', opacity: 0 }, { transform: 'none', opacity: 1 }],
-    morph: [{ opacity: 0 }, { opacity: 1 }],
+  const dir = (slideRoot?.getAttribute('data-transition-direction') ?? 'l') as 'l' | 'r' | 'u' | 'd'
+  const from = { l: 'translateX(100%)', r: 'translateX(-100%)', u: 'translateY(100%)', d: 'translateY(-100%)' }[dir] ?? 'translateX(100%)'
+  const to = { l: 'translateX(-100%)', r: 'translateX(100%)', u: 'translateY(-100%)', d: 'translateY(100%)' }[dir] ?? 'translateX(-100%)'
+  const clip = { l: 'inset(0 0 0 100%)', r: 'inset(0 100% 0 0)', u: 'inset(100% 0 0 0)', d: 'inset(0 0 100% 0)' }[dir] ?? 'inset(0 0 0 100%)'
+  const opts: KeyframeAnimationOptions = { duration, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: 'both' }
+  const run: Animation[] = []
+  const inA = (k: Keyframe[]) => run.push(incoming.animate(k, opts))
+  const outA = (k: Keyframe[]) => outgoing && run.push(outgoing.animate(k, opts))
+  if (outgoing) outgoing.style.zIndex = type === 'uncover' ? '2' : '0'
+  switch (type) {
+    case 'push': inA([{ transform: from }, { transform: 'none' }]); outA([{ transform: 'none' }, { transform: to }]); break
+    case 'cover': inA([{ transform: from }, { transform: 'none' }]); break
+    case 'uncover': outA([{ transform: 'none' }, { transform: to }]); break
+    case 'wipe': inA([{ clipPath: clip }, { clipPath: 'inset(0)' }]); break
+    case 'split': inA([{ clipPath: 'inset(0 50% 0 50%)' }, { clipPath: 'inset(0)' }]); break
+    case 'zoom': inA([{ transform: 'scale(0.6)', opacity: 0 }, { transform: 'none', opacity: 1 }]); break
+    case 'dissolve': inA([{ opacity: 0, filter: 'blur(6px)' }, { opacity: 1, filter: 'blur(0)' }]); break
+    default: inA([{ opacity: 0 }, { opacity: 1 }]); outA([{ opacity: 1 }, { opacity: 0 }]) // fade, morph
   }
-  el.animate(frames[type] ?? frames.fade, { duration, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' })
+  void Promise.all(run.map((a) => a.finished.catch(() => {}))).then(() => { for (const a of run) a.cancel(); done() })
+  return duration
 }
 
 export function Present({ deck, start, onExit, presenter = false }: { deck: Deck; start: number; onExit: (slideIndex: number) => void; presenter?: boolean }) {
@@ -81,6 +92,8 @@ export function Present({ deck, start, onExit, presenter = false }: { deck: Deck
   const stage = useRef<HTMLElement | null>(null)
   const steps = useRef<Step[]>([])
   const entering = useRef<'forward' | 'back' | 'jump'>('jump')
+  const [leaving, setLeaving] = useState<Deck['slides'][number] | null>(null)
+  const leavingRef = useRef<HTMLDivElement>(null)
   const typed = useRef('')
   const atRef = useRef(at)
   useEffect(() => { atRef.current = at }, [at])
@@ -113,14 +126,15 @@ export function Present({ deck, start, onExit, presenter = false }: { deck: Deck
     setClick(k)
     settle(steps.current, k)
     if (entering.current !== 'back') {
-      if (frame.current && entering.current === 'forward') transition(frame.current, st.querySelector('.domoxml-slide'))
+      if (frame.current && entering.current === 'forward') transition(frame.current, leavingRef.current, st.querySelector('.domoxml-slide'), () => setLeaving(null))
+      else setLeaving(null)
       play(steps.current, 0)
-    }
+    } else setLeaving(null)
   }, [at])
 
   const next = () => {
     if (click < clicks(steps.current)) { const k = click + 1; setClick(k); play(steps.current, k); return }
-    if (at < shown.length - 1) { entering.current = 'forward'; setAt(at + 1) }
+    if (at < shown.length - 1) { entering.current = 'forward'; setLeaving(shown[at].sl); setAt(at + 1) }
   }
   const prev = () => {
     if (click > 0) { const k = click - 1; setClick(k); settle(steps.current, k); return }
@@ -169,7 +183,12 @@ export function Present({ deck, start, onExit, presenter = false }: { deck: Deck
   return (
     <div ref={ref} className={s.present} tabIndex={-1} onKeyDown={onKey} role="region" aria-label={`Presenting slide ${(cur?.i ?? 0) + 1} of ${deck.slides.length}`}
       onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) next() }} onContextMenu={(e) => { e.preventDefault(); prev() }}>
-      {cur && <div ref={frame} className={s.slide} style={{ width: size.w * scale, height: size.h * scale }}><SlideView key={cur.sl.id} slide={cur.sl} size={size} css={deck.css} interactive onStage={(st) => { stage.current = st }} /></div>}
+      {cur && (
+        <div className={s.stack} style={{ width: size.w * scale, height: size.h * scale }}>
+          {leaving && <div ref={leavingRef} className={s.slide}><SlideView key={`out-${leaving.id}`} slide={leaving} size={size} css={deck.css} /></div>}
+          <div ref={frame} className={s.slide} style={{ zIndex: 1 }}><SlideView key={cur.sl.id} slide={cur.sl} size={size} css={deck.css} interactive onStage={(st) => { stage.current = st }} /></div>
+        </div>
+      )}
       {windowed && <button type="button" className={s.exit} onClick={exit}><X size={14} /> Exit</button>}
       {inline && panel && <div className={s.inlinePresenter} onClick={(e) => e.stopPropagation()}>{panel}</div>}
       {popup && panel && createPortal(panel, popup.root)}

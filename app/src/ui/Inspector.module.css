@@ -5,7 +5,7 @@
   display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 4px; margin-left: -4px;
   font-size: 12.5px; font-weight: 620; color: var(--ink); border-radius: var(--r-xs);
 }
-.sectionToggle:focus-visible { outline: 2px solid var(--deck); outline-offset: 1px; }
+.sectionToggle:focus-visible { outline: 2px solid var(--select); outline-offset: 1px; }
 .caret { color: var(--ink-3); transition: rotate var(--dur-1) var(--ease-out); }
 .sectionToggle[aria-expanded="false"] .caret { rotate: -90deg; }
 .sectionBody { display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
@@ -27,7 +27,7 @@
 
 .well { width: 30px; height: 30px; border-radius: var(--r-xs); display: grid; place-items: center; background: var(--fill); flex: none; }
 .well:hover { background: var(--fill-2); }
-.well:focus-visible { outline: 2px solid var(--deck); outline-offset: 1px; }
+.well:focus-visible { outline: 2px solid var(--select); outline-offset: 1px; }
 .swatch { width: 18px; height: 18px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15); }
 .swatch[data-none] { background: linear-gradient(135deg, transparent 45%, var(--danger) 45% 55%, transparent 55%) var(--paper) !important; }
 
@@ -39,7 +39,7 @@
 .chips { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
 .chip { aspect-ratio: 1; border-radius: 5px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.14); }
 .chip[aria-pressed="true"] { outline: 2px solid var(--select); outline-offset: 1px; }
-.chip:focus-visible { outline: 2px solid var(--deck); outline-offset: 1px; }
+.chip:focus-visible { outline: 2px solid var(--select); outline-offset: 1px; }
 .popRow { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
 .picker { width: 30px; height: 30px; padding: 0; border: 0; background: none; border-radius: var(--r-xs); cursor: pointer; }
 .hex { flex: 1; min-width: 0; height: 30px; padding: 0 8px; border-radius: var(--r-xs); background: var(--fill); border: 0; font: inherit; font-size: 12.5px; color: var(--ink); font-variant-numeric: tabular-nums; }

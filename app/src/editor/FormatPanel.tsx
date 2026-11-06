@@ -43,6 +43,8 @@ export function kindOf(el: HTMLElement): Kind {
 }
 const KIND_NAME: Record<Kind, string> = { text: 'Text box', shape: 'Shape', picture: 'Picture', preserved: 'Chart', group: 'Group', table: 'Table', svg: 'Shape', chart: 'Chart', line: 'Line' }
 export function objectName(el: HTMLElement): string {
+  const given = el.getAttribute('data-ream-name')
+  if (given) return given
   const k = kindOf(el)
   const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
   if (k === 'preserved') return el.getAttribute('alt') || 'Kept object'
@@ -90,18 +92,20 @@ export function FormatPanel({ deck, slide, index, onClose }: { deck: Deck; slide
       <div className={s.body}>
         {!els.length && <SlidePanel deck={deck} slide={slide} sec={sec} colors={deckColors} />}
         {kinds[0] === 'preserved' && els.length === 1 && <p className={s.note}>Kept exactly as in PowerPoint. You can move, resize and reorder it.</p>}
-        {showText && kinds[0] === 'text' && <TextSection sec={sec('text')} colors={deckColors} ids={sel} />}
-        {styleable && <FillSection sec={sec('fill', kinds[0] !== 'text')} els={els} ids={sel} colors={deckColors} />}
-        {styleable && kinds.some((k) => k !== 'text') && <EffectsSection sec={sec('effects', false)} els={els} ids={sel} />}
-        {showText && kinds[0] !== 'text' && <TextSection sec={sec('text')} colors={deckColors} ids={sel} />}
-        {els.length === 1 && kinds[0] === 'picture' && <PictureSection sec={sec('picture')} el={els[0]} id={sel[0]} />}
+        {els.length > 1 && <ArrangeSection sec={sec('arrange')} els={els} ids={sel} size={deck.size ?? { w: 1280, h: 720 }} />}
         {kinds.length > 0 && kinds.every((k) => k === 'line') && <LineSection sec={sec('line')} els={els} ids={sel} colors={deckColors} />}
+        {els.length === 1 && kinds[0] === 'picture' && <PictureSection sec={sec('picture')} el={els[0]} id={sel[0]} />}
         {els.length === 1 && kinds[0] === 'chart' && <ChartSection sec={sec('chart')} el={els[0]} id={sel[0]} />}
         {els.length === 1 && kinds[0] === 'table' && <TableSection sec={sec('table')} el={els[0]} id={sel[0]} colors={deckColors} />}
-        {els.length === 1 && (kinds[0] === 'picture' || kinds[0] === 'chart' || kinds[0] === 'preserved' || kinds[0] === 'shape' || kinds[0] === 'svg') && <AltTextSection sec={sec('alt', false)} el={els[0]} id={sel[0]} />}
+        {/* Text leads whenever there's text, whatever is drawn behind it. */}
+        {showText && <TextSection sec={sec('text')} colors={deckColors} ids={sel} />}
+        {styleable && <FillSection sec={sec('fill', kinds[0] !== 'text')} els={els} ids={sel} colors={deckColors} />}
+        {styleable && kinds.some((k) => k !== 'text') && <EffectsSection sec={sec('effects', false)} els={els} ids={sel} />}
+        {els.length === 1 && <ArrangeSection sec={sec('arrange', kinds[0] === 'preserved')} els={els} ids={sel} size={deck.size ?? { w: 1280, h: 720 }} />}
         {els.length > 0 && <AnimateSection sec={sec('animate', false)} els={els} ids={sel} />}
+        {els.length === 1 && (kinds[0] === 'picture' || kinds[0] === 'chart' || kinds[0] === 'preserved' || kinds[0] === 'shape' || kinds[0] === 'svg') && <AltTextSection sec={sec('alt', false)} el={els[0]} id={sel[0]} />}
         {els.length === 1 && <CommentsSection slide={slide} objectId={sel[0]} objectName={objectName(els[0]).split(':')[0].toLowerCase()} sec={sec('comments', !!slide.comments?.some((c) => c.objectId === sel[0] && !c.resolved))} />}
-        {els.length > 0 && <ArrangeSection sec={sec('arrange', els.length > 1 || kinds[0] === 'preserved')} els={els} ids={sel} size={deck.size ?? { w: 1280, h: 720 }} />}
+        {els.length > 0 && <Section title="Objects on this slide" {...sec('objects-in-object', false)}><ObjectList /></Section>}
       </div>
     </aside>
   )
@@ -114,6 +118,7 @@ function TextSection({ sec, colors, ids }: { sec: Sec; colors: string[]; ids: st
   const [fontMenu, setFontMenu] = useState<MenuAnchor | null>(null)
   if (!t) return null
   const fonts = [...new Set([t.family, ...FONTS])]
+  const anchor = anchorOf(ids)
   return (
     <Section title="Text" {...sec}>
       <Row label="Font">
@@ -139,9 +144,9 @@ function TextSection({ sec, colors, ids }: { sec: Sec; colors: string[]; ids: st
         })}
       </Row>
       <Row label="Vertical">
-        <Toggle label="Top" on={false} onClick={() => setAnchor(ids, 'top')}><AlignTop size={15} /></Toggle>
-        <Toggle label="Middle" on={false} onClick={() => setAnchor(ids, 'middle')}><AlignCenterVertical size={15} /></Toggle>
-        <Toggle label="Bottom" on={false} onClick={() => setAnchor(ids, 'bottom')}><AlignBottom size={15} /></Toggle>
+        <Toggle label="Top" on={anchor === 'top'} onClick={() => setAnchor(ids, 'top')}><AlignTop size={15} /></Toggle>
+        <Toggle label="Middle" on={anchor === 'middle'} onClick={() => setAnchor(ids, 'middle')}><AlignCenterVertical size={15} /></Toggle>
+        <Toggle label="Bottom" on={anchor === 'bottom'} onClick={() => setAnchor(ids, 'bottom')}><AlignBottom size={15} /></Toggle>
       </Row>
       <Row label="Line spacing">
         <NumberField label="×" value={t.lineHeight} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0.5, Math.min(5, v)) }} onCommit={(v) => formatParas({ 'line-height': `${Math.round(v * 1.2 * 1000) / 1000}` })} step={0.1} hint="A multiple, like 1.15" />
@@ -299,21 +304,23 @@ function ArrangeSection({ sec, els, ids, size }: { sec: Sec; els: HTMLElement[];
   const parse = (x: string, c: number) => parseLength(x, c, unit)
   const commit = (patch: Partial<Box>) => {
     if (single) { setBoxes(new Map([[ids[0], { ...b, ...patch }]]), 'Arrange'); return }
-    // Typing W/H for several objects scales the union proportionally (spec: Arrange, multiple).
-    const nb = { ...b, ...patch }
-    const sx = b.w ? nb.w / b.w : 1, sy = b.h ? nb.h / b.h : 1
+    // Typing W/H for several objects scales the union proportionally (spec: Arrange, multiple): one
+    // factor for both axes, so nothing inside is squashed.
+    const k = patch.w !== undefined && b.w ? patch.w / b.w : patch.h !== undefined && b.h ? patch.h / b.h : 1
+    const nb = { ...b, ...patch, w: b.w * k, h: b.h * k }
+    const sx = k, sy = k
     setBoxes(new Map(els.map((e, i) => { const m = boxOf(e); return [ids[i], { ...m, x: nb.x + (m.x - b.x) * sx, y: nb.y + (m.y - b.y) * sy, w: m.w * sx, h: m.h * sy }] as const })), 'Arrange')
   }
   const al = (a: Align) => align(ids, a, size)
   return (
     <Section title="Arrange" {...sec}>
       <Row label="Position">
-        <NumberField label="X" value={b.x} format={fmt} parse={parse} onCommit={(x) => commit({ x })} scrub={1} disabled={locked} />
-        <NumberField label="Y" value={b.y} format={fmt} parse={parse} onCommit={(y) => commit({ y })} disabled={locked} />
+        <NumberField label="X" value={b.x} format={fmt} parse={parse} onCommit={(x) => commit({ x })} scrub={1} step={0.1} disabled={locked} />
+        <NumberField label="Y" value={b.y} format={fmt} parse={parse} onCommit={(y) => commit({ y })} step={0.1} disabled={locked} />
       </Row>
       <Row label="Size">
-        <NumberField label="W" value={b.w} format={fmt} parse={(x, c) => { const v = parse(x, c); return v === null ? null : Math.max(1, v) }} onCommit={(w) => commit({ w })} disabled={locked} />
-        <NumberField label="H" value={b.h} format={fmt} parse={(x, c) => { const v = parse(x, c); return v === null ? null : Math.max(1, v) }} onCommit={(h) => commit({ h })} disabled={locked} />
+        <NumberField label="W" value={b.w} format={fmt} parse={(x, c) => { const v = parse(x, c); return v === null ? null : Math.max(1, v) }} onCommit={(w) => commit({ w })} step={0.1} disabled={locked} />
+        <NumberField label="H" value={b.h} format={fmt} parse={(x, c) => { const v = parse(x, c); return v === null ? null : Math.max(1, v) }} onCommit={(h) => commit({ h })} step={0.1} disabled={locked} />
       </Row>
       {single && !isGroup(els[0]) && (
         <Row label="Angle">
@@ -353,8 +360,6 @@ function SlidePanel({ deck, slide, sec, colors }: { deck: Deck; slide: SlideDoc;
   const stage = liveStage()
   const root = stage?.querySelector<HTMLElement>('.domoxml-slide')
   const bg = root ? getComputedStyle(root).backgroundColor : '#ffffff'
-  const objects = root ? ([...root.children].filter((c) => c.hasAttribute('data-domoxml-node-id')) as HTMLElement[]) : []
-  const [drag, setDrag] = useState<number | null>(null)
   const [versions, setVersions] = useState(false)
   const missing = useMissingFonts(deck)
   return (
@@ -371,26 +376,7 @@ function SlidePanel({ deck, slide, sec, colors }: { deck: Deck; slide: SlideDoc;
       <TransitionSection slide={slide} deck={deck} sec={sec('transition', false)} />
       <DesignSection deck={deck} sec={sec('design', false)} colors={colors} />
       <Section title="Objects on this slide" {...sec('objects')}>
-        {!objects.length && <p className={s.note}>Nothing on this slide yet. Add text, a shape or a picture from the header.</p>}
-        <ol className={s.objects} aria-label="Objects, front to back">
-          {[...objects].reverse().map((el, ri) => {
-            const i = objects.length - 1 - ri
-            const id = el.getAttribute('data-domoxml-node-id')!
-            const locked = el.hasAttribute('data-ream-locked')
-            const hidden = el.hasAttribute('data-ream-hidden')
-            return (
-              <li key={id} className={s.object} data-drop={drag !== null && drag !== i ? 'maybe' : undefined}
-                draggable onDragStart={(e) => { setDrag(i); e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => setDrag(null)}
-                onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (drag !== null && drag !== i) moveToIndex(objects[drag].getAttribute('data-domoxml-node-id')!, i); setDrag(null) }}>
-                <DotsSixVertical size={14} className={s.grip} aria-hidden />
-                <button type="button" className={s.objectName} onClick={() => { select([id], null); setEditor({ scope: null }) }}>{objectName(el)}</button>
-                <Tooltip label={hidden ? 'Show' : 'Hide'}><button type="button" className={s.objectBtn} aria-pressed={hidden} aria-label={hidden ? 'Show' : 'Hide'} onClick={() => toggleAttr([id], 'data-ream-hidden', hidden ? 'Show' : 'Hide')}>{hidden ? <EyeSlash size={14} /> : <Eye size={14} />}</button></Tooltip>
-                <Tooltip label={locked ? 'Unlock' : 'Lock'}><button type="button" className={s.objectBtn} aria-pressed={locked} aria-label={locked ? 'Unlock' : 'Lock'} onClick={() => toggleAttr([id], 'data-ream-locked', locked ? 'Unlock' : 'Lock')}>{locked ? <Lock size={14} /> : <LockOpen size={14} />}</button></Tooltip>
-              </li>
-            )
-          })}
-        </ol>
-        {objects.length > 1 && <p className={s.hint}>Drag to change the order. Top of the list is in front.</p>}
+        <ObjectList />
       </Section>
       <Section title="Speaker notes" {...sec('notes', false)}>
         <NotesField slide={slide} />
@@ -448,7 +434,6 @@ function fontExists(f: string): boolean {
   c.font = `40px "${f}", serif`; const b2 = c.measureText(probe).width
   return a !== b || a2 !== b2
 }
-void textHost
 
 // ---------- motion (domOXML's data-transition* and data-animate*, written natively on export) ----------
 
@@ -647,4 +632,63 @@ function DesignSection({ deck, sec, colors }: { deck: Deck; sec: Sec; colors: st
       <Menu open={!!menu} anchor={menu?.anchor ?? null} items={menu?.items ?? []} label={menu?.label.split('|')[0] ?? ''} search={menu?.label.endsWith('|search') ? 'Find a font' : undefined} onClose={() => setMenu(null)} />
     </Section>
   )
+}
+
+/** PowerPoint's Selection Pane: every object, front to back, with hide, lock, rename (double-click)
+ *  and drag (or ⌥↑/⌥↓) to reorder. Selecting a row keeps the list where it is. */
+function ObjectList() {
+  useEditor((e) => e.sel)
+  const sel = useEditor((e) => e.sel)
+  const stage = liveStage()
+  const root = stage?.querySelector<HTMLElement>('.domoxml-slide')
+  const objects = root ? ([...root.children].filter((c) => c.hasAttribute('data-domoxml-node-id')) as HTMLElement[]) : []
+  const [drag, setDrag] = useState<number | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  if (!objects.length) return <p className={s.note}>Nothing on this slide yet. Add text, a shape or a picture from the header.</p>
+  const rename = (id: string, name: string) => {
+    setRenaming(null)
+    editSlide('Rename', (r) => { const e = find(r, id); if (!e) return false; if (name.trim()) e.setAttribute('data-ream-name', name.trim()); else e.removeAttribute('data-ream-name') })
+  }
+  return (
+    <>
+      <ol className={s.objects} aria-label="Objects, front to back">
+        {[...objects].reverse().map((el, ri) => {
+          const i = objects.length - 1 - ri
+          const id = el.getAttribute('data-domoxml-node-id')!
+          const locked = el.hasAttribute('data-ream-locked')
+          const hidden = el.hasAttribute('data-ream-hidden')
+          const name = el.getAttribute('data-ream-name') ?? objectName(el)
+          return (
+            <li key={id} className={s.object} aria-selected={sel.includes(id)} data-drop={drag !== null && drag !== i ? 'maybe' : undefined}
+              draggable={renaming !== id} onDragStart={(e) => { setDrag(i); e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => setDrag(null)}
+              onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (drag !== null && drag !== i) moveToIndex(objects[drag].getAttribute('data-domoxml-node-id')!, i); setDrag(null) }}>
+              <DotsSixVertical size={14} className={s.grip} aria-hidden />
+              {renaming === id
+                ? <input className={s.renameInput} defaultValue={el.getAttribute('data-ream-name') ?? ''} placeholder={objectName(el)} aria-label="Name" autoFocus
+                    onBlur={(e) => rename(id, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') rename(id, (e.target as HTMLInputElement).value); if (e.key === 'Escape') { e.stopPropagation(); setRenaming(null) } }} />
+                : <button type="button" className={s.objectName} title="Double-click to rename"
+                    onClick={(e) => { if (e.shiftKey || e.metaKey) select(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id], null); else select([id], null); setEditor({ scope: null }) }}
+                    onDoubleClick={() => setRenaming(id)}
+                    onKeyDown={(e) => {
+                      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); moveToIndex(id, Math.max(0, Math.min(objects.length - 1, i + (e.key === 'ArrowUp' ? 1 : -1)))) }
+                      if (e.key === 'F2') { e.preventDefault(); setRenaming(id) }
+                    }}>{name}</button>}
+              <Tooltip label={hidden ? 'Show' : 'Hide'}><button type="button" className={s.objectBtn} aria-pressed={hidden} aria-label={hidden ? `Show ${name}` : `Hide ${name}`} onClick={() => toggleAttr([id], 'data-ream-hidden', hidden ? 'Show' : 'Hide')}>{hidden ? <EyeSlash size={14} /> : <Eye size={14} />}</button></Tooltip>
+              <Tooltip label={locked ? 'Unlock' : 'Lock'}><button type="button" className={s.objectBtn} aria-pressed={locked} aria-label={locked ? `Unlock ${name}` : `Lock ${name}`} onClick={() => toggleAttr([id], 'data-ream-locked', locked ? 'Unlock' : 'Lock')}>{locked ? <Lock size={14} /> : <LockOpen size={14} />}</button></Tooltip>
+            </li>
+          )
+        })}
+      </ol>
+      {objects.length > 1 && <p className={s.hint}>Front to back. Drag or ⌥↑/⌥↓ to reorder; double-click to rename.</p>}
+    </>
+  )
+}
+
+function anchorOf(ids: string[]): 'top' | 'middle' | 'bottom' | null {
+  const stage = liveStage()
+  const el = ids[0] && stage ? find(stage, ids[0]) : null
+  const host = el && textHost(el)
+  if (!host) return null
+  const jc = getComputedStyle(host).display.includes('flex') ? getComputedStyle(host).justifyContent : ''
+  return jc === 'center' ? 'middle' : jc === 'flex-end' || jc === 'end' ? 'bottom' : 'top'
 }

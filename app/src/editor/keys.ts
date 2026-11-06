@@ -35,12 +35,12 @@ export function applyUndo(deckId: string, which: 'undo' | 'redo') {
   if (r.skipped) toast({ message: `${r.skipped === 1 ? 'One slide was' : `${r.skipped} slides were`} changed since and kept as they are.` })
 }
 
-type Opts = { deckId: string; slides: string[]; onPresent: (fromStart: boolean, presenter?: boolean) => void; onAsk: () => void; onFormat: () => void; onLeave: () => void; onFind: (replace: boolean) => void; fitZoom: () => number }
+type Opts = { readOnly?: boolean; deckId: string; slides: string[]; onPresent: (fromStart: boolean, presenter?: boolean) => void; onAsk: () => void; onFormat: () => void; onLeave: () => void; onFind: (replace: boolean) => void; fitZoom: () => number }
 
 export function useEditorKeys(o: Opts) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (document.documentElement.dataset.overlay || e.defaultPrevented) return
+      if (document.documentElement.dataset.overlay || e.defaultPrevented || getEditor().presenting) return
       const mod = e.metaKey || e.ctrlKey
       const k = e.key.toLowerCase()
       const path = e.composedPath()
@@ -78,6 +78,12 @@ export function useEditorKeys(o: Opts) {
         return // ⌘Z and the rest: the browser's text editing
       }
       if (inField) return
+      // The viewer (tablets): moving through slides and presenting only.
+      if (o.readOnly) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); step(o, 1) }
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') { e.preventDefault(); step(o, -1) }
+        return
+      }
 
       if (mod && k === 'z') { e.preventDefault(); applyUndo(o.deckId, e.shiftKey ? 'redo' : 'undo'); return }
       if (mod && k === 'y') { e.preventDefault(); applyUndo(o.deckId, 'redo'); return }

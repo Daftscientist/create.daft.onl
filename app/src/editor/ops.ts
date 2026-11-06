@@ -34,8 +34,14 @@ export function cleanForStore(el: Element) {
 
 type Mutate = (root: HTMLElement) => void | false
 
+/** Set by the text editor: commits a live text edit before any other change, so a property change
+ *  (fill, geometry, alignment) never races the edit's next save of the same object. */
+let beforeEdit: (() => void) | null = null
+export const setBeforeEdit = (fn: () => void) => { beforeEdit = fn }
+
 /** Changes one slide as one transaction. `sel`: the selection afterwards (default: unchanged). */
 export function editSlide(label: string, mutate: Mutate, opts: { slideId?: string; sel?: string[] } = {}): boolean {
+  beforeEdit?.()
   const deck = openDeck()
   if (!deck) return false
   const slideId = opts.slideId ?? getEditor().slideId
@@ -56,6 +62,7 @@ export function editSlide(label: string, mutate: Mutate, opts: { slideId?: strin
 
 /** Changes the deck's slide list as one transaction (new, duplicate, delete, reorder, background). */
 export function editSlides(label: string, fn: (slides: SlideDoc[]) => SlideDoc[] | false, after?: { slideId?: string; railSel?: string[] }) {
+  beforeEdit?.()
   const deck = openDeck()
   if (!deck) return
   const next = fn(deck.slides.slice())

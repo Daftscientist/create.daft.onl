@@ -2,10 +2,10 @@
 // saves after 600ms idle (and on blur) without adding history; ending the edit records one transaction.
 // Formatting has three targets (spec): the selected range, the caret (style for what's typed next),
 // or, when no text is being edited, every run of the selected objects.
-import { getLibrary, updateSlides } from '../data/library'
+import { getLibrary, markUnsaved, updateSlides } from '../data/library'
 import type { SlideDoc } from '../data/types'
 import { transact } from './history'
-import { cleanForStore, editSlide, find, openDeck, parasOf, removeObjects, runsOf, setParaStyle, setRunStyle, textHost, type Css } from './ops'
+import { cleanForStore, editSlide, find, openDeck, parasOf, removeObjects, runsOf, setBeforeEdit, setParaStyle, setRunStyle, textHost, type Css } from './ops'
 import { getEditor, setEditor } from './session'
 import { editParas, styleParas, indent, insertStyled, normalizeHost, rangeIn, readParas, renderParas, restoreCaret, saveCaret, styleAt, styleRange, toggleList } from './text'
 
@@ -21,8 +21,15 @@ type Live = {
   timer: number
   composing: boolean
   dispose: () => void
+  /** The edit's own history: typing (grouped by pauses) and formatting, with the caret. */
+  hist: { html: string; caret: ReturnType<typeof saveCaret> | null }[]
+  pos: number
+  histTimer: number
 }
 let live: Live | null = null
+// Any other change commits the edit first (ops.editSlide); the edit stays open on the same object.
+setBeforeEdit(() => { if (live && !ending) commitNow() })
+let ending = false
 const listeners = new Set<() => void>()
 const emit = () => { for (const l of listeners) l() }
 export const onTextChange = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
@@ -59,21 +66,30 @@ export function beginEdit(stage: HTMLElement, id: string, at?: { x: number; y: n
   host.setAttribute('spellcheck', 'true')
   host.setAttribute('data-ream-host', '')
   el.setAttribute('data-ream-editing', '')
-  const l: Live = { id, slideId, el, host, root, from: deck.slides, pending: null, bookmark: null, timer: 0, composing: false, dispose: () => {} }
+  const l: Live = { id, slideId, el, host, root, from: deck.slides, pending: null, bookmark: null, timer: 0, composing: false, dispose: () => {}, hist: [], pos: -1, histTimer: 0 }
   const onInput = () => {
     if (l.composing) return
+    clearTimeout(l.histTimer)
+    l.histTimer = window.setTimeout(() => record(l), 350)
     if (el.hasAttribute('data-ream-empty') && (host.textContent ?? '').trim()) el.removeAttribute('data-ream-empty')
     grow(l)
     saveSoon(l)
     emit()
   }
   const onBefore = (e: InputEvent) => {
+    if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') { e.preventDefault(); step(l, e.inputType === 'historyRedo' ? 1 : -1); return }
     if (l.pending && e.inputType === 'insertText' && e.data && !e.isComposing) {
       const r = rangeIn(root)
       if (r) { e.preventDefault(); insertStyled(host, r, e.data, l.pending); l.pending = null; onInput() }
     }
   }
   const onKey = (e: KeyboardEvent) => {
+    const mod = e.metaKey || e.ctrlKey
+    if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+      e.preventDefault(); e.stopPropagation()
+      step(l, e.key.toLowerCase() === 'y' || e.shiftKey ? 1 : -1)
+      return
+    }
     if (table && e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !readParas(host).some((p) => p.list)) {
       // Tab moves to the next cell (⇧Tab the previous), as in PowerPoint.
       e.preventDefault(); e.stopPropagation()
@@ -85,7 +101,7 @@ export function beginEdit(stage: HTMLElement, id: string, at?: { x: number; y: n
     if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey) {
       const r = rangeIn(root)
       const inList = readParas(host).some((p) => p.list)
-      if (inList) { e.preventDefault(); e.stopPropagation(); indent(host, r, e.shiftKey ? -1 : 1); onInput() }
+      if (inList) { e.preventDefault(); e.stopPropagation(); record(l); indent(host, r, e.shiftKey ? -1 : 1); onInput(); record(l) }
     }
   }
   const onPaste = (e: ClipboardEvent) => {
@@ -120,8 +136,36 @@ export function beginEdit(stage: HTMLElement, id: string, at?: { x: number; y: n
   live = l
   host.focus({ preventScroll: true })
   placeCaret(l, at)
+  record(l)
   emit()
 }
+
+function record(l: Live) {
+  clearTimeout(l.histTimer)
+  const r = rangeIn(l.root)
+  const s = { html: l.host.innerHTML, caret: r && l.host.contains(r.startContainer) ? saveCaret(l.host, r) : null }
+  if (l.hist[l.pos]?.html === s.html) { l.hist[l.pos] = s; return }
+  l.hist = l.hist.slice(0, l.pos + 1)
+  l.hist.push(s)
+  if (l.hist.length > 200) l.hist.shift()
+  l.pos = l.hist.length - 1
+}
+
+/** Undo (-1) or redo (+1) inside the edit. Past its start, ⌘Z ends the edit and undoes in the deck. */
+function step(l: Live, by: 1 | -1) {
+  record(l) // whatever was typed since the last pause is a step of its own
+  const i = l.pos + by
+  if (i < 0 || i >= l.hist.length) return
+  l.pos = i
+  const s = l.hist[i]
+  l.host.innerHTML = s.html
+  if (s.caret) restoreCaret(l.host, s.caret)
+  grow(l)
+  saveSoon(l)
+  emit()
+}
+/** Formatting is a step in the edit's history too. */
+const formatted = (l: Live) => { record(l); saveSoon(l); emit() }
 
 type CaretDoc = Document & { caretPositionFromPoint?: (x: number, y: number, o?: { shadowRoots: ShadowRoot[] }) => { offsetNode: Node; offset: number } | null; caretRangeFromPoint?: (x: number, y: number) => Range | null }
 function placeCaret(l: Live, at?: { x: number; y: number }) {
@@ -155,6 +199,7 @@ function grow(l: Live) {
 }
 
 function saveSoon(l: Live) {
+  markUnsaved(true)
   clearTimeout(l.timer)
   l.timer = window.setTimeout(() => save(l), 600)
 }
@@ -191,6 +236,7 @@ function replaceIn(l: Live, slides: SlideDoc[]): SlideDoc[] | null {
 function save(l: Live) {
   clearTimeout(l.timer)
   if (l.composing) return
+  markUnsaved(false)
   const deck = openDeck()
   if (!deck) return
   const next = replaceIn(l, deck.slides)
@@ -198,11 +244,23 @@ function save(l: Live) {
 }
 
 /** Ends the edit: one transaction for everything typed. A box made in Ream and left empty goes. */
+/** Commits the text so far as one transaction (the edit continues with a fresh starting point), then
+ *  ends the edit: the next change re-renders the object from the store, which now holds its text. */
+function commitNow() {
+  const l = live
+  if (!l) return
+  const id = l.id
+  endEdit()
+  setEditor({ sel: [id] })
+}
+
 export function endEdit(opts: { keepSession?: boolean } = {}) {
   const l = live
   if (!l) return
   live = null
+  ending = true
   clearTimeout(l.timer)
+  markUnsaved(false)
   l.dispose()
   const deck = openDeck()
   if (deck) {
@@ -219,8 +277,17 @@ export function endEdit(opts: { keepSession?: boolean } = {}) {
   document.getSelection()?.removeAllRanges()
   if (!opts.keepSession && getEditor().editing === l.id) setEditor({ editing: null })
   const empty = (l.host.textContent ?? '').trim() === ''
+  ending = false
   if (empty && l.el.hasAttribute('data-ream-autogrow') && !l.el.hasAttribute('data-ream-placeholder')) removeObjects([l.id], 'Delete empty text box')
   emit()
+}
+
+/** Returns focus to the text being edited, at the caret or range it had (text bar fields and popovers). */
+export function refocus() {
+  const l = live
+  if (!l) return
+  l.host.focus({ preventScroll: true })
+  if (l.bookmark) restoreCaret(l.host, l.bookmark)
 }
 
 // ---------- formatting ----------
@@ -238,9 +305,9 @@ export function formatRuns(css: Css, label = 'Format text') {
   if (l) {
     const r = liveRange(l)
     if (!r || r.collapsed) { l.pending = { ...l.pending, ...css }; emit(); return }
+    record(l)
     styleRange(l.host, r, css)
-    saveSoon(l)
-    emit()
+    formatted(l)
     return
   }
   setRunStyle(getEditor().sel, css, label)
@@ -249,9 +316,9 @@ export function formatRuns(css: Css, label = 'Format text') {
 export function formatParas(css: Css) {
   const l = live
   if (l) {
+    record(l)
     styleParas(l.host, liveRange(l), css)
-    saveSoon(l)
-    emit()
+    formatted(l)
     return
   }
   setParaStyle(getEditor().sel, css, css['text-align'] ? 'Align text' : 'Paragraph spacing')
@@ -259,7 +326,7 @@ export function formatParas(css: Css) {
 
 export function list(kind: 'ul' | 'ol') {
   const l = live
-  if (l) { toggleList(l.host, liveRange(l), kind); saveSoon(l); emit(); return }
+  if (l) { record(l); toggleList(l.host, liveRange(l), kind); formatted(l); return }
   editSlide(kind === 'ul' ? 'Bullets' : 'Numbering', (root) => {
     for (const id of getEditor().sel) {
       const el = find(root, id)
@@ -273,7 +340,7 @@ export function list(kind: 'ul' | 'ol') {
 
 export function shiftIndent(by: 1 | -1) {
   const l = live
-  if (l) { indent(l.host, liveRange(l), by); saveSoon(l); emit(); return }
+  if (l) { record(l); indent(l.host, liveRange(l), by); formatted(l); return }
   editSlide('Indent', (root) => {
     for (const id of getEditor().sel) { const host = find(root, id) && textHost(find(root, id)!); if (host) editParas(host, null, (p) => (p.list ? { ...p, level: Math.max(0, Math.min(8, p.level + by)) } : p)) }
   })

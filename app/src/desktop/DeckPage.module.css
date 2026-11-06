@@ -11,14 +11,14 @@
   font-size: 13px; font-weight: 560; color: var(--ink-2); white-space: nowrap;
 }
 .insertBtn:hover { background: var(--paper); color: var(--ink); box-shadow: var(--shadow-tile); }
-.insertBtn:focus-visible { outline: 2px solid var(--deck); outline-offset: 1px; }
+.insertBtn:focus-visible { outline: 2px solid var(--select); outline-offset: 1px; }
 .history { display: flex; align-items: center; }
 .actions { display: flex; align-items: center; gap: 6px; }
 .seg { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 560; padding: 0 2px; }
 .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 8px; padding: 0 8px 8px; position: relative; }
 .body[data-column] { grid-template-columns: 200px minmax(0, 1fr) var(--col); }
 /* Narrow windows: the column overlays the stage instead of pushing it (spec: Widths). */
-.body[data-column][data-overlay] { grid-template-columns: 64px minmax(0, 1fr); }
+.body[data-column][data-overlay] { grid-template-columns: 200px minmax(0, 1fr); }
 .body[data-overlay] .column { position: absolute; right: 8px; top: 0; bottom: 8px; width: min(var(--col), calc(100% - 96px)); z-index: 5; box-shadow: var(--shadow-float); border-radius: var(--r-panel); }
 .stageWrap { position: relative; min-height: 0; min-width: 0; }
 .column { position: relative; min-height: 0; display: flex; }

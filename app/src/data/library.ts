@@ -170,8 +170,11 @@ let pending = 0
 let failed: Mutation[] = []
 let saveState: SaveState = 'saved'
 const saveListeners = new Set<() => void>()
+let unsaved = false
+/** A change exists that isn't written yet (text typed before its idle save): the header says Saving…. */
+export function markUnsaved(on: boolean) { unsaved = on; setSave() }
 const setSave = () => {
-  const next: SaveState = failed.length ? 'failed' : pending ? 'saving' : 'saved'
+  const next: SaveState = failed.length ? 'failed' : pending || unsaved ? 'saving' : 'saved'
   if (next !== saveState) { saveState = next; for (const l of saveListeners) l() }
 }
 export const useSaveState = () => useSyncExternalStore((l) => (saveListeners.add(l), () => saveListeners.delete(l)), () => saveState)

@@ -12,7 +12,7 @@ import { deleteSlides, duplicateSlides, moveSlides, newSlide, toggleHidden } fro
 import { getEditor, setEditor, useEditor } from './session'
 import s from './Rail.module.css'
 
-export function Rail({ deck, compact }: { deck: Deck; compact?: boolean }) {
+export function Rail({ deck, compact, readOnly = false }: { deck: Deck; compact?: boolean; readOnly?: boolean }) {
   const slideId = useEditor((e) => e.slideId)
   const railSel = useEditor((e) => e.railSel)
   const locked = useEditor((e) => e.locked)
@@ -26,7 +26,12 @@ export function Rail({ deck, compact }: { deck: Deck; compact?: boolean }) {
   const index = Math.max(0, ids.indexOf(slideId ?? ''))
   const selected = railSel.length ? railSel : slideId ? [slideId] : []
 
-  useEffect(() => { ref.current?.querySelector(`[data-id="${slideId}"]`)?.scrollIntoView({ block: 'nearest' }) }, [slideId])
+  useEffect(() => {
+    const item = ref.current?.querySelector<HTMLElement>(`[data-id="${slideId}"]`)
+    item?.scrollIntoView({ block: 'nearest' })
+    // Arrow keys move focus with the displayed slide, so the next key acts on the slide shown.
+    if (item && ref.current?.contains(document.activeElement)) item.focus({ preventScroll: true })
+  }, [slideId])
 
   const dragged = useRef(false)
   const show = (id: string) => setEditor({ slideId: id, railSel: [id], railAnchor: id, sel: [], scope: null, editing: null })
@@ -65,6 +70,7 @@ export function Rail({ deck, compact }: { deck: Deck; compact?: boolean }) {
     else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') step(-1)
     else if (e.key === 'Home') { e.preventDefault(); show(ids[0]) }
     else if (e.key === 'End') { e.preventDefault(); show(ids[ids.length - 1]) }
+    else if (readOnly) return
     else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSlides(selected) }
     else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSlides(selected) }
     else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); setEditor({ railSel: ids }) }
@@ -72,7 +78,7 @@ export function Rail({ deck, compact }: { deck: Deck; compact?: boolean }) {
 
   // Pointer reorder: the selected block moves together, with an insertion line and edge auto-scroll.
   const onPointerDown = (e: React.PointerEvent, id: string) => {
-    if (e.button !== 0) return
+    if (e.button !== 0 || readOnly) return
     drag.current = { ids: selected.includes(id) ? ids.filter((x) => selected.includes(x)) : [id], startY: e.clientY, active: false }
   }
   useEffect(() => {
@@ -126,7 +132,7 @@ export function Rail({ deck, compact }: { deck: Deck; compact?: boolean }) {
               data-busy={locked.includes(sl.id) || undefined}
               onClick={(e) => click(e, sl.id)}
               onPointerDown={(e) => onPointerDown(e, sl.id)}
-              onContextMenu={(e) => { e.preventDefault(); if (!selected.includes(sl.id)) show(sl.id); setMenu({ anchor: { x: e.clientX, y: e.clientY }, items: menuFor(sl.id) }) }}
+              onContextMenu={(e) => { e.preventDefault(); if (readOnly) return; if (!selected.includes(sl.id)) show(sl.id); setMenu({ anchor: { x: e.clientX, y: e.clientY }, items: menuFor(sl.id) }) }}
             >
               <span className={s.num}>{i + 1}</span>
               <DeckThumb deck={deck} slide={i} className={s.thumb} />
@@ -135,10 +141,10 @@ export function Rail({ deck, compact }: { deck: Deck; compact?: boolean }) {
         ))}
         {drop === deck.slides.length && <span className={s.dropLine} aria-hidden />}
       </div>
-      <div className={s.new}>
+      {!readOnly && <div className={s.new}>
         <Tooltip label="New slide" hint={`${modKey}↵`}><button type="button" className={s.newBtn} onClick={() => newSlide()}><Plus size={14} weight="bold" /><span>New slide</span></button></Tooltip>
         <Tooltip label="More slide layouts"><button type="button" className={s.newMore} aria-label="More slide layouts" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ anchor: { x: r.left, y: r.bottom + 4 }, items: [{ label: 'From this slide’s layout', run: () => newSlide() }, { label: 'Blank', run: () => newSlide('blank') }] }) }}><CaretDown size={12} weight="bold" /></button></Tooltip>
-      </div>
+      </div>}
       <Menu open={!!menu} anchor={menu?.anchor ?? null} items={menu?.items ?? []} label="Slide" onClose={() => setMenu(null)} />
     </nav>
   )

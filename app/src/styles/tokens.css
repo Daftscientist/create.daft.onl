@@ -102,9 +102,11 @@
   }
 :root[data-theme="light"] { color-scheme: light; }
 
+/* The fallbacks out-rank the theme selectors (:root:not([data-theme="light"]) is two classes deep). */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  :root { --glass: var(--paper); }
+  :root:root:root { --glass: var(--paper); }
+  .glass { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root { --glass: var(--paper); }
+  :root:root:root { --glass: var(--paper); }
 }

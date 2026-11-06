@@ -81,10 +81,14 @@ export function NumberField({ label, value, format, parse, onCommit, onPreview, 
           if (e.key === 'Enter') { e.preventDefault(); commit(); (e.target as HTMLInputElement).select() }
           else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setText(null); setBad(false) }
           else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            // Steps in the unit shown (0.1 in, 1 pt…) and through the same parsing and limits as typing.
             e.preventDefault()
             const cur = text !== null ? parse(text, value) ?? value : value
-            const v = cur + (e.key === 'ArrowUp' ? 1 : -1) * step * (e.shiftKey ? 10 : 1)
-            setText(null); onCommit(v)
+            const m = /^(-?[\d.,]+)\s*(.*)$/.exec(format(cur))
+            const by = (e.key === 'ArrowUp' ? 1 : -1) * step * (e.shiftKey ? 10 : 1)
+            const v = m ? parse(`${Math.round((parseFloat(m[1].replace(',', '.')) + by) * 1000) / 1000}${m[2] ? ` ${m[2]}` : ''}`, cur) : null
+            setText(null)
+            if (v !== null && v !== value) onCommit(v)
           }
         }}
       />
@@ -96,7 +100,7 @@ export function NumberField({ label, value, format, parse, onCommit, onPreview, 
 const recent: string[] = []
 
 /** A colour well. `colors`: the deck's own colours, shown first. `none` adds a "No fill" choice. */
-export function ColorWell({ label, value, onChange, colors = [], none, mixed }: { label: string; value: string | null; onChange: (c: string | null) => void; colors?: string[]; none?: string; mixed?: boolean }) {
+export function ColorWell({ label, value, onChange, colors = [], none, mixed, onClosed }: { label: string; value: string | null; onChange: (c: string | null) => void; colors?: string[]; none?: string; mixed?: boolean; /** Where focus goes when the popover closes (default: the swatch). */ onClosed?: () => void }) {
   const btn = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   return (
@@ -104,7 +108,7 @@ export function ColorWell({ label, value, onChange, colors = [], none, mixed }: 
       <button ref={btn} type="button" className={s.well} aria-label={`${label}: ${mixed ? 'mixed' : value ?? 'none'}`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <span className={s.swatch} data-none={!value || undefined} style={{ background: mixed ? 'conic-gradient(#e8603c 0 25%, #1d56e0 0 50%, #1e9e62 0 75%, #e3b341 0)' : value ?? undefined }} />
       </button>
-      {open && <ColorPopover anchor={btn.current!} value={value} colors={colors} none={none} onClose={() => { setOpen(false); btn.current?.focus() }} onChange={(c) => { if (c && !recent.includes(c)) { recent.unshift(c); recent.length = Math.min(recent.length, 8) } onChange(c) }} />}
+      {open && <ColorPopover anchor={btn.current!} value={value} colors={colors} none={none} onClose={() => { setOpen(false); if (onClosed) onClosed(); else btn.current?.focus() }} onChange={(c) => { if (c && !recent.includes(c)) { recent.unshift(c); recent.length = Math.min(recent.length, 8) } onChange(c) }} />}
     </>
   )
 }

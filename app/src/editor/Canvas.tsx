@@ -59,6 +59,7 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
   const [hover, setHover] = useState<string | null>(null)
   const [space, setSpace] = useState(false)
   const [stage, setStage] = useState<HTMLDivElement | null>(null)
+  const [announce, setAnnounce] = useState('')
   const caretAt = useRef<{ x: number; y: number } | null>(null)
 
   const fit = vpSize.w ? Math.max(0.05, Math.min((vpSize.w - PAD * 2) / size.w, (vpSize.h - PAD * 2) / size.h)) : 0.5
@@ -233,7 +234,7 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
       for (const [id, b] of g.orig) { const el = live(id); if (el) setBox(el, { ...b, x: b.x + dx, y: b.y + dy }) }
       setGuides(gs)
       const first = [...g.orig.values()][0]
-      setReadout({ x: e.clientX, y: e.clientY, text: `${formatLength(first.x + dx, unit)}, ${formatLength(first.y + dy, unit)}` })
+      setReadout({ x: e.clientX, y: e.clientY, text: `X ${formatLength(first.x + dx, unit)} · Y ${formatLength(first.y + dy, unit)}` })
       rerender()
     } else if (g.kind === 'resize') {
       const one = g.orig.size === 1 ? [...g.orig][0] : null
@@ -247,7 +248,8 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
         if (el) setBox(el, nb)
         setReadout({ x: e.clientX, y: e.clientY, text: `${formatLength(nb.w, unit)} × ${formatLength(nb.h, unit)}` })
       } else {
-        const nu = resizeBox(g.union, g.dir, p, keep, e.altKey)
+        // Several objects scale proportionally (spec), so rotated members never shear; ⇧ frees it.
+        const nu = resizeBox(g.union, g.dir, p, !e.shiftKey, e.altKey)
         const sx = g.union.w ? nu.w / g.union.w : 1, sy = g.union.h ? nu.h / g.union.h : 1
         for (const [id, b] of g.orig) {
           const el = live(id)
@@ -341,6 +343,12 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
     if (canEditText(el)) { caretAt.current = { x: e.clientX, y: e.clientY }; setEditor({ sel: [id], editing: id }) }
   }
 
+  useEffect(() => {
+    if (!stage) return
+    const els = sel.map((id) => live(id)).filter((e): e is HTMLElement => !!e)
+    setAnnounce(els.length === 1 ? `${describe(els[0])}, selected` : els.length ? `${els.length} objects selected` : '')
+  }, [sel.join(','), stage]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Text editing follows the session (Enter, double-click, a new text box).
   useEffect(() => {
     if (!stage) return
@@ -401,6 +409,8 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
       tabIndex={0}
       role="group"
       aria-label={label}
+      aria-describedby="stage-objects"
+      aria-activedescendant={sel[0] ? `obj-${sel[0]}` : undefined}
       data-space={space || undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -437,7 +447,13 @@ export function Canvas({ deck, slide, label, readOnly = false }: { deck: Deck; s
         </div>
       </div>
       {locked && !readOnly && <div className={s.lockNote} role="status">Ream is editing this slide</div>}
-      {readout && <div className={s.readout} style={{ left: readout.x + 12, top: readout.y + 18 }}>{readout.text}</div>}
+      {/* What a screen reader gets for the stage: each object by kind and text, the selection, and a
+          polite note when it changes (spec: Accessibility). */}
+      <ul className={s.sr} role="listbox" aria-label={`Objects on ${label}`} aria-multiselectable id="stage-objects">
+        {pickable().map((el) => { const id = idOf(el); return <li key={id} id={`obj-${id}`} role="option" aria-selected={sel.includes(id)}>{describe(el)}</li> })}
+      </ul>
+      <div className={s.sr} aria-live="polite">{announce}</div>
+      {readout && <div className={s.readout} style={{ left: Math.min(readout.x + 12, innerWidth - 180), top: Math.min(readout.y + 18, innerHeight - 32) }}>{readout.text}</div>}
     </div>
   )
 }
@@ -470,4 +486,12 @@ function resizeBox(b: Box, dir: Dir, p: { x: number; y: number }, keepAspect: bo
   const cx = c.x + Math.cos(r) * clx - Math.sin(r) * cly
   const cy = c.y + Math.sin(r) * clx + Math.cos(r) * cly
   return { x: cx - w / 2, y: cy - h / 2, w, h, rot: b.rot }
+}
+
+/** An object as a screen reader names it: its kind and text ("Text box: Q3 review"). */
+function describe(el: HTMLElement): string {
+  const kind = isGroup(el) ? 'Group' : el.hasAttribute('data-chart') || el.classList.contains('domoxml-preserved') ? 'Chart'
+    : el.tagName === 'IMG' ? 'Picture' : el.tagName === 'TABLE' ? 'Table' : isLine(el) ? 'Line' : el.querySelector('.domoxml-text, li') ? 'Text box' : 'Shape'
+  const text = (el.getAttribute('aria-label') || el.getAttribute('alt') || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80)
+  return `${kind}${el.hasAttribute('data-ream-locked') ? ' (locked)' : ''}${text ? `: ${text}` : ''}`
 }

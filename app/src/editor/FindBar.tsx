@@ -10,7 +10,8 @@ import { editSlides } from './ops'
 import { setEditor } from './session'
 import s from './FindBar.module.css'
 
-type Hit = { slideId: string; slideIndex: number; objectId: string }
+/** One match: its object, and which match it is inside that object (so Replace changes exactly it). */
+type Hit = { slideId: string; slideIndex: number; objectId: string; occ: number }
 const TEXT = '.domoxml-text, li, td, th'
 
 function textNodesOf(root: Element): Text[] {
@@ -39,9 +40,10 @@ export function FindBar({ deck, replace: startReplace, onClose }: { deck: Deck; 
     const out: Hit[] = []
     deck.slides.forEach((sl, slideIndex) => {
       for (const [objectId, el] of topNodes(parseSlide(sl.html))) {
+        let occ = 0
         for (const t of textNodesOf(el)) {
           const n = t.data.match(re)?.length ?? 0
-          for (let i = 0; i < n; i++) out.push({ slideId: sl.id, slideIndex, objectId })
+          for (let i = 0; i < n; i++) out.push({ slideId: sl.id, slideIndex, objectId, occ: occ++ })
         }
       }
     })
@@ -67,10 +69,9 @@ export function FindBar({ deck, replace: startReplace, onClose }: { deck: Deck; 
       let changed = false
       for (const [id, el] of topNodes(root)) {
         if (only && id !== only.objectId) continue
+        let occ = 0
         for (const t of textNodesOf(el)) {
-          const next = only
-            ? (() => { let done = count > 0; return t.data.replace(re, (m) => { if (done) return m; done = true; count++; return rep }) })()
-            : t.data.replace(re, () => { count++; return rep })
+          const next = t.data.replace(re, (m) => { const mine = !only || occ === only.occ; occ++; if (!mine) return m; count++; return rep })
           if (next !== t.data) { t.data = next; changed = true }
         }
       }

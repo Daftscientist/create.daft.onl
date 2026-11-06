@@ -5,3 +5,4 @@
   border-radius: var(--r-md);
 }
 .sep { width: 1px; height: 20px; background: var(--glass-line); margin: 0 4px; }
+.bar [class*="numLabel"] { color: var(--ink-2); }
