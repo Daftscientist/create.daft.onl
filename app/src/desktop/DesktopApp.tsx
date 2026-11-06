@@ -70,6 +70,8 @@ export function DesktopApp() {
     return (
       <ActionsContext.Provider value={actions}>
         <DeckPage deckId={route.deckId} slide={route.slide} />
+        <AnimatePresence>{palette && <CommandPalette key="cp" onClose={() => setPalette(false)} />}</AnimatePresence>
+        <AnimatePresence><ConfirmHost /></AnimatePresence>
         <AnimatePresence><SyncFlowHost /></AnimatePresence>
       </ActionsContext.Provider>
     )

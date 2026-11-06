@@ -1,12 +1,13 @@
 // Search model shared by the desktop palette and the mobile search screen (one implementation).
-import { ArrowSquareOut, ClockCounterClockwise, CloudArrowUp, FolderSimple, GearSix, Plus, Star, Trash, UploadSimple } from '@phosphor-icons/react'
+import { ArrowSquareOut, Command, ClockCounterClockwise, CloudArrowUp, FolderSimple, GearSix, Plus, Star, Trash, UploadSimple } from '@phosphor-icons/react'
 import { useMemo, type ReactNode } from 'react'
+import { editorCommands } from '../editor/commandList'
 import { backUp, decks, folders, getLibrary, isLive, newDeck, openDeck, pathTo, recents, slideText } from '../data/library'
 import type { Deck } from '../data/types'
 import { count, relTimeInline } from '../lib/format'
 import { navigate } from '../lib/router'
 
-export type SearchItem = { id: string; section: 'Decks' | 'Slides' | 'Folders' | 'Go to' | 'Actions'; icon: ReactNode; deck?: Deck; slide?: number; title: ReactNode; sub?: ReactNode; run: () => void }
+export type SearchItem = { id: string; section: 'Decks' | 'Slides' | 'Folders' | 'Go to' | 'Actions' | 'Commands'; icon: ReactNode; deck?: Deck; slide?: number; title: ReactNode; sub?: ReactNode; run: () => void }
 
 export function highlight(text: string, q: string): ReactNode {
   if (!q) return text
@@ -34,7 +35,10 @@ export function useSearch(q: string, onDone: () => void, pickFiles: () => void):
       { id: 'g-starred', section: 'Go to', icon: <Star size={16} />, title: 'Starred', run: go(() => navigate({ name: 'starred' })) },
       { id: 'g-trash', section: 'Go to', icon: <Trash size={16} />, title: 'Trash', run: go(() => navigate({ name: 'trash' })) },
     ]
+    // The open deck's editor commands come first while a deck is open.
+    const commands: SearchItem[] = editorCommands().map((c) => ({ id: c.id, section: 'Commands', icon: <Command size={16} />, title: c.title, sub: c.hint, run: go(c.run), keywords: c.keywords } as SearchItem & { keywords?: string }))
     if (!query) {
+      if (commands.length) return [...commands.slice(0, 8), ...actions]
       return [
         ...recents(lib, 5).map<SearchItem>((d) => ({ id: d.id, section: 'Decks', icon: <ArrowSquareOut size={16} />, deck: d, title: d.name, sub: `${where(d)} · opened ${relTimeInline(d.openedAt ?? d.modifiedAt)}`, run: openAt(d) })),
         ...actions,
@@ -54,6 +58,7 @@ export function useSearch(q: string, onDone: () => void, pickFiles: () => void):
     const folderHits = folders(lib).filter((f) => isLive(f) && f.name.toLowerCase().includes(query)).slice(0, 4)
       .map<SearchItem>((f) => ({ id: f.id, section: 'Folders', icon: <FolderSimple size={16} />, title: highlight(f.name, q.trim()), run: go(() => navigate({ name: 'files', folderId: f.id })) }))
     const actionHits = actions.filter((a) => String(a.title).toLowerCase().includes(query))
-    return [...deckHits, ...slideHits, ...folderHits, ...actionHits]
+    const commandHits = commands.filter((c) => `${String(c.title)} ${(c as { keywords?: string }).keywords ?? ''}`.toLowerCase().includes(query)).map((c) => ({ ...c, title: highlight(String(c.title), q.trim()) }))
+    return [...commandHits, ...deckHits, ...slideHits, ...folderHits, ...actionHits]
   }, [q, onDone, pickFiles])
 }

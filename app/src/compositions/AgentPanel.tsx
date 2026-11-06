@@ -10,6 +10,8 @@ import { getLibrary, updateSlides } from '../data/library'
 import { toast } from '../data/toasts'
 import type { Deck, SlideDoc } from '../data/types'
 import { navigate } from '../lib/router'
+import { setEditor } from '../editor/session'
+import { endEdit } from '../editor/textctl'
 import { modKey } from '../lib/shell'
 import { IconButton } from '../ui/Button'
 import { DeckThumb } from './DeckThumb'
@@ -72,6 +74,10 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
     setTurns((ts) => [...ts, { prompt: text, slide: target, steps: [], text: '', state: 'running', startedAt: Date.now() }])
     const ac = new AbortController()
     abort.current = ac
+    // The slide the agent is changing is read-only on the canvas until it's done (editor spec, contract 6).
+    const lockedId = deck.slides[target]?.id
+    endEdit()
+    if (lockedId) setEditor((e) => ({ locked: [...e.locked, lockedId], sel: e.slideId === lockedId ? [] : e.sel }))
     try {
       const { before, after } = await runAgent({
         deckId: deck.id, slide: target, prompt: text, history, signal: ac.signal,
@@ -96,6 +102,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
       patchLast((t) => ({ ...t, state: stopped ? 'stopped' : 'done', ms: Date.now() - t.startedAt, error: stopped ? undefined : (e as Error).message, edit: t.edited?.length ? { before: deck.slides, after: d.slides } : undefined }))
     } finally {
       abort.current = null
+      if (lockedId) setEditor((e) => ({ locked: e.locked.filter((x) => x !== lockedId) }))
     }
   }
 
@@ -103,11 +110,23 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
     const t = turns[i]
     if (!t.edit || t.edit.undone) return
     const d = getLibrary().entries[deck.id] as Deck
-    if (d.slides !== t.edit.after) {
-      toast({ message: 'The deck changed after this edit, so it wasn’t undone. Undo the later changes first.' })
-      return
+    if (d.slides === t.edit.after) updateSlides(deck.id, t.edit.before, { exact: true })
+    else {
+      // Only this turn's slides go back, and only those nobody changed since (editor spec, contract 5).
+      const before = new Map(t.edit.before.map((x) => [x.id, x]))
+      const after = new Map(t.edit.after.map((x) => [x.id, x]))
+      let skipped = 0, reverted = 0
+      const slides = d.slides.map((x) => {
+        const a = after.get(x.id), b = before.get(x.id)
+        if (!a || !b || a === b) return x
+        if (x === a || x.html === a.html) { reverted++; return b }
+        skipped++
+        return x
+      })
+      if (!reverted) { toast({ message: 'Those slides changed after this edit, so it wasn’t undone.' }); return }
+      updateSlides(deck.id, slides, { exact: true })
+      if (skipped) toast({ message: `${skipped === 1 ? 'One slide was' : `${skipped} slides were`} changed since and kept as they are.` })
     }
-    updateSlides(deck.id, t.edit.before)
     setTurns((ts) => ts.map((x, j) => (j === i ? { ...x, edit: { ...x.edit!, undone: true } } : x)))
   }
 

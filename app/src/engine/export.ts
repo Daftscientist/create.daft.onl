@@ -1,7 +1,10 @@
-// Export. PowerPoint: slides still holding their imported IR go straight to domOXML's PPTX builder
-// (exact); edited slides are captured by the web backend first, then take the same path. HTML: one
+// Export. PowerPoint: an imported slide ships its IR (exact). When it was edited, the objects that
+// changed are captured by the web backend and every other object keeps its IR (editor/irdiff.ts);
+// slides made in Ream are captured whole. HTML: one
 // standalone page per deck with every font embedded, so it opens anywhere.
-import type { Deck } from '../data/types'
+import type { Deck, SlideDoc } from '../data/types'
+import { boxOf, isGroup } from '../editor/geometry'
+import { parseSlide, topNodes } from '../editor/irdiff'
 import { appFonts, captureSlide } from './capture'
 import { withFamilyNames } from '../slides/fonts'
 import { exportPptxPayload } from './index'
@@ -15,10 +18,37 @@ export async function deckToPptx(deck: Deck, onSlide?: (i: number) => void): Pro
   const slides: object[] = []
   for (const [i, sl] of deck.slides.entries()) {
     onSlide?.(i)
-    slides.push(sl.ir ? { ir: sl.ir } : { snapshot: await captureSlide(sl.html, css, w, h) })
+    slides.push(await slidePayload(sl, css, w, h))
   }
   const out = await exportPptxPayload({ slides, css, fonts: await appFonts() })
   return { bytes: out.pptx, warnings: out.warnings }
+}
+
+/** Ids of the IR's top-level nodes (cheap: no need to validate the whole IR here). */
+function irIds(ir: string): Set<string> {
+  const out = new Set<string>()
+  for (const n of (JSON.parse(ir) as { contents: { node_id?: string }[] }).contents) if (n.node_id) out.add(n.node_id)
+  return out
+}
+
+async function slidePayload(sl: SlideDoc, css: string, w: number, h: number): Promise<object> {
+  if (!sl.ir) return { snapshot: await captureSlide(sl.html, css, w, h) }
+  if (!sl.irDirty?.length && !sl.irMoved?.length && !sl.irSlide) return { ir: sl.ir }
+  const slide = parseSlide(sl.html)
+  const nodes = topNodes(slide)
+  const order = [...nodes.keys()]
+  const moved: Record<string, object> = {}
+  for (const id of sl.irMoved ?? []) {
+    const el = nodes.get(id) as HTMLElement | undefined
+    if (!el) continue
+    const b = boxOf(el)
+    moved[id] = { x: b.x, y: b.y, w: b.w, h: b.h, rotation: isGroup(el) ? undefined : b.rot }
+  }
+  const known = irIds(sl.ir)
+  const dirty = sl.irDirty ?? []
+  // Only what the IR can't supply needs the browser: edited and new objects, or a changed background.
+  const needsCapture = sl.irSlide || dirty.some((id) => nodes.has(id)) || order.some((id) => !known.has(id)) || nodes.size < slide.children.length
+  return { ir: sl.ir, order, moved, dirty, slideChanged: !!sl.irSlide, ...(needsCapture ? { snapshot: await captureSlide(sl.html, css, w, h) } : {}) }
 }
 
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)

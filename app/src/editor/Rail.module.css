@@ -1,0 +1,28 @@
+.rail { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 6px 8px 12px 6px; min-height: 0; }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.slot { position: relative; }
+.item { width: 100%; display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; padding: 4px; border-radius: var(--r-sm); touch-action: none; }
+.item:focus-visible { outline: 2px solid var(--deck); outline-offset: 0; }
+.num { font-size: 12px; color: var(--ink-3); text-align: right; padding-top: 2px; font-variant-numeric: tabular-nums; }
+.item[aria-current] .num { color: var(--ink); font-weight: 600; }
+.thumb { --thumb-r: 6px; transition: box-shadow var(--dur-1) var(--ease-out); }
+.item:hover .thumb { box-shadow: 0 0 0 2px var(--fill-2); }
+.item[aria-selected="true"] .thumb { box-shadow: 0 0 0 2px var(--select-soft), 0 0 0 1px var(--select); }
+.item[aria-current] .thumb { box-shadow: 0 0 0 2px var(--select); }
+.item[data-hidden] .thumb { opacity: 0.4; }
+.item[data-busy] .thumb { box-shadow: 0 0 0 2px var(--deck); animation: pulse 1.4s ease-in-out infinite; }
+.dropLine { position: absolute; left: 26px; right: 4px; top: -6px; height: 2px; border-radius: 1px; background: var(--select); }
+.list > .dropLine { position: relative; display: block; top: -6px; margin-left: 26px; }
+.new { display: flex; align-items: center; gap: 2px; padding-left: 26px; }
+.newBtn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px;
+  border-radius: var(--r-sm) 0 0 var(--r-sm); background: var(--fill); font-size: 12.5px; font-weight: 560; color: var(--ink-2);
+}
+.newMore { width: 28px; height: 32px; display: grid; place-items: center; border-radius: 0 var(--r-sm) var(--r-sm) 0; background: var(--fill); color: var(--ink-3); }
+.newBtn:hover, .newMore:hover { background: var(--fill-2); color: var(--ink); }
+.rail[data-compact] .thumb { display: none; }
+.rail[data-compact] .item { grid-template-columns: 1fr; }
+.rail[data-compact] .new { padding-left: 0; }
+.rail[data-compact] .newBtn span { display: none; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--deck) 40%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .item[data-busy] .thumb { animation: none; } }

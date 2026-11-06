@@ -1,0 +1,64 @@
+/* The ground is untinted in the editor (VISION: Ground, "Off in the editor"). */
+.viewport {
+  position: relative; overflow: auto; min-height: 0; min-width: 0; height: 100%;
+  border-radius: var(--r-panel); background: var(--panel); box-shadow: 0 0 0 1px var(--hair);
+  overscroll-behavior: contain; touch-action: none;
+}
+.viewport:focus { outline: none; }
+.viewport:focus-visible { box-shadow: 0 0 0 1px var(--hair), inset 0 0 0 2px var(--deck); }
+.viewport[data-space] { cursor: grab; }
+.world { position: relative; }
+.paper {
+  position: absolute; background: #fff;
+  box-shadow: 0 0 0 1px var(--hair), 0 1px 2px rgb(0 0 0 / 0.06), 0 18px 48px -18px rgb(0 0 0 / 0.25);
+}
+:global([data-theme="dark"]) .paper, :global(:root:not([data-theme="light"])) .paper { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 18px 48px -18px rgb(0 0 0 / 0.6); }
+.overlay { position: absolute; pointer-events: none; }
+.overlay > * { position: absolute; transform-origin: center; box-sizing: border-box; }
+
+/* Selection: 1px --select with a white outer halo, so it reads over any slide colour. */
+.frame { border: 1px solid var(--select); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.9), 0 0 0 2px rgb(0 0 0 / 0.12); }
+.frame[data-editing] { border-style: dashed; }
+.frame[data-locked] { border-style: dotted; }
+.member { border: 1px solid var(--select); opacity: 0.55; }
+.hover { border: 1px solid var(--select); opacity: 0.6; }
+.scope { border: 1px dashed var(--ink-3); opacity: 0.6; }
+.handle {
+  position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; pointer-events: auto; touch-action: none;
+}
+.handle::after {
+  content: ""; position: absolute; inset: 4px; background: #fff; border: 1px solid var(--select);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.9), 0 1px 2px rgb(0 0 0 / 0.2);
+}
+.rotate {
+  position: absolute; left: 50%; top: -32px; width: 24px; height: 24px; margin-left: -12px; pointer-events: auto; cursor: grab;
+}
+.rotate::before { content: ""; position: absolute; left: 50%; top: 18px; width: 1px; height: 14px; background: var(--select); }
+.rotate::after {
+  content: ""; position: absolute; inset: 7px; border-radius: 50%; background: #fff; border: 1px solid var(--select);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.9), 0 1px 2px rgb(0 0 0 / 0.2);
+}
+
+/* Smart guides: magenta (never red: that reads as an error and clashes with the Deck coral). */
+.guide { --guide: #e8178a; animation: fade var(--dur-1) var(--ease-out); }
+.guide[data-axis="x"] { width: 1px; margin-left: -0.5px; background: var(--guide); box-shadow: 0 0 0 0.5px rgb(255 255 255 / 0.8); }
+.guide[data-axis="y"] { height: 1px; margin-top: -0.5px; background: var(--guide); box-shadow: 0 0 0 0.5px rgb(255 255 255 / 0.8); }
+.pill {
+  position: absolute; left: 50%; top: 50%; translate: -50% -50%; padding: 1px 6px; border-radius: var(--r-pill);
+  background: var(--guide); color: #fff; font: 600 11px/16px var(--font); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.marquee { border: 1px solid var(--select); background: var(--select-soft); }
+
+/* Solid, not glass: it shows data (spec: Readout). */
+.readout {
+  position: fixed; z-index: 30; pointer-events: none; padding: 3px 8px; border-radius: var(--r-xs);
+  background: var(--paper); color: var(--ink); box-shadow: var(--shadow-float);
+  font: 560 12px/18px var(--font); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.lockNote {
+  position: sticky; left: 50%; bottom: 16px; translate: -50% 0; width: max-content; margin-top: -44px;
+  padding: 6px 12px; border-radius: var(--r-pill); background: var(--paper); box-shadow: var(--shadow-float);
+  font-size: 12.5px; color: var(--ink-2);
+}
+@keyframes fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .guide { animation: none; } }

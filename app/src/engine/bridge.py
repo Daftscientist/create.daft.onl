@@ -60,30 +60,85 @@ def compose(slide_html, css, width, height):
 _FONT_URI = re.compile(r"url\((['\"]?)data:[^;,]+;base64,([A-Za-z0-9+/=]+)\1\)")
 
 
+def _patched(node, geometry):
+    """`node` with a new box (px) and rotation, for an object that was only moved or resized. A group
+    keeps its child space, so its children move and scale with its box."""
+    if geometry is None:
+        return node
+    from domoxml.core.units import px_to_emu
+
+    data = node.model_dump(mode="json")
+    if "box" not in data:
+        return node
+    data["box"] = {
+        "x": px_to_emu(geometry["x"]),
+        "y": px_to_emu(geometry["y"]),
+        "width": max(1, px_to_emu(geometry["w"])),
+        "height": max(1, px_to_emu(geometry["h"])),
+    }
+    rotation = float(geometry.get("rotation") or 0.0)
+    if data.get("transform") is not None or rotation:
+        data["transform"] = {**(data.get("transform") or {}), "rotation_deg": rotation}
+    return type(node).model_validate(data)
+
+
+def _splice(original, captured, order, moved, dirty, slide_changed):
+    """Per-object exactness (Ream's editor spec, contract 2): every node that wasn't edited ships its
+    original IR (patched with its new box when it was moved), in the slide's current order; edited and
+    new nodes come from the capture."""
+    by_id = {n.node_id: n for n in original.contents if n.node_id}
+    # Captured nodes by the object they came from; nodes of an object without an id (added by
+    # hand-written HTML) follow the object before them.
+    buckets, key = {}, None
+    for n in captured.contents if captured is not None else ():
+        base = (n.node_id or "").split(":")[0]
+        own = base in order
+        if own:
+            key = base
+        buckets.setdefault(key, []).append((n, own))
+    contents = [n for n, _ in buckets.get(None, [])]
+    for nid in order:
+        if nid in by_id and nid not in dirty:
+            contents.append(_patched(by_id[nid], moved.get(nid)))
+            contents.extend(n for n, own in buckets.get(nid, []) if not own)
+        else:
+            contents.extend(n for n, _ in buckets.get(nid, []))
+    base = captured if slide_changed and captured is not None else original
+    return base.model_copy(update={"contents": contents, "width": original.width, "height": original.height})
+
+
 def export_pptx(payload):
-    """Slides carry either their imported IR (unchanged since import: exact) or a web snapshot
-    of their current HTML (edited), which domOXML extracts exactly as it would a Chromium one."""
+    """Each slide is its imported IR (exact), a web snapshot of its HTML (made in Ream), or both: an
+    imported slide that was edited keeps the IR of every object that wasn't (see _splice)."""
     p = json.loads(payload)
     fonts = {f"font-{i}": base64.b64decode(b) for i, b in enumerate(p.get("fonts", []))}
     for i, m in enumerate(_FONT_URI.finditer(p.get("css", ""))):
         fonts[f"css-{i}"] = base64.b64decode(m.group(2))
     irs, warnings = [], []
     for s in p["slides"]:
+        captured = None
+        if s.get("snapshot"):
+            snap = s["snapshot"]
+            resources = {url: base64.b64decode(b) for url, b in snap.get("resources", {}).items()}
+            fonts.update(resources)
+            rendered = RenderedSlide(
+                width=snap["width"],
+                height=snap["height"],
+                nodes=tuple(RenderedNode.model_validate(n) for n in snap["nodes"]),
+                resources=resources,
+            )
+            extracted = extract_slide(rendered)
+            captured = extracted.slide
+            warnings.extend(w.message for w in extracted.warnings)
         if s.get("ir"):
-            irs.append(SlideIR.model_validate_json(s["ir"]))
-            continue
-        snap = s["snapshot"]
-        resources = {url: base64.b64decode(b) for url, b in snap.get("resources", {}).items()}
-        fonts.update(resources)
-        rendered = RenderedSlide(
-            width=snap["width"],
-            height=snap["height"],
-            nodes=tuple(RenderedNode.model_validate(n) for n in snap["nodes"]),
-            resources=resources,
-        )
-        extracted = extract_slide(rendered)
-        irs.append(extracted.slide)
-        warnings.extend(w.message for w in extracted.warnings)
+            original = SlideIR.model_validate_json(s["ir"])
+            irs.append(
+                _splice(original, captured, s.get("order", []), s.get("moved", {}), set(s.get("dirty", [])), s.get("slideChanged", False))
+                if "order" in s
+                else original
+            )
+        else:
+            irs.append(captured)
     # Imported slides keep their exact EMU size (e.g. 12188825 wide), while captures come from the
     # rounded CSS px size. A .pptx has one slide size, so captures take the imported size.
     kept = next((ir for ir, s in zip(irs, p["slides"]) if s.get("ir")), None)
@@ -101,35 +156,3 @@ def export_pptx(payload):
 
 def ping():
     return True
-
-
-def patch_ir(ir_json, ops_json):
-    """Applies geometry and stacking edits to a slide's IR, so a moved or reordered slide keeps
-    exporting exactly (charts and other preserved payloads stay native).
-
-    ops: [{"op": "geometry", "id", "x", "y", "w", "h" (px), "rotation" (deg)}, {"op": "order", "ids": [...]}]
-    Returns the new IR JSON, or None when an op names a node the IR doesn't have at the top level
-    (the caller then drops the IR and the slide is captured on export).
-    """
-    from domoxml.core.units import px_to_emu
-
-    data = json.loads(ir_json)
-    contents = data["contents"]
-    by_id = {node.get("node_id"): node for node in contents}
-    for op in json.loads(ops_json):
-        if op["op"] == "geometry":
-            node = by_id.get(op["id"])
-            if node is None or "box" not in node:
-                return None
-            node["box"] = {"x": px_to_emu(op["x"]), "y": px_to_emu(op["y"]), "width": max(1, px_to_emu(op["w"])), "height": max(1, px_to_emu(op["h"]))}
-            if "transform" in node or op.get("rotation"):
-                transform = node.get("transform") or {}
-                transform["rotation_deg"] = float(op.get("rotation") or 0.0)
-                node["transform"] = transform
-        elif op["op"] == "order":
-            if sorted(op["ids"]) != sorted(by_id) or None in by_id:
-                return None
-            data["contents"] = contents = [by_id[i] for i in op["ids"]]
-        else:
-            return None
-    return SlideIR.model_validate(data).model_dump_json()

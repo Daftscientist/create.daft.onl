@@ -31,3 +31,9 @@ Added for Settings and sync (2026-11-05):
 | `Dialog` / `Modal` / `Confirm` / `confirm()` | Modal decisions; every irreversible action | `Modal` = Dialog on desktop, Sheet on mobile. `await confirm({...})` from anywhere (one `ConfirmHost` per shell); focuses Cancel; names exactly what happens |
 | `Switch`, `TextField` | Settings controls | 44px+ on mobile |
 | `SettingGroup` / `SettingRow` | Every settings screen | Label + description left, control right; stacks on mobile |
+
+Added for the deck editor (2026-11-06):
+
+| Primitive | Use for | Notes |
+|---|---|---|
+| `Inspector` (`Section`, `Row`, `NumberField`, `ColorWell`, `KeptChip`) | Properties panels (the editor's Format column) | `NumberField`: units and arithmetic via `parse`, Enter/blur commit, Esc revert, arrows step, label scrubbing. `ColorWell`: solid paper popover (deck colours, recent, picker, hex). `KeptChip`: a value the controls can't show, with Replace |

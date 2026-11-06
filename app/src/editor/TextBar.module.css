@@ -1,0 +1,7 @@
+/* Acrylic (VISION): the global .glass class gives blur, tint and the specular edge, and falls back to
+   solid paper under reduced transparency, increased contrast or no backdrop-filter. */
+.bar {
+  position: fixed; z-index: 40; display: flex; align-items: center; gap: 2px; height: 40px; padding: 0 6px;
+  border-radius: var(--r-md);
+}
+.sep { width: 1px; height: 20px; background: var(--glass-line); margin: 0 4px; }

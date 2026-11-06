@@ -6,8 +6,7 @@ import { ActionSheet } from '../compositions/ActionSheet'
 import { FolderSheet } from '../compositions/FolderSheet'
 import { pickPptx } from '../compositions/importPicker'
 import type { MobileSelect } from '../compositions/MobileList'
-import { download, getLibrary, newDeck, newFolder, openDeck, trash } from '../data/library'
-import { toast } from '../data/toasts'
+import { download, getLibrary, newFolder, openDeck, trash } from '../data/library'
 import type { Entry } from '../data/types'
 import { back, navigate, useRoute } from '../lib/router'
 import { BackButton, IconButton, TextButton } from '../ui/Button'
@@ -125,7 +124,7 @@ export function MobileApp() {
             <SheetActions
               onDone={() => setSheet(null)}
               groups={[[
-                { label: 'New deck', icon: <Plus size={20} />, run: () => { const id = newDeck(destination); toast({ message: `New deck in ${destName}` }); open(getLibrary().entries[id]) } },
+                // No New deck on phones until they can edit (editor spec: coarse pointers get the viewer).
                 { label: 'Import from Files', icon: <UploadSimple size={20} />, run: () => pickPptx(destination) },
                 { label: 'New folder', icon: <FolderSimplePlus size={20} />, run: () => navigate({ name: 'files', folderId: newFolder(destination) }) },
               ]]}

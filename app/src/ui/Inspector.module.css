@@ -1,0 +1,51 @@
+.section { border-top: 1px solid var(--hair); padding: 4px 0 10px; }
+.section:first-of-type { border-top: 0; }
+.sectionHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sectionToggle {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 4px; margin-left: -4px;
+  font-size: 12.5px; font-weight: 620; color: var(--ink); border-radius: var(--r-xs);
+}
+.sectionToggle:focus-visible { outline: 2px solid var(--deck); outline-offset: 1px; }
+.caret { color: var(--ink-3); transition: rotate var(--dur-1) var(--ease-out); }
+.sectionToggle[aria-expanded="false"] .caret { rotate: -90deg; }
+.sectionBody { display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
+.row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 30px; }
+.rowLabel { font-size: 12.5px; color: var(--ink-3); }
+.rowControls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+
+.num {
+  position: relative; display: flex; align-items: center; height: 30px; border-radius: var(--r-xs);
+  background: var(--fill); flex: 1 1 0; min-width: 64px; box-shadow: inset 0 0 0 1px transparent;
+}
+.num:focus-within { box-shadow: inset 0 0 0 1.5px var(--select); background: var(--paper); }
+.num[data-bad] { box-shadow: inset 0 -2px 0 var(--danger); }
+.num[data-disabled] { opacity: 0.5; }
+.numLabel { padding: 0 2px 0 8px; font-size: 11.5px; font-weight: 600; color: var(--ink-3); cursor: ew-resize; user-select: none; flex: none; }
+.numInput { width: 100%; min-width: 0; height: 100%; padding: 0 8px 0 4px; font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink); background: none; border: 0; outline: none; }
+.numInput::placeholder { color: var(--ink-3); }
+.numHint { position: absolute; left: 0; top: calc(100% + 4px); z-index: 2; font-size: 11.5px; color: var(--danger); white-space: nowrap; background: var(--paper); padding: 2px 6px; border-radius: var(--r-xs); box-shadow: var(--shadow-float); }
+
+.well { width: 30px; height: 30px; border-radius: var(--r-xs); display: grid; place-items: center; background: var(--fill); flex: none; }
+.well:hover { background: var(--fill-2); }
+.well:focus-visible { outline: 2px solid var(--deck); outline-offset: 1px; }
+.swatch { width: 18px; height: 18px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15); }
+.swatch[data-none] { background: linear-gradient(135deg, transparent 45%, var(--danger) 45% 55%, transparent 55%) var(--paper) !important; }
+
+.popover {
+  position: fixed; z-index: 60; width: 232px; padding: 12px; border-radius: var(--r-md);
+  background: var(--paper); box-shadow: var(--shadow-float); display: flex; flex-direction: column; gap: 6px;
+}
+.popTitle { font-size: 11.5px; font-weight: 600; color: var(--ink-3); margin-top: 2px; }
+.chips { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
+.chip { aspect-ratio: 1; border-radius: 5px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.14); }
+.chip[aria-pressed="true"] { outline: 2px solid var(--select); outline-offset: 1px; }
+.chip:focus-visible { outline: 2px solid var(--deck); outline-offset: 1px; }
+.popRow { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.picker { width: 30px; height: 30px; padding: 0; border: 0; background: none; border-radius: var(--r-xs); cursor: pointer; }
+.hex { flex: 1; min-width: 0; height: 30px; padding: 0 8px; border-radius: var(--r-xs); background: var(--fill); border: 0; font: inherit; font-size: 12.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.hex:focus { outline: 1.5px solid var(--select); background: var(--paper); }
+.noneBtn { height: 30px; padding: 0 8px; border-radius: var(--r-xs); font-size: 12px; color: var(--ink-2); background: var(--fill); white-space: nowrap; }
+.noneBtn:hover { background: var(--fill-2); }
+
+.kept { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 10px; border-radius: var(--r-pill); background: var(--fill); font-size: 12px; color: var(--ink-2); }
+.kept button { height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--paper); box-shadow: var(--shadow-tile); font-size: 11.5px; font-weight: 560; color: var(--ink); }

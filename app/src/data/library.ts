@@ -7,7 +7,7 @@ import { claimOwnership, ownInMemory, persistStorage, storage } from '../storage
 import type { Mutation } from '../storage/protocol'
 import { blankSlide, SAMPLE_IDS, sampleLibrary, sampleSlides } from './fixtures'
 import { withFamilyNames } from '../slides/fonts'
-import { dropStalePayloads } from '../editor/payloads'
+import { settleSlides } from '../editor/irdiff'
 import { slideText as textOf } from '../slides/SlideView'
 import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideDoc } from './types'
 import { deviceId, noteLocalChange } from './sync'
@@ -159,10 +159,49 @@ function commit(next: LibraryState, quiet = false, origin: 'local' | 'remote' = 
   if (origin === 'local') noteLocalChange(1, quiet)
   if (new URLSearchParams(location.search).has('memory')) return
   if (!askedPersist) { askedPersist = true; void persistStorage() }
-  writing = writing.then(async () => { await storage.apply(mutations) }).catch(async (e: Error) => {
-    toast({ message: e.name === 'QuotaExceededError' ? 'Couldn’t save: browser storage is full. Free space in Settings → Storage.' : 'Couldn’t save that change. Your library was reloaded.', tone: 'danger' })
-    try { state = fromOpened(await storage.open()); emit() } catch { /* keep in-memory state */ }
+  write(mutations)
+}
+
+// ---------- save state (the editor's "Saving…" / "Saved in this browser" / "Not saved") ----------
+// A failed write keeps the in-memory library (the user's work) and its mutations, to retry; it is
+// never replaced by the older copy on disk.
+export type SaveState = 'saved' | 'saving' | 'failed'
+let pending = 0
+let failed: Mutation[] = []
+let saveState: SaveState = 'saved'
+const saveListeners = new Set<() => void>()
+const setSave = () => {
+  const next: SaveState = failed.length ? 'failed' : pending ? 'saving' : 'saved'
+  if (next !== saveState) { saveState = next; for (const l of saveListeners) l() }
+}
+export const useSaveState = () => useSyncExternalStore((l) => (saveListeners.add(l), () => saveListeners.delete(l)), () => saveState)
+/** Resolves once every write queued so far is on disk (or has failed). */
+export const flushed = () => writing
+
+function write(mutations: Mutation[]) {
+  pending++
+  setSave()
+  writing = writing.then(async () => {
+    try {
+      await storage.apply(mutations)
+    } catch (e) {
+      const first = !failed.length
+      failed.push(...mutations)
+      if (first) {
+        toast({
+          message: (e as Error).name === 'QuotaExceededError' ? 'Not saved: browser storage is full. Free space in Settings → Storage.' : 'Not saved: this browser refused the change.',
+          tone: 'danger', duration: Infinity, action: { label: 'Retry', run: retrySave },
+        })
+      }
+    } finally { pending--; setSave() }
   })
+}
+
+export function retrySave() {
+  const again = failed
+  failed = []
+  if (again.length) write(again)
+  else setSave()
 }
 
 function patch(id: string, update: Partial<Deck> | Partial<Folder>, quiet = false) {
@@ -253,26 +292,12 @@ export function openDeck(deckId: string) {
   patch(deckId, { openedAt: Date.now() }, true)
 }
 
-/** Replaces one slide (agent edits, later the editor). A real edit: it prompts about paused sync. */
-/** A slide's imported IR only describes the HTML it came with: once the HTML changes it goes, so
- *  export captures the slide as it is now instead of shipping the stale original. */
-function settleIr(prev: SlideDoc[], next: SlideDoc[]): SlideDoc[] {
-  const before = new Map(prev.map((sl) => [sl.id, sl.html]))
-  return next.map((sl) => {
-    const old = before.get(sl.id)
-    if (old === undefined || old === sl.html) return sl
-    const html = dropStalePayloads(old, sl.html)
-    const { ir: _ir, ...rest } = sl
-    return { ...rest, html }
-  })
-}
-
 export function updateSlide(deckId: string, index: number, slide: SlideDoc) {
   const d = state.entries[deckId]
   if (!d || d.type !== 'deck') return
   const slides = d.slides.slice()
   slides[index] = slide
-  patch(deckId, { slides: settleIr(d.slides, slides), modifiedAt: Date.now() })
+  patch(deckId, { slides: settleSlides(d.slides, slides), modifiedAt: Date.now() })
 }
 
 export function setLastSlide(deckId: string, index: number) {
@@ -570,9 +595,13 @@ export function applyRemoteSettings(settings: LibraryState['settings']) {
   commit({ ...state, settings }, true, 'remote')
 }
 
-/** Replaces a deck's slides in one change (agent edits, reorders). */
-export function updateSlides(deckId: string, slides: SlideDoc[]) {
+/** Replaces a deck's slides in one change (editor, agent, reorders). `exact`: the slides are an
+ *  earlier version being restored (undo), with their own change records, so they aren't diffed again.
+ *  `extra`: deck fields changed in the same commit (background size, CSS). Returns the stored slides. */
+export function updateSlides(deckId: string, slides: SlideDoc[], opts: { exact?: boolean; extra?: Partial<Deck> } = {}): SlideDoc[] | undefined {
   const d = state.entries[deckId]
   if (!d || d.type !== 'deck') return
-  patch(deckId, { slides: settleIr(d.slides, slides), modifiedAt: Date.now() })
+  const next = opts.exact ? slides : settleSlides(d.slides, slides)
+  patch(deckId, { ...opts.extra, slides: next, modifiedAt: Date.now() })
+  return next
 }

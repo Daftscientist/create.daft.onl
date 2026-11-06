@@ -1,11 +1,13 @@
 // UI-phase data model. The real engine (domOXML on Pyodide + OPFS/SQLite) replaces the store's
 // implementation later; these shapes are what the UI depends on.
 
-/** One slide as normalized HTML (domOXML's output shape): what the viewer renders, the AI reads and
- *  edits, and the engine converts to and from PPTX. `id` is stable across edits and reorders. */
-/** One slide as domOXML normalized HTML. `ir`: its domOXML IR from import (JSON), kept while the
- *  slide is unchanged so export is exact; dropped as soon as the HTML changes. */
-export type SlideDoc = { id: string; html: string; ir?: string }
+/** One slide as domOXML normalized HTML: what the viewer renders, the AI reads and edits, and the
+ *  engine converts to and from PPTX. `id` is stable across edits and reorders.
+ *  Imported slides keep their domOXML IR (JSON) for exact export, with what changed since import
+ *  (editor/irdiff.ts): `irDirty` nodes are captured from the HTML, `irMoved` nodes keep their IR with
+ *  a new box, every other node ships its original IR. `irSlide`: the slide's own attributes
+ *  (background) changed. */
+export type SlideDoc = { id: string; html: string; ir?: string; irDirty?: string[]; irMoved?: string[]; irSlide?: boolean; notes?: string; hidden?: boolean }
 /** Slide size in CSS px; 1280x720 unless an imported deck says otherwise. */
 export type SlideSize = { w: number; h: number }
 
