@@ -17,9 +17,16 @@ import s from './Sections.module.css'
 
 type Sec = { open: boolean; onToggle: () => void }
 
+/** Unsent comments and replies, by slide and object (or comment), so closing the popover never loses them. */
+const drafts = new Map<string, string>()
+function useDraft(key: string): [string, (v: string) => void] {
+  const [v, setV] = useState(() => drafts.get(key) ?? '')
+  useEffect(() => setV(drafts.get(key) ?? ''), [key])
+  return [v, (x: string) => { if (x) drafts.set(key, x); else drafts.delete(key); setV(x) }]
+}
+
 export function CommentsSection({ slide, sec, objectId, objectName }: { slide: SlideDoc; sec: Sec; objectId?: string; objectName?: string }) {
-  const [text, setText] = useState('')
-  const [reply, setReply] = useState<Record<string, string>>({})
+  const [text, setText] = useDraft(`${slide.id}:${objectId ?? ''}`)
   const all = slide.comments ?? []
   const shown = objectId ? all.filter((c) => c.objectId === objectId) : all
   const open = shown.filter((c) => !c.resolved)
@@ -35,8 +42,7 @@ export function CommentsSection({ slide, sec, objectId, objectName }: { slide: S
           <p className={s.commentText} onClick={() => c.objectId && setEditor({ sel: [c.objectId], scope: null })}>{c.text}</p>
           {(c.replies ?? []).map((r) => <p key={r.id} className={s.reply}>{r.text}<span> · {relTimeInline(r.at)}</span></p>)}
           {!c.resolved && (
-            <input className={s.replyInput} placeholder="Reply" aria-label="Reply" value={reply[c.id] ?? ''} onChange={(e) => setReply({ ...reply, [c.id]: e.target.value })}
-              onKeyDown={(e) => { if (e.key === 'Enter' && reply[c.id]?.trim()) { replyComment(slide.id, c.id, reply[c.id].trim()); setReply({ ...reply, [c.id]: '' }) } }} />
+            <ReplyField slideId={slide.id} commentId={c.id} />
           )}
         </div>
       ))}
@@ -44,6 +50,14 @@ export function CommentsSection({ slide, sec, objectId, objectName }: { slide: S
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim()) { addComment(slide.id, text.trim(), objectId); setText('') } }} />
       <Row><Button variant="secondary" icon={<ChatCircle size={14} />} disabled={!text.trim()} onClick={() => { addComment(slide.id, text.trim(), objectId); setText('') }}>Comment</Button></Row>
     </Section>
+  )
+}
+
+function ReplyField({ slideId, commentId }: { slideId: string; commentId: string }) {
+  const [reply, setReply] = useDraft(`reply:${commentId}`)
+  return (
+    <input className={s.replyInput} placeholder="Reply" aria-label="Reply" value={reply} onChange={(e) => setReply(e.target.value)}
+      onKeyDown={(e) => { if (e.key === 'Enter' && reply.trim()) { replyComment(slideId, commentId, reply.trim()); setReply('') } }} />
   )
 }
 

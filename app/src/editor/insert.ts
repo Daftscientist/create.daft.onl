@@ -1,7 +1,7 @@
 // Insert (spec: Insert bar): text box, basic shapes, pictures. New objects are centred in the visible
 // part of the slide (or placed where dropped), selected, and take the deck's text colour and font.
 import { toast } from '../data/toasts'
-import { deckTextStyle, insertObject, newId, openDeck } from './ops'
+import { deckTextStyle, editSlide, find, insertObject, newId, openDeck } from './ops'
 import { lineHtml } from './line'
 
 // Polygons are domOXML's own preset outlines (domoxml/core/drawingml/presets.py), so each exports as the native
@@ -110,5 +110,25 @@ export function pickPicture(): Promise<File | null> {
     input.onchange = () => res(input.files?.[0] ?? null)
     input.oncancel = () => res(null)
     input.click()
+  })
+}
+
+/** PowerPoint's Change Shape: a new outline for the selected shapes, keeping position, fill, border and text. */
+export function changeShape(ids: string[], kind: ShapeKind) {
+  const poly = SHAPES.find((x) => x.kind === kind)?.poly
+  editSlide(`Change to ${SHAPES.find((x) => x.kind === kind)!.label.toLowerCase()}`, (root) => {
+    let changed = false
+    for (const id of ids) {
+      const el = find(root, id)
+      if (!el || el.tagName !== 'DIV') continue
+      el.setAttribute('data-ream-shape', kind)
+      el.style.removeProperty('clip-path')
+      el.style.removeProperty('border-radius')
+      if (kind === 'rounded') el.style.borderRadius = '24px'
+      else if (kind === 'ellipse') el.style.borderRadius = '50%'
+      else if (poly) el.style.clipPath = `polygon(${poly})`
+      changed = true
+    }
+    if (!changed) return false
   })
 }

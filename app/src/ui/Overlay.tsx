@@ -3,6 +3,7 @@
 import { motion } from 'motion/react'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useChildLayer } from './layers'
 import s from './Overlay.module.css'
 
 export function Overlay({ onClose, label, children, className, align = 'center' }: {
@@ -13,6 +14,8 @@ export function Overlay({ onClose, label, children, className, align = 'center' 
   align?: 'center' | 'top' | 'bottom'
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const root = useRef<HTMLDivElement>(null)
+  useChildLayer(root)
   const close = useRef(onClose)
   close.current = onClose
   useEffect(() => {
@@ -47,7 +50,7 @@ export function Overlay({ onClose, label, children, className, align = 'center' 
   }, [])
 
   return createPortal(
-    <div className={s.root} data-align={align} data-ream-layer="">
+    <div ref={root} className={s.root} data-align={align} data-ream-layer="">
       <motion.div
         className={s.smoke}
         initial={{ opacity: 0 }}

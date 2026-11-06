@@ -1,11 +1,11 @@
 // Every model the user can use, grouped by provider with its logo: the browser's built-in model
 // first (when it has one), then each connected provider's chat models. One picker for the
-// Ask Ream header (`chip`) and Settings → AI (`field`).
-import { CaretDown, Gear } from '@phosphor-icons/react'
+// Ask composer (`chip`, opening upwards) and Settings → AI (`field`). `ReasoningPicker` sits beside the chip.
+import { Brain, CaretDown, Gear } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 import { BROWSER_MODEL_ID, useBrowserModel } from '../data/ai/browser'
 import { AI_PROVIDER_IDS, providerDef, type AiProviderId } from '../data/ai/providers'
-import { getAi, modelLabel, providerName, setAi, setModels, useActiveModel, useAi } from '../data/ai/settings'
+import { getAi, modelLabel, providerName, REASONING_LEVELS, reasoningFor, setAi, setModels, setReasoning, useActiveModel, useAi } from '../data/ai/settings'
 import { navigate } from '../lib/router'
 import { Menu, type MenuAnchor, type MenuItem } from '../ui/Menu'
 import { AiMark } from './AiMark'
@@ -55,7 +55,7 @@ export function ModelPicker({ variant }: { variant: 'chip' | 'field' }) {
 
   const open = () => {
     const r = trigger.current!.getBoundingClientRect()
-    setAnchor(variant === 'chip' ? { x: r.left, y: r.bottom + 6 } : { x: r.right, y: r.bottom + 6, align: 'end' })
+    setAnchor(variant === 'chip' ? { x: r.left, y: r.top - 6 } : { x: r.right, y: r.bottom + 6, align: 'end' })
   }
   const empty = !browser && !connected.length
   const label = active ? modelLabel(active, browser) : empty ? 'Add a provider' : 'Choose a model'
@@ -77,6 +77,29 @@ export function ModelPicker({ variant }: { variant: 'chip' | 'field' }) {
         {!empty && <CaretDown size={variant === 'chip' ? 10 : 12} weight="bold" className={s.caret} />}
       </button>
       <Menu open={!!anchor} anchor={anchor} items={items} label="Model" search={items.length > 10 ? 'Find a model' : undefined} onClose={() => setAnchor(null)} />
+    </>
+  )
+}
+
+/** The chosen model's reasoning level, remembered per model. Hidden for the browser's built-in model. */
+export function ReasoningPicker() {
+  const ai = useAi()
+  const active = useActiveModel()
+  const trigger = useRef<HTMLButtonElement>(null)
+  const [anchor, setAnchor] = useState<MenuAnchor | null>(null)
+  if (!active || active.provider === 'browser') return null
+  const level = reasoningFor(ai, active)
+  const label = REASONING_LEVELS.find((x) => x.level === level)!.label
+  return (
+    <>
+      <button ref={trigger} type="button" className={s.chip} aria-haspopup="menu" aria-expanded={!!anchor} aria-label={`Reasoning: ${label}`} title="How much the model thinks before answering"
+        onClick={() => { const r = trigger.current!.getBoundingClientRect(); setAnchor(anchor ? null : { x: r.left, y: r.top - 6 }) }}>
+        <Brain size={13} /><span className={s.label}>{level === 'provider-default' ? 'Reasoning' : label}</span><CaretDown size={10} weight="bold" className={s.caret} />
+      </button>
+      <Menu open={!!anchor} anchor={anchor} label="Reasoning" onClose={() => setAnchor(null)} items={[
+        { kind: 'note', text: 'Models that can’t change this use their own setting.' },
+        ...REASONING_LEVELS.map((x) => ({ label: x.label, selected: x.level === level, run: () => setReasoning(active, x.level) })),
+      ]} />
     </>
   )
 }

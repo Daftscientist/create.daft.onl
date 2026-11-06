@@ -77,3 +77,5 @@
   .icon_btn[data-size="sm"], .icon_btn[data-size="md"] { position: relative; }
   .icon_btn[data-size="sm"]::after, .icon_btn[data-size="md"]::after { content: ""; position: absolute; inset: -8px; }
 }
+@media (prefers-reduced-motion: reduce) { .btn:active:not(:disabled), .icon_btn:active:not(:disabled) { scale: none; } }
+:global(html[data-motion="reduce"]) .btn:active:not(:disabled), :global(html[data-motion="reduce"]) .icon_btn:active:not(:disabled) { scale: none; }

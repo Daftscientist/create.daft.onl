@@ -237,7 +237,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
       e.preventDefault(); e.stopPropagation()
       if (kind === 'text') insertText(at)
       else if (kind === 'picture') void pic(at)
-      else if (kind === 'table') insertTable(3, 3, at)
+      else if (kind.startsWith('table')) { const [, c, r] = kind.split(':').map(Number); insertTable(r || 3, c || 3, at) }
       else if (kind.startsWith('chart')) insertChart((kind.split(':')[1] ?? 'column') as ChartType, at)
       else insertShape(kind as ShapeKind, at)
       return
@@ -256,7 +256,7 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
           <span className={s.titleRow}>
             <h1 title={d.name}>{d.name}</h1>
             {!viewer && <IconButton label="Deck options" size="sm" tone="plain" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ anchor: { x: r.left, y: r.bottom + 6 }, label: 'Deck', items: [
-              { label: 'Find and replace', hint: `${modKey}H`, run: () => setFind({ replace: true }) },
+              { label: 'Find and replace', hint: `⇧${modKey}H`, run: () => setFind({ replace: true }) },
               { kind: 'sep' },
               { label: 'Design: fonts, colours, slide size…', run: () => setDeckDialog('design') },
               { label: 'Check accessibility…', run: () => setDeckDialog('a11y') },

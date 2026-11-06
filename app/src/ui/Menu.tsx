@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useIsPresent } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { snappy } from '../lib/motion'
+import { useChildLayer } from './layers'
 import s from './Menu.module.css'
 
 export type MenuItem =
@@ -52,6 +53,7 @@ function filterItems(items: MenuItem[], q: string): MenuItem[] {
 function MenuPanel({ anchor, items: all, onClose, label, search }: { anchor: MenuAnchor; items: MenuItem[]; onClose: () => void; label: string; search?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLInputElement>(null)
+  useChildLayer(ref)
   const [query, setQuery] = useState('')
   const items = search ? filterItems(all, query) : all
   const [pos, setPos] = useState<{ left: number; top: number; origin: string }>({ left: anchor.x, top: anchor.y, origin: 'top left' })

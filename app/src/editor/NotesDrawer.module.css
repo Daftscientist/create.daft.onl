@@ -16,5 +16,6 @@
   font: inherit; font-size: 14px; line-height: 21px; color: var(--ink);
 }
 .area::placeholder { color: var(--ink-3); }
-.splitter { position: absolute; left: 0; right: 0; top: -4px; height: 8px; cursor: row-resize; z-index: 2; }
+.splitter { position: absolute; left: 0; right: 0; top: -4px; height: 8px; cursor: row-resize; z-index: 2; display: grid; place-items: center; }
+.grip { width: 36px; height: 4px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 20%, transparent); }
 .splitter:hover, .splitter:focus-visible { background: linear-gradient(to bottom, transparent 3px, var(--select) 3px 5px, transparent 5px); outline: none; }

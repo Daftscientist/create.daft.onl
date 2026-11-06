@@ -1,6 +1,6 @@
 // AI co-editing panel (docs/design/specs/ai-panel.md + both review rounds), driving the real agent
 // (data/ai/agent.ts). Activity lines hold ≥1.6s, queue at most one, and flush when the answer starts.
-import { ArrowUp, ChatCircleText, Check, NotePencil, Stop, X } from '@phosphor-icons/react'
+import { ArrowUp, Check, NotePencil, Stop, X } from '@phosphor-icons/react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import type { ModelMessage } from 'ai'
@@ -15,10 +15,14 @@ import { endEdit } from '../editor/textctl'
 import { modKey } from '../lib/shell'
 import { IconButton } from '../ui/Button'
 import { DeckThumb } from './DeckThumb'
-import { ModelPicker } from './ModelPicker'
+import { ModelPicker, ReasoningPicker } from './ModelPicker'
+import { Dialog } from '../ui/Dialog'
+import { Button } from '../ui/Button'
 import s from './AgentPanel.module.css'
 
 type Step = { label: string; ms: number }
+/** One slide a turn changed, frozen as it was when the turn ended (a deleted slide as it was before). */
+type Change = { kind: 'added' | 'edited' | 'deleted' | 'moved'; number: number; slide: SlideDoc }
 /** What happened in a turn, in order: the model's words between (or before) its steps. */
 type Item = { kind: 'text'; text: string } | { kind: 'step'; label: string }
 type Turn = {
@@ -30,6 +34,7 @@ type Turn = {
   thought?: string
   edited?: number[]
   edit?: { before: SlideDoc[]; after: SlideDoc[]; undone?: boolean }
+  changes?: Change[]
   error?: string
   state: 'running' | 'done' | 'stopped'
   startedAt: number
@@ -111,12 +116,12 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
         },
       })
       flush()
-      patchLast((t) => ({ ...t, state: 'done', ms: Date.now() - t.startedAt, edit: before !== after ? { before, after } : undefined }))
+      patchLast((t) => ({ ...t, state: 'done', ms: Date.now() - t.startedAt, edit: before !== after ? { before, after } : undefined, changes: before !== after ? changesOf(before, after) : undefined }))
     } catch (e) {
       flush()
       const stopped = ac.signal.aborted
       const d = getLibrary().entries[deck.id] as Deck
-      patchLast((t) => ({ ...t, state: stopped ? 'stopped' : 'done', ms: Date.now() - t.startedAt, error: stopped ? undefined : (e as Error).message, edit: t.edited?.length ? { before: deck.slides, after: d.slides } : undefined }))
+      patchLast((t) => ({ ...t, state: stopped ? 'stopped' : 'done', ms: Date.now() - t.startedAt, error: stopped ? undefined : (e as Error).message, edit: t.edited?.length ? { before: deck.slides, after: d.slides } : undefined, changes: t.edited?.length ? changesOf(deck.slides, d.slides) : undefined }))
     } finally {
       abort.current = null
       if (lockedIds.size) setEditor((e) => ({ locked: e.locked.filter((x) => !lockedIds.has(x)) }))
@@ -152,8 +157,6 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   return (
     <aside className={s.panel} aria-label="Ask Ream">
       <header className={s.head}>
-        <span className={s.model}><ChatCircleText size={15} /> Ask Ream</span>
-        <ModelPicker variant="chip" />
         <span className={s.headSpacer} />
         <IconButton label="New chat" size="sm" tone="plain" disabled={running || !turns.length} onClick={() => { const prev = turns; setTurns([]); toast({ message: 'Started a new chat', action: { label: 'Undo', run: () => setTurns(prev) } }) }}><NotePencil size={16} /></IconButton>
         <IconButton label="Close" hint={`${modKey}J`} size="sm" tone="plain" onClick={onClose}><X size={16} /></IconButton>
@@ -184,7 +187,8 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
             {t.thought && <details className={s.steps}><summary>Thought it through</summary><p className={s.thought}>{t.thought}</p></details>}
             {!t.log && t.text && <p className={s.answer}>{t.text}</p>}
             {t.error && <p className={s.error}>{t.error}</p>}
-            {t.edit && t.edited?.length ? (
+            {t.changes?.length && t.edit ? <ChangeCard deck={deck} changes={t.changes} undone={!!t.edit.undone} onUndo={t.state !== 'running' ? () => undo(i) : undefined} />
+              : t.edit && t.edited?.length ? (
               <div className={s.change}>
                 <span className={s.changeThumb}><DeckThumb deck={{ ...deck, slides: (t.edit.undone ? t.edit.before : t.edit.after) }} slide={Math.max(0, (t.edited[0] ?? 1) - 1)} /></span>
                 <span className={s.changeText}>{t.edit.undone ? 'Undid these edits' : `Edited ${t.edited.length === 1 ? `slide ${t.edited[0]}` : `slides ${t.edited.join(', ')}`}`}</span>
@@ -197,6 +201,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
 
       <form className={s.composer} onSubmit={(e) => { e.preventDefault(); void send(draft) }}>
         <span className={s.chip}>Slide {slide + 1}</span>
+        <span className={s.pickers}><ModelPicker variant="chip" /><ReasoningPicker /></span>
         <textarea
           ref={input}
           rows={1}
@@ -249,8 +254,63 @@ function Log({ turn: t, line }: { turn: Turn; line: string | null }) {
         ? <p key={j} className={s.answer}>{g.text.trim()}</p>
         : (running && j === groups.length - 1) ? null
           : <details key={j} className={s.steps}><summary>{g.labels.length === 1 ? g.labels[0] : `${g.labels.length} steps`}</summary><ol>{g.labels.map((l, k) => <li key={k}><Check size={12} weight="bold" />{l}</li>)}</ol></details>)}
-      {running && !lastIsText && <Activity line={line} />}
+      {running && <Activity line={lastIsText ? 'Working' : line} />}
       {!running && t.ms !== undefined && <p className={s.meta}>{Math.round(t.ms / 1000)}s{t.state === 'stopped' ? ' · stopped' : ''}</p>}
     </>
+  )
+}
+
+/** What a turn changed, slide by slide, each frozen as it was when the turn ended. */
+function changesOf(before: SlideDoc[], after: SlideDoc[]): Change[] {
+  const was = new Map(before.map((x, i) => [x.id, { x, i }]))
+  const out: Change[] = []
+  after.forEach((x, i) => {
+    const b = was.get(x.id)
+    if (!b) out.push({ kind: 'added', number: i + 1, slide: x })
+    else if (b.x.html !== x.html) out.push({ kind: 'edited', number: i + 1, slide: x })
+  })
+  const now = new Set(after.map((x) => x.id))
+  before.forEach((x, i) => { if (!now.has(x.id)) out.push({ kind: 'deleted', number: i + 1, slide: x }) })
+  if (!out.length) {
+    // Only the order changed.
+    after.forEach((x, i) => { if (was.get(x.id)?.i !== i) out.push({ kind: 'moved', number: i + 1, slide: x }) })
+  }
+  return out.slice(0, 24)
+}
+
+const VERB = { added: 'Added', edited: 'Edited', deleted: 'Deleted', moved: 'Moved' } as const
+function summary(changes: Change[]): string {
+  return (['added', 'edited', 'deleted', 'moved'] as const).map((k) => {
+    const n = changes.filter((c) => c.kind === k).map((c) => c.number)
+    return n.length ? `${VERB[k]} ${n.length === 1 ? `slide ${n[0]}` : `slides ${n.join(', ')}`}` : ''
+  }).filter(Boolean).join(' · ')
+}
+
+/** The card a turn leaves: frozen thumbnails of what it changed; open it to see them large. */
+function ChangeCard({ deck, changes, undone, onUndo }: { deck: Deck; changes: Change[]; undone: boolean; onUndo?: () => void }) {
+  const [open, setOpen] = useState(false)
+  const shown = changes.slice(0, 3)
+  return (
+    <div className={s.change}>
+      <button type="button" className={s.changeOpen} onClick={() => setOpen(true)} aria-label={`View the changes: ${summary(changes)}`}>
+        <span className={s.stack} data-n={shown.length}>
+          {shown.map((c, j) => <span key={j} className={s.changeThumb} data-deleted={c.kind === 'deleted' || undefined}><DeckThumb deck={{ ...deck, slides: [c.slide] }} /></span>)}
+        </span>
+        <span className={s.changeText}>{undone ? 'Undid these edits' : summary(changes)}</span>
+      </button>
+      {!undone && onUndo && <button type="button" className={s.undo} onClick={onUndo}>Undo</button>}
+      {open && (
+        <Dialog title={summary(changes)} width={720} onClose={() => setOpen(false)} actions={<Button variant="secondary" onClick={() => setOpen(false)}>Done</Button>}>
+          <div className={s.changeList}>
+            {changes.map((c, j) => (
+              <figure key={j} className={s.changeBig}>
+                <div data-deleted={c.kind === 'deleted' || undefined}><DeckThumb deck={{ ...deck, slides: [c.slide] }} /></div>
+                <figcaption>{VERB[c.kind]} slide {c.number}{c.kind === 'deleted' ? ' (as it was)' : ''}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </Dialog>
+      )}
+    </div>
   )
 }

@@ -2,7 +2,7 @@
 // flat; the deck menu opens Design in a dialog. Each one reads the live stage and edits through ops.
 import {
   AlignBottom, AlignCenterHorizontal, AlignCenterVertical, AlignLeft, AlignRight, AlignTop, ArrowLineDown, ArrowLineUp,
-  ArrowDown, ArrowUp, CaretRight, DotsSixVertical, Eye, EyeSlash, ListBullets, ListNumbers, Lock, LockOpen, TextAlignCenter,
+  ArrowDown, ArrowUp, CaretDown, CaretRight, DotsSixVertical, Eye, EyeSlash, ListBullets, ListNumbers, Lock, LockOpen, TextAlignCenter,
   TextAlignJustify, TextAlignLeft, TextAlignRight, TextB, TextItalic, TextOutdent, TextIndent, TextUnderline,
   ArrowsInLineHorizontal, ArrowsInLineVertical,  Selection as SelectionIcon, SelectionSlash, Image as ImageIcon,
 } from '@phosphor-icons/react'
@@ -189,8 +189,8 @@ export function FillSection({ sec, els, ids, colors }: { sec: Sec; els: HTMLElem
             : <ColorWell label="Fill" value={fill} colors={colors} none="No fill" mixed={mixed((e) => css(e).backgroundColor)} onChange={(c) => setObjectStyle(ids, { 'background-color': c ?? 'transparent', 'background-image': null }, 'Fill')} />}
       </Row>
       <Row label="Border">
-        <ColorWell label="Border colour" value={bc} colors={colors} none="No border" onChange={(c) => setObjectStyle(ids, c ? { 'border-style': 'solid', 'border-color': c, 'border-width': bw ? `${bw}px` : '2px' } : { 'border-style': null, 'border-color': null, 'border-width': null }, 'Border')} />
-        <Slider label="Border width" min={0} max={20} step={0.25} value={pt(bw)} format={(v) => (v ? `${v} pt` : 'None')}
+        <ColorWell label="Border colour" value={bc} mixed={mixed((e) => `${css(e).borderTopWidth} ${css(e).borderTopColor}`)} colors={colors} none="No border" onChange={(c) => setObjectStyle(ids, c ? { 'border-style': 'solid', 'border-color': c, 'border-width': bw ? `${bw}px` : '2px' } : { 'border-style': null, 'border-color': null, 'border-width': null }, 'Border')} />
+        <Slider label="Border width" min={0} max={20} exactMax={100} step={0.25} value={pt(bw)} mixed={mixed((e) => css(e).borderTopWidth)} format={(v) => (v ? `${v} pt` : 'None')}
           onPreview={(v) => preview(ids, v ? { 'border-style': 'solid', 'border-width': `${v / 0.75}px`, 'border-color': bc ?? 'rgba(23,23,28,1)' } : { 'border-style': null, 'border-width': null })}
           onCommit={(v) => setObjectStyle(ids, v ? { 'border-style': 'solid', 'border-width': `${Math.round((v / 0.75) * 100) / 100}px`, 'border-color': bc ?? 'rgba(23,23,28,1)' } : { 'border-style': null, 'border-width': null }, 'Border width')} />
       </Row>
@@ -206,7 +206,9 @@ export function FillSection({ sec, els, ids, colors }: { sec: Sec; els: HTMLElem
 
 export function EffectsSection({ sec, els, ids }: { sec: Sec; els: HTMLElement[]; ids: string[] }) {
   const st = css(els[0])
-  const shadow = st.boxShadow === 'none' ? 'none' : Object.entries(SHADOWS).find(([, v]) => v && normalizeShadow(v) === normalizeShadow(els[0].style.boxShadow))?.[0] ?? 'custom'
+  const shadowOf = (el: HTMLElement) => css(el).boxShadow === 'none' ? 'none' : Object.entries(SHADOWS).find(([, v]) => v && normalizeShadow(v) === normalizeShadow(el.style.boxShadow))?.[0] ?? 'custom'
+  // Several objects with different shadows: no choice shows as current until one is picked.
+  const shadow = new Set(els.map(shadowOf)).size > 1 ? 'mixed' : shadowOf(els[0])
   const op = Math.round(parseFloat(st.opacity) * 100)
   return (
     <Section title="Effects" {...sec}>
@@ -317,10 +319,12 @@ export function ArrangeSection({ sec, els, ids, size }: { sec: Sec; els: HTMLEle
           <NumberField label="°" name="Rotation, degrees" value={Math.round(b.rot * 10) / 10} format={(v) => `${v}°`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : ((v % 360) + 360) % 360 }} onCommit={(rot) => commit({ rot })} disabled={locked} hint="Use an angle like 45" />
         </Row>
       )}
-      <Row label={single ? 'To slide' : 'Align'}>
+      <Row label={single ? 'Align to slide' : 'Align'}>
         <Toggle label="Align left" on={false} onClick={() => al('left')}><AlignLeft size={15} /></Toggle>
         <Toggle label="Align centre" on={false} onClick={() => al('center')}><AlignCenterHorizontal size={15} /></Toggle>
         <Toggle label="Align right" on={false} onClick={() => al('right')}><AlignRight size={15} /></Toggle>
+      </Row>
+      <Row label="">
         <Toggle label="Align top" on={false} onClick={() => al('top')}><AlignTop size={15} /></Toggle>
         <Toggle label="Align middle" on={false} onClick={() => al('middle')}><AlignCenterVertical size={15} /></Toggle>
         <Toggle label="Align bottom" on={false} onClick={() => al('bottom')}><AlignBottom size={15} /></Toggle>
@@ -402,7 +406,7 @@ export function TransitionSection({ slide, deck, sec }: { slide: SlideDoc; deck:
       </Row>
       {type !== 'none' && type !== 'cut' && (
         <Row label="Duration">
-          <Slider label="Transition duration" min={0.1} max={3} step={0.1} value={Math.round(dur / 100) / 10} format={(v) => `${v.toFixed(1)} s`} onCommit={(v) => set({ 'data-transition-duration': String(Math.round(v * 1000)) })} />
+          <Slider label="Transition duration" min={0.1} max={3} exactMax={10} step={0.1} value={Math.round(dur / 100) / 10} format={(v) => `${v.toFixed(1)} s`} onCommit={(v) => set({ 'data-transition-duration': String(Math.round(v * 1000)) })} />
         </Row>
       )}
       {DIRECTIONAL.has(type) && (
@@ -438,10 +442,10 @@ export function AnimateSection({ sec, els, ids }: { sec: Sec; els: HTMLElement[]
           <button type="button" className={s.chipBtn} aria-pressed={a.step === 0} onClick={() => setAnimation(ids, { ...a, step: 0 })}>With slide</button>
         </Row>
         <Row label="Duration">
-          <Slider label="Animation duration" min={0.1} max={3} step={0.1} value={Math.round(a.duration / 100) / 10} format={(v) => `${v.toFixed(1)} s`} onCommit={(v) => setAnimation(ids, { ...a, duration: v * 1000 })} />
+          <Slider label="Animation duration" min={0.1} max={3} exactMax={60} step={0.1} value={Math.round(a.duration / 100) / 10} format={(v) => `${v.toFixed(1)} s`} onCommit={(v) => setAnimation(ids, { ...a, duration: v * 1000 })} />
         </Row>
         <Row label="Delay">
-          <Slider label="Animation delay" min={0} max={5} step={0.1} value={Math.round(a.delay / 100) / 10} format={(v) => (v ? `${v.toFixed(1)} s` : 'None')} onCommit={(v) => setAnimation(ids, { ...a, delay: v * 1000 })} />
+          <Slider label="Animation delay" min={0} max={5} exactMax={60} step={0.1} value={Math.round(a.delay / 100) / 10} format={(v) => (v ? `${v.toFixed(1)} s` : 'None')} onCommit={(v) => setAnimation(ids, { ...a, delay: v * 1000 })} />
         </Row>
       </>}
     </Section>
@@ -457,7 +461,7 @@ export function ChartSection({ sec, el, id }: { sec: Sec; el: HTMLElement; id: s
   return (
     <Section title="Chart" {...sec}>
       <Row label="Type">
-        {CHART_TYPES.map((t) => <button key={t.type} type="button" className={s.chipBtn} aria-pressed={spec.type === t.type} onClick={() => setChart(id, t.type === 'pie' ? { ...spec, type: t.type, series: spec.series.slice(0, 1) } : { ...spec, type: t.type })}>{t.label}</button>)}
+        {CHART_TYPES.map((t) => <button key={t.type} type="button" className={s.chipBtn} aria-pressed={spec.type === t.type} onClick={() => setChart(id, { ...spec, type: t.type })}>{t.label}</button>)}
       </Row>
       <Row><Button variant="secondary" onClick={() => setEditing(true)}>Edit data…</Button></Row>
       <p className={s.note}>Exports as a native PowerPoint chart, with its data, so Edit Data works there too.</p>
@@ -534,7 +538,7 @@ export function LineSection({ sec, els, ids, colors }: { sec: Sec; els: HTMLElem
   return (
     <Section title="Line" {...sec}>
       <Row label="Colour"><ColorWell label="Line colour" value={color} colors={colors} onChange={(v) => v && set({ color: v }, 'Line colour')} /></Row>
-      <Row label="Width"><Slider label="Line width" min={0.25} max={20} step={0.25} value={width} format={(v) => `${v} pt`} onCommit={(v) => set({ widthPx: v / 0.75 }, 'Line width')} /></Row>
+      <Row label="Width"><Slider label="Line width" min={0.25} max={20} exactMax={50} step={0.25} value={width} format={(v) => `${v} pt`} onCommit={(v) => set({ widthPx: v / 0.75 }, 'Line width')} /></Row>
       <Row label="Dash">
         {(['solid', 'dash', 'dot'] as const).map((d) => <button key={d} type="button" className={s.chipBtn} aria-pressed={(c.line.dash ?? 'solid') === d} onClick={() => set({ dash: d }, 'Line dash')}>{cap(d)}</button>)}
       </Row>
@@ -558,20 +562,20 @@ export function DesignSection({ deck, sec, colors }: { deck: Deck; sec: Sec; col
   return (
     <Section title="Design" {...sec}>
       <Row label="Slide size">
-        <button type="button" className={s.select} aria-haspopup="menu" onClick={(e) => open(e, 'Slide size', SIZES.map(([n, w, h]) => ({ label: n, selected: w === size.w && h === size.h, run: () => setSlideSize(w, h) })))}>{sizeName}</button>
+        <button type="button" className={s.select} aria-haspopup="menu" onClick={(e) => open(e, 'Slide size', SIZES.map(([n, w, h]) => ({ label: n, selected: w === size.w && h === size.h, run: () => setSlideSize(w, h) })))}>{sizeName}<CaretDown size={10} weight="bold" /></button>
       </Row>
       {fonts.length > 0 && (
-        <Row label="Fonts">
+        <Row label="Replace fonts">
           <div className={s.stack}>
             {fonts.map((f) => (
               <button key={f} type="button" className={s.select} style={{ fontFamily: f }} aria-haspopup="menu" title={`Replace ${f} everywhere`}
-                onClick={(e) => open(e, `Replace ${f} with`, FONT_NAMES.filter((x) => x !== f).map((x) => ({ label: x, run: () => replaceFont(f, x) })), true)}>{f}</button>
+                onClick={(e) => open(e, `Replace ${f} with`, FONT_NAMES.filter((x) => x !== f).map((x) => ({ label: x, run: () => replaceFont(f, x) })), true)}>{f} → …<CaretDown size={10} weight="bold" /></button>
             ))}
           </div>
         </Row>
       )}
       {colors.length > 0 && (
-        <Row label="Colours">
+        <Row label="Replace colours">
           {colors.slice(0, 10).map((c) => <ColorWell key={c} label={`Replace ${c} everywhere`} value={c} colors={colors} onChange={(v) => v && toHex(v) !== toHex(c) && replaceColour(c, v)} />)}
         </Row>
       )}

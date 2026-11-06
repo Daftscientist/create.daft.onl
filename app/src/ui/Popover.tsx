@@ -1,9 +1,10 @@
 // Anchored paper popover (property forms, galleries): solid paper, clamped to the viewport, Esc closes it
 // and returns focus to its button, a click outside closes it (a half-typed field commits first). Colour wells,
-// menus and dialogs opened from inside are child layers (`data-ream-layer`): clicks in them don't dismiss it,
-// and Esc closes only them.
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+// menus and dialogs opened from inside register as child layers (ui/layers): clicks in them don't dismiss it,
+// and Esc closes only them. A click on any other surface closes it. Focus moves to its first control.
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { LayerContext, useChildLayer } from './layers'
 import s from './Popover.module.css'
 
 export function Popover({ anchor, label, onClose, children, width = 280, onClosed, className }: {
@@ -21,6 +22,9 @@ export function Popover({ anchor, label, onClose, children, width = 280, onClose
   const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null)
   const close = useRef(onClose)
   close.current = onClose
+  const children_ = useRef(new Set<HTMLElement>())
+  const register = useCallback((el: HTMLElement) => { children_.current.add(el); return () => { children_.current.delete(el) } }, [])
+  useChildLayer(ref) // a popover opened from inside another popover is its child
 
   useLayoutEffect(() => {
     const place = () => {
@@ -42,12 +46,13 @@ export function Popover({ anchor, label, onClose, children, width = 280, onClose
   }, [anchor, width])
 
   useEffect(() => {
-    ref.current?.focus({ preventScroll: true })
+    const first = ref.current?.querySelector<HTMLElement>('[data-autofocus], [data-tile], [role=grid], input:not([type=range]), button:not(:disabled), [tabindex="0"], input')
+    ;(first ?? ref.current)?.focus({ preventScroll: true })
     const down = (e: PointerEvent) => {
       const t = e.target as Element
       if (ref.current?.contains(t) || anchor.contains(t)) return
-      // A child layer (colour popover, menu, dialog) opened from in here, or any other layer above us.
-      if (t.closest?.('[data-ream-layer]')) return
+      // A child layer (colour popover, menu, dialog) opened from in here.
+      for (const c of children_.current) if (c.contains(t)) return
       // Commit a half-typed field to what it was editing before the press changes anything.
       const a = document.activeElement
       if (a instanceof HTMLElement && ref.current?.contains(a)) a.blur()
@@ -73,7 +78,7 @@ export function Popover({ anchor, label, onClose, children, width = 280, onClose
         if (onClosed) onClosed(); else anchor.focus({ preventScroll: true })
       }}
     >
-      {children}
+      <LayerContext.Provider value={register}>{children}</LayerContext.Provider>
     </div>,
     document.body,
   )

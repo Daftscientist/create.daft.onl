@@ -4,6 +4,7 @@
 import { CaretDown } from '@phosphor-icons/react'
 import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useChildLayer } from './layers'
 import s from './Inspector.module.css'
 
 /** Inside a popover, sections lie flat: a heading and their rows, always open. `'bare'` (a dialog that
@@ -127,13 +128,16 @@ export function NumberField({ label, name, value, format, parse, onCommit, onPre
 }
 
 /** A slider (native range: arrows, Page Up/Down, Home/End and screen readers work). Dragging previews
- *  live (`onPreview`) and commits once on release; the readout shows the value in its unit. */
-export function Slider({ label, value, min, max, step = 1, format, onCommit, onPreview, mixed, disabled }: {
+ *  live (`onPreview`) and commits once on release; Esc, a cancelled pointer or unmounting mid-drag puts the
+ *  original back. Click the readout to type an exact value, which may go past the slider's range up to
+ *  `exactMax` (imported values beyond the range show as typed and pin the thumb at the end). */
+export function Slider({ label, value, min, max, step = 1, exactMax = max, format, onCommit, onPreview, mixed, disabled }: {
   label: string
   value: number
   min: number
   max: number
   step?: number
+  exactMax?: number
   format: (v: number) => string
   onCommit: (v: number) => void
   onPreview?: (v: number) => void
@@ -141,16 +145,33 @@ export function Slider({ label, value, min, max, step = 1, format, onCommit, onP
   disabled?: boolean
 }) {
   const [draft, setDraft] = useState<number | null>(null)
+  const [typing, setTyping] = useState<string | null>(null)
+  const live = useRef({ draft: null as number | null, value, onPreview })
+  live.current = { draft, value, onPreview }
+  // Unmounted mid-drag (the popover closed): undo the preview.
+  useEffect(() => () => { const l = live.current; if (l.draft !== null) l.onPreview?.(l.value) }, [])
   const v = draft ?? value
   const commit = () => { if (draft !== null) { const d = draft; setDraft(null); if (d !== value) onCommit(d) } }
+  const cancel = () => { if (draft !== null) { setDraft(null); onPreview?.(value) } }
   const pct = ((Math.min(max, Math.max(min, v)) - min) / (max - min)) * 100
+  const typed = () => {
+    if (typing === null) return
+    const n = parseFloat(typing.replace(',', '.'))
+    setTyping(null)
+    if (Number.isFinite(n)) { const c = Math.min(exactMax, Math.max(min, Math.round(n / step) * step)); if (c !== value) onCommit(Math.round(c * 1000) / 1000) }
+  }
   return (
     <span className={s.slider} data-disabled={disabled || undefined}>
-      <input type="range" className={s.range} min={min} max={max} step={step} value={v} disabled={disabled} aria-label={label} aria-valuetext={mixed && draft === null ? 'Mixed' : format(v)}
+      <input type="range" className={s.range} min={min} max={max} step={step} value={Math.min(max, v)} disabled={disabled} aria-label={label} aria-valuetext={mixed && draft === null ? 'Mixed' : format(v)}
         style={{ ['--pct' as string]: `${pct}%` }}
         onChange={(e) => { const n = Number(e.target.value); setDraft(n); onPreview?.(n) }}
-        onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
-      <span className={s.readout}>{mixed && draft === null ? 'Mixed' : format(v)}</span>
+        onKeyDown={(e) => { if (e.key === 'Escape' && draft !== null) { e.preventDefault(); e.stopPropagation(); cancel() } }}
+        onPointerUp={commit} onPointerCancel={cancel} onKeyUp={(e) => { if (e.key !== 'Escape') commit() }} onBlur={commit} />
+      {typing !== null
+        ? <input className={s.readoutInput} autoFocus value={typing} aria-label={`${label}, exact value`} onChange={(e) => setTyping(e.target.value)} onBlur={typed}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); typed() } if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setTyping(null) } }} />
+        : <button type="button" className={s.readout} disabled={disabled} title="Type an exact value" aria-label={`${label}: ${mixed && draft === null ? 'mixed' : format(v)}. Type an exact value`}
+            onClick={() => setTyping(String(Math.round(v * 100) / 100))}>{mixed && draft === null ? 'Mixed' : format(v)}</button>}
     </span>
   )
 }
@@ -182,6 +203,7 @@ function ColorPopover({ anchor, value, colors, none, onChange, onClose }: { anch
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: 0, top: 0 })
   const [hex, setHex] = useState(toHex(value))
+  useChildLayer(ref)
   useLayoutEffect(() => {
     const r = anchor.getBoundingClientRect()
     const w = 232, h = ref.current?.offsetHeight ?? 220

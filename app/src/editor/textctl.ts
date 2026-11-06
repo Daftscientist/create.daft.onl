@@ -405,8 +405,8 @@ export function textState(stage: HTMLElement | null): TextState | null {
     if (node && node.tagName !== 'SPAN') node = node.querySelector('span') ?? node
     para = node?.closest('.domoxml-text, li') ?? null
   } else if (stage) {
-    const id = getEditor().sel[0]
-    const el = id ? find(stage, id) : null
+    // The first selected object that has text (a picture or empty shape in the selection doesn't count).
+    const el = getEditor().sel.map((id) => find(stage, id)).find((e): e is HTMLElement => !!e && runsOf(e).length > 0) ?? null
     if (!el) return null
     node = runsOf(el)[0] ?? null
     para = parasOf(el)[0] ?? null

@@ -13,6 +13,21 @@ export type AiSettings = {
   /** Each provider's chat models, as last listed from the provider. */
   models?: Partial<Record<AiProviderId, string[]>>
   model: ModelRef | null
+  /** The reasoning level last chosen for each model (`provider:id`); absent = the provider's default. */
+  reasoning?: Record<string, ReasoningLevel>
+}
+
+export type ReasoningLevel = 'provider-default' | 'none' | 'low' | 'medium' | 'high' | 'max'
+export const REASONING_LEVELS: { level: ReasoningLevel; label: string }[] = [
+  { level: 'provider-default', label: 'Default' }, { level: 'none', label: 'Off' }, { level: 'low', label: 'Low' },
+  { level: 'medium', label: 'Medium' }, { level: 'high', label: 'High' }, { level: 'max', label: 'Max' },
+]
+const modelKey = (m: ModelRef) => `${m.provider}:${m.id}`
+export const reasoningFor = (s: AiSettings, m: ModelRef | null): ReasoningLevel => (m && s.reasoning?.[modelKey(m)]) || 'provider-default'
+export function setReasoning(m: ModelRef, level: ReasoningLevel) {
+  const r = { ...getAi().reasoning }
+  if (level === 'provider-default') delete r[modelKey(m)]; else r[modelKey(m)] = level
+  setAi({ reasoning: r })
 }
 const EMPTY: AiSettings = { providers: {}, model: null }
 

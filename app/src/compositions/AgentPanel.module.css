@@ -29,7 +29,18 @@
 .steps li { display: flex; align-items: center; gap: 8px; }
 .steps li svg { color: var(--ok); }
 .answer { font-size: 13.5px; line-height: 21px; }
-.change { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 6px; border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-tile); }
+.change { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-tile); }
+.changeOpen { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; border-radius: var(--r-sm); padding: 0; }
+.changeOpen:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
+.stack { display: grid; flex: none; isolation: isolate; }
+.stack > * { grid-area: 1 / 1; }
+.stack > :nth-child(2) { translate: 6px -4px; z-index: -1; }
+.stack > :nth-child(3) { translate: 12px -8px; z-index: -2; }
+.stack[data-n="2"] { margin-right: 6px; } .stack[data-n="3"] { margin-right: 12px; }
+[data-deleted] { opacity: 0.55; filter: grayscale(1); }
+.changeList { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; max-height: 64vh; overflow: auto; }
+.changeBig { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.changeBig figcaption { font-size: 12.5px; color: var(--ink-2); }
 .changeThumb { width: 72px; flex: none; --thumb-r: 6px; }
 .changeText { flex: 1; font-size: 13px; font-weight: 540; }
 .undo { height: 28px; padding: 0 12px; border-radius: var(--r-pill); font-size: 12.5px; font-weight: 600; color: var(--select); }
@@ -37,8 +48,10 @@
 
 .composer {
   margin: 8px; padding: 8px 8px 8px 10px; border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-tile);
-  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "chip chip" "text send"; gap: 6px 8px; align-items: end;
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "chip chip" "text text" "pickers send"; gap: 6px 8px; align-items: center;
 }
+.pickers { grid-area: pickers; display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: -8px; }
+.composer > button, .composer > [class*="send"] { grid-area: send; }
 .composer:focus-within { box-shadow: 0 0 0 2px var(--select); }
 .chip { grid-area: chip; justify-self: start; font-size: 11.5px; font-weight: 600; color: var(--ink-2); background: var(--fill); padding: 2px 8px; border-radius: var(--r-pill); }
 .composer textarea { grid-area: text; border: 0; background: none; resize: none; font-size: 14px; line-height: 20px; padding: 4px 0; max-height: 160px; outline: none; }

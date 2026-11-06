@@ -10,19 +10,32 @@ import s from './InsertGallery.module.css'
 
 type Drag = { onDrag: (dragging: boolean) => void }
 
-/** 2-D arrow keys over a grid of buttons (`cols` per row), with Home/End; the first tile takes focus. */
-function useGrid(cols: number) {
+/** Arrow keys over the tiles as laid out (Down goes to the tile visually below, across section breaks),
+ *  Home/End, and one tab stop for the whole gallery; the first tile takes focus. */
+function useGrid() {
   const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => { ref.current?.querySelector<HTMLElement>('[data-tile]')?.focus({ preventScroll: true }) }, [])
+  const tiles = () => [...(ref.current?.querySelectorAll<HTMLElement>('[data-tile]') ?? [])]
+  const stop = (t: HTMLElement) => { for (const x of tiles()) x.tabIndex = x === t ? 0 : -1 }
+  useEffect(() => { const t = tiles()[0]; if (t) { stop(t); t.focus({ preventScroll: true }) } }, [])
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const tiles = [...(ref.current?.querySelectorAll<HTMLElement>('[data-tile]') ?? [])]
-    const i = tiles.indexOf(document.activeElement as HTMLElement)
+    const list = tiles()
+    const cur = document.activeElement as HTMLElement
+    const i = list.indexOf(cur)
     if (i < 0) return
-    const to = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'ArrowDown' ? i + cols : e.key === 'ArrowUp' ? i - cols
-      : e.key === 'Home' ? 0 : e.key === 'End' ? tiles.length - 1 : null
-    if (to === null) return
+    let to: HTMLElement | undefined
+    if (e.key === 'ArrowRight') to = list[i + 1]
+    else if (e.key === 'ArrowLeft') to = list[i - 1]
+    else if (e.key === 'Home') to = list[0]
+    else if (e.key === 'End') to = list[list.length - 1]
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const r = cur.getBoundingClientRect(), down = e.key === 'ArrowDown'
+      const rows = list.filter((t) => { const q = t.getBoundingClientRect(); return down ? q.top > r.bottom - 2 : q.bottom < r.top + 2 })
+      const rowY = rows.length ? (down ? Math.min(...rows.map((t) => t.getBoundingClientRect().top)) : Math.max(...rows.map((t) => t.getBoundingClientRect().top))) : null
+      const row = rows.filter((t) => t.getBoundingClientRect().top === rowY)
+      to = row.sort((a, b) => Math.abs(a.getBoundingClientRect().left - r.left) - Math.abs(b.getBoundingClientRect().left - r.left))[0]
+    } else return
     e.preventDefault()
-    tiles[Math.max(0, Math.min(tiles.length - 1, to))]?.focus()
+    if (to) { stop(to); to.focus() }
   }
   return { ref, onKeyDown }
 }
@@ -49,9 +62,9 @@ function ShapeIcon({ kind, poly }: { kind: ShapeKind; poly?: string }) {
   )
 }
 
-export function ShapesGallery({ onPick, onDrag }: { onPick: (k: ShapeKind) => void } & Drag) {
-  const grid = useGrid(6)
-  const groups: ShapeGroup[] = ['Lines', 'Basic shapes', 'Arrows and stars']
+export function ShapesGallery({ onPick, onDrag, lines = true, current }: { onPick: (k: ShapeKind) => void; lines?: boolean; current?: string } & Drag) {
+  const grid = useGrid()
+  const groups: ShapeGroup[] = lines ? ['Lines', 'Basic shapes', 'Arrows and stars'] : ['Basic shapes', 'Arrows and stars']
   return (
     <div ref={grid.ref} onKeyDown={grid.onKeyDown} className={s.gallery}>
       {groups.map((g) => (
@@ -59,7 +72,7 @@ export function ShapesGallery({ onPick, onDrag }: { onPick: (k: ShapeKind) => vo
           <h3 className={s.heading}>{g}</h3>
           <div className={s.tiles} role="group" aria-label={g}>
             {SHAPES.filter((x) => x.group === g).map((x) => (
-              <button key={x.kind} type="button" data-tile className={s.tile} aria-label={x.label} title={x.label} onClick={() => onPick(x.kind)} {...drag(x.kind, { onDrag })}>
+              <button key={x.kind} type="button" data-tile className={s.tile} aria-label={x.label} aria-pressed={current ? current === x.kind : undefined} title={x.label} onClick={() => onPick(x.kind)} {...drag(x.kind, { onDrag })}>
                 <ShapeIcon kind={x.kind} poly={x.poly} />
               </button>
             ))}
@@ -75,8 +88,8 @@ export function ShapesGallery({ onPick, onDrag }: { onPick: (k: ShapeKind) => vo
 const COLS = 10, ROWS = 8
 
 export function TableGallery({ onPick, onDrag }: { onPick: (rows: number, cols: number) => void } & Drag) {
-  const [at, setAt] = useState({ c: 1, r: 1 })
-  const [custom, setCustom] = useState({ c: 4, r: 3 })
+  // One size for everything: the highlighted grid, the announcement, the fields, Insert and a drag.
+  const [at, setAt] = useState({ c: 3, r: 3 })
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => { ref.current?.focus({ preventScroll: true }) }, [])
   const say = (c: number, r: number) => `${c} ${c === 1 ? 'column' : 'columns'}, ${r} ${r === 1 ? 'row' : 'rows'}`
@@ -89,11 +102,11 @@ export function TableGallery({ onPick, onDrag }: { onPick: (rows: number, cols: 
   return (
     <div className={s.gallery}>
       <div ref={ref} className={s.grid} role="grid" aria-label={`Table size: ${say(at.c, at.r)}. Arrow keys change it, Enter inserts.`} tabIndex={0} onKeyDown={onKeyDown}
-        onPointerLeave={() => setAt({ c: 1, r: 1 })} {...drag('table', { onDrag })}>
+        {...drag(`table:${at.c}:${at.r}`, { onDrag })}>
         {Array.from({ length: ROWS }, (_, r) => (
           <div key={r} role="row" className={s.gridRow}>
             {Array.from({ length: COLS }, (_, c) => (
-              <span key={c} role="gridcell" aria-selected={c < at.c && r < at.r} className={s.cell} data-on={(c < at.c && r < at.r) || undefined}
+              <span key={c} role="gridcell" aria-selected={c < at.c && r < at.r} className={s.cell} data-on={(c < at.c && r < at.r) || undefined} data-x={c} data-y={r}
                 onPointerEnter={() => setAt({ c: c + 1, r: r + 1 })} onClick={() => onPick(r + 1, c + 1)} />
             ))}
           </div>
@@ -101,9 +114,9 @@ export function TableGallery({ onPick, onDrag }: { onPick: (rows: number, cols: 
       </div>
       <p className={s.size} aria-live="polite">{say(at.c, at.r)}</p>
       <div className={s.custom}>
-        <NumberField label="Columns" name="Columns" width={110} value={custom.c} format={String} parse={n} onCommit={(c) => setCustom((x) => ({ ...x, c }))} hint="1 to 30" />
-        <NumberField label="Rows" name="Rows" width={96} value={custom.r} format={String} parse={n} onCommit={(r) => setCustom((x) => ({ ...x, r }))} hint="1 to 30" />
-        <Button variant="secondary" onClick={() => onPick(custom.r, custom.c)}>Insert</Button>
+        <NumberField label="Columns" name="Columns" width={110} value={at.c} format={String} parse={n} onCommit={(c) => setAt((x) => ({ ...x, c }))} hint="1 to 30" />
+        <NumberField label="Rows" name="Rows" width={96} value={at.r} format={String} parse={n} onCommit={(r) => setAt((x) => ({ ...x, r }))} hint="1 to 30" />
+        <Button variant="secondary" onClick={() => onPick(at.r, at.c)}>Insert</Button>
       </div>
     </div>
   )
@@ -123,7 +136,7 @@ function ChartIcon({ type }: { type: ChartType }) {
 }
 
 export function ChartGallery({ onPick, onDrag }: { onPick: (t: ChartType) => void } & Drag) {
-  const grid = useGrid(2)
+  const grid = useGrid()
   return (
     <div ref={grid.ref} onKeyDown={grid.onKeyDown} className={s.charts}>
       {CHART_TYPES.map((t) => (

@@ -8,7 +8,7 @@ import type { Deck, SlideDoc, SlideSize } from '../types'
 import { sanitize, slideText, SLIDE_H, SLIDE_W } from '../../slides/SlideView'
 import { runBrowserLoop } from './browser'
 import { providerDef } from './providers'
-import { getActiveModel, getAi } from './settings'
+import { getActiveModel, getAi, reasoningFor } from './settings'
 
 export type AgentEvent =
   | { type: 'thinking'; on: boolean; summary?: string }
@@ -226,6 +226,7 @@ export async function runAgent(opts: {
     system: sys,
     messages: [...opts.history, { role: 'user', content: opts.prompt }],
     tools,
+    reasoning: reasoningFor(ai, chosen),
     stopWhen: isStepCount(16),
     abortSignal: opts.signal,
   })

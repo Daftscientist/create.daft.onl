@@ -98,6 +98,8 @@ export function useEditorKeys(o: Opts) {
       if (mod && e.key === 'Enter') { e.preventDefault(); newSlide(); return }
       if (e.key === 'PageDown' || e.key === 'PageUp') { e.preventDefault(); step(o, e.key === 'PageDown' ? 1 : -1); return }
 
+      // A popover, menu or dialog owns its keys: nothing in it reaches the canvas shortcuts.
+      if (target instanceof Element && target.closest('[data-ream-layer]')) return
       const region = regionOf(document.activeElement)
       if (region === 'rail' || region === 'column' || region === 'header' || region === 'bar' || region === 'notes') return
       // ---- the stage (or nothing focused) ----

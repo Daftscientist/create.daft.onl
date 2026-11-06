@@ -6,6 +6,7 @@
 }
 .tile svg { fill: color-mix(in srgb, var(--ink) 10%, transparent); stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
 .tile:hover { background: var(--fill); color: var(--ink); }
+.tile[aria-pressed="true"] { background: var(--select-soft); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--select); }
 .tile:focus-visible { outline: 2px solid var(--select); outline-offset: 0; }
 
 .grid { display: flex; flex-direction: column; gap: 3px; padding: 2px; border-radius: var(--r-xs); }
@@ -25,4 +26,4 @@
 .chartTile:focus-visible { outline: 2px solid var(--select); outline-offset: 1px; }
 .chartIcon [data-c="0"] { fill: #4472c4; stroke: #4472c4; }
 .chartIcon [data-c="1"] { fill: #ed7d31; stroke: #ed7d31; }
-.chartIcon polyline { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chartIcon polyline, .chartIcon polyline[data-c] { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }

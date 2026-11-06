@@ -5,7 +5,7 @@
 import {
   CaretDown, ChatCircle, DotsThree, Function as FnIcon, ListBullets, ListNumbers, PaintBucket, Selection as SelectionIcon, SelectionSlash,
   Sparkle, Stack, TextAlignCenter, TextAlignJustify, TextAlignLeft, TextAlignRight, TextAa, TextB, TextItalic, TextUnderline, FilmStrip, ArrowsOutCardinal,
-  TextIndent, TextOutdent, AlignTop, AlignCenterVertical, AlignBottom, Drop, Image as ImageIcon, Table as TableIcon, ChartBar, LineSegment,
+  TextIndent, TextOutdent, Shapes as ShapesIcon, AlignTop, AlignCenterVertical, AlignBottom, Drop, Image as ImageIcon, Table as TableIcon, ChartBar, LineSegment,
 } from '@phosphor-icons/react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useLibrary } from '../data/library'
@@ -22,6 +22,8 @@ import { readSpec } from './chart'
 import { isGroup } from './geometry'
 import { find, group, setAnchor, setBackground, ungroup } from './ops'
 import { CommentsSection } from './Review'
+import { ShapesGallery } from './InsertGallery'
+import { changeShape } from './insert'
 import {
   AltTextSection, AnimateSection, ArrangeSection, ChartSection, EffectsSection, FillSection, FLAT, LineSection, ObjectList, PictureSection,
   TableSection, Toggle, TransitionSection, anchorOf, colorsOf, kindOf, objectName,
@@ -65,8 +67,9 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
   const one = els.length === 1 ? kinds[0] : null
   const colors = colorsOf(deck)
   const size = deck.size ?? { w: 1280, h: 720 }
+  // Text controls whenever any selected object (or group member) has text; formatting applies to those runs.
   const withText = !!editing || els.some((e) => !!e.querySelector('.domoxml-text, li'))
-  const textOk = withText && kinds.every((k) => k === 'text' || k === 'shape' || k === 'table')
+  const textOk = withText && kinds.every((k) => k !== 'preserved' && k !== 'chart')
   const styleable = els.length > 0 && kinds.every((k) => k === 'text' || k === 'shape' || k === 'svg' || k === 'picture' || k === 'group' || k === 'chart')
   const t = textOk ? textState(stage) : null
   const textLabels = density < 1
@@ -98,6 +101,7 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
     fill: styleable && one !== 'picture' ? { label: 'Fill and border', body: () => <FillSection sec={FLAT} els={els} ids={sel} colors={colors} /> } : undefined,
     border: styleable && one === 'picture' ? { label: 'Border', body: () => <FillSection sec={FLAT} els={els} ids={sel} colors={colors} /> } : undefined,
     effects: styleable && kinds.some((k) => k !== 'text') ? { label: 'Effects', body: () => <EffectsSection sec={FLAT} els={els} ids={sel} /> } : undefined,
+    shape: els.length > 0 && kinds.every((k) => k === 'shape') && els.every((e) => e.tagName === 'DIV' && !e.hasAttribute('data-domoxml-custom-geometry')) ? { label: 'Change shape', width: 268, body: () => <ShapesGallery lines={false} current={els[0].getAttribute('data-ream-shape') ?? undefined} onDrag={() => {}} onPick={(k) => { changeShape(sel, k); setPop(null) }} /> } : undefined,
     picture: one === 'picture' ? { label: 'Picture', body: () => <PictureSection sec={FLAT} el={els[0]} id={sel[0]} /> } : undefined,
     table: one === 'table' ? { label: 'Table', body: () => <TableSection sec={FLAT} el={els[0]} id={sel[0]} colors={colors} />, width: 320 } : undefined,
     chart: one === 'chart' ? { label: 'Chart', body: () => <ChartSection sec={FLAT} el={els[0]} id={sel[0]} /> } : undefined,
@@ -110,7 +114,7 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
     </> } : undefined,
   }
   const open = pop && panels[pop.key] ? pop : null
-  useEffect(() => { if (pop && !panels[pop.key]) setPop(null) })
+  useEffect(() => { if (pop && (!panels[pop.key] || locked)) setPop(null) })
   const anchor = open ? (open.anchor.isConnected ? open.anchor : root.current?.querySelector<HTMLElement>(`[data-pop="${open.key}"]`) ?? null) : null
   const closed = () => { if (editingLive()) refocus(); else anchor?.focus({ preventScroll: true }) }
 
@@ -120,7 +124,12 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
   const what = els.length > 1 ? `${els.length} objects` : els[0] ? (els[0].getAttribute('data-ream-name') ?? objectName(els[0]).split(':')[0]) : `Slide ${index + 1}`
 
   return (
-    <div ref={root} className={s.wrap}>
+    <div ref={root} className={s.wrap} onKeyDown={(e) => {
+      // Esc from the bar goes back to the text being edited, or to the slide.
+      if (e.key !== 'Escape' || e.defaultPrevented || !(e.target as Element).closest('[data-toolbar]')) return
+      e.preventDefault()
+      if (editingLive()) refocus(); else document.querySelector<HTMLElement>('[data-region="stage"]')?.focus()
+    }}>
       <Toolbar ref={bar} label="Format" region="bar" className={s.bar} inert={locked}>
         <span className={s.slot}>
           <Tooltip label="Objects on this slide" hint="Alt F10">
@@ -162,6 +171,7 @@ export function ContextBar({ deck, slide, index }: { deck: Deck; slide: SlideDoc
           {els.length > 1 && !kinds.includes('group') && <Toggle label="Group" hint="⌘G" on={false} onClick={() => group(sel)}><SelectionIcon size={15} /></Toggle>}
           {els.some(isGroup) && <Toggle label="Ungroup" hint="⌘⇧G" on={false} onClick={() => ungroup(sel)}><SelectionSlash size={15} /></Toggle>}
           {one === 'chart' && readSpec(els[0]) && <BarButton label="Edit data" icon={<FnIcon size={15} />} showLabel onClick={() => setChartData(true)} />}
+          {btn('shape', 'Shape', <ShapesIcon size={15} />)}
           {btn('chart', 'Chart', <ChartBar size={15} />)}
           {btn('table', 'Table', <TableIcon size={15} />)}
           {btn('picture', 'Picture', <ImageIcon size={15} />)}
@@ -260,10 +270,10 @@ function ParagraphPanel({ t }: { t: TextState }) {
         <NumberField label="×" name="Line spacing, multiple" value={t.lineHeight} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0.5, Math.min(5, v)) }} onCommit={(v) => formatParas({ 'line-height': `${Math.round(v * 1.2 * 1000) / 1000}` })} step={0.1} hint="A multiple, like 1.15" />
       </Row>
       <Row label="Before">
-        <Slider label="Space before paragraph" min={0} max={48} value={t.before} format={(v) => (v ? `${v} pt` : 'None')} onCommit={(v) => formatParas({ 'margin-top': v ? `${v}pt` : null })} />
+        <Slider label="Space before paragraph" min={0} max={48} exactMax={200} value={t.before} format={(v) => (v ? `${v} pt` : 'None')} onCommit={(v) => formatParas({ 'margin-top': v ? `${v}pt` : null })} />
       </Row>
       <Row label="After">
-        <Slider label="Space after paragraph" min={0} max={48} value={t.after} format={(v) => (v ? `${v} pt` : 'None')} onCommit={(v) => formatParas({ 'margin-bottom': v ? `${v}pt` : null })} />
+        <Slider label="Space after paragraph" min={0} max={48} exactMax={200} value={t.after} format={(v) => (v ? `${v} pt` : 'None')} onCommit={(v) => formatParas({ 'margin-bottom': v ? `${v}pt` : null })} />
       </Row>
       <Row label="Indent">
         <Toggle label="Decrease indent" hint="⇧Tab" on={false} onClick={() => shiftIndent(-1)}><TextOutdent size={15} /></Toggle>
