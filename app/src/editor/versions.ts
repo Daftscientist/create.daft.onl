@@ -1,10 +1,11 @@
 // Local version history (spec phase 6). While a deck is being edited, a copy of it is kept at most
 // every 10 minutes (and when it's opened), in this browser only (IndexedDB), up to 40 per deck.
 // Restoring is an ordinary, undoable change.
+import { scoped } from '../data/accounts'
 import type { Deck, SlideDoc, SlideSize } from '../data/types'
 
 export type Version = { id: string; deckId: string; at: number; slides: SlideDoc[]; css?: string; size?: SlideSize; count: number }
-const DB = 'ream-versions', STORE = 'versions', EVERY = 10 * 60_000, CAP = 40
+const DB = scoped('ream-versions'), STORE = 'versions', EVERY = 10 * 60_000, CAP = 40
 
 let db: Promise<IDBDatabase> | null = null
 function open(): Promise<IDBDatabase> {

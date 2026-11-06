@@ -24,7 +24,7 @@ export function runSyncAction(a: NonNullable<Summary['action']>) {
   if (a === 'reconnect') void reconnect()
   else if (a === 'unlock') openSyncFlow('unlock')
   else if (a === 'review') navigate({ name: 'files', folderId: null })
-  else navigate({ name: 'settings', section: 'sync' })
+  else navigate({ name: 'settings', section: 'accounts' })
 }
 
 /** Sidebar footer / mobile Files card: two quiet lines, no stacked buttons. The action is an inline text
@@ -38,7 +38,7 @@ export function SyncStatus({ sub, noticeShown = false }: { sub?: string; noticeS
     <div className={s.status} data-tone={sum.tone}>
       <span className={s.icon} aria-hidden>{sync.locked ? <Lock size={16} /> : sync.provider ? ICON[sum.tone] : <HardDrives size={16} />}</span>
       <div className={s.body}>
-        <button type="button" className={s.line} onClick={() => navigate({ name: 'settings', section: sync.provider ? 'sync' : 'storage' })}>{sum.title}</button>
+        <button type="button" className={s.line} onClick={() => navigate({ name: 'settings', section: 'accounts' })}>{sum.title}</button>
         {(detail || action) && (
           <span className={s.sub}>
             {detail}

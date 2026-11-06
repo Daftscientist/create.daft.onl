@@ -8,7 +8,7 @@ import type { Folder } from '../data/types'
 import { relTimeInline } from '../lib/format'
 import { navigate, type Route } from '../lib/router'
 import { dwellOn, endDrag, getDnd, hasFiles, hasIds, MIME, setOver, useDnd } from '../compositions/dnd'
-import { BrandLockup } from '../ui/Brand'
+import { AccountButton } from '../compositions/AccountSwitcher'
 import { IconButton } from '../ui/Button'
 import { SyncStatus } from '../compositions/SyncStatus'
 import { modKey } from '../lib/shell'
@@ -31,7 +31,7 @@ export function Sidebar({ route }: { route: Route }) {
   return (
     <aside className={s.sidebar} aria-label="Library">
       <div className={s.brand}>
-        <BrandLockup />
+        <AccountButton />
         <IconButton label="Settings" hint={`${modKey},`} size="sm" tone="plain" onClick={() => navigate({ name: 'settings', section: null })}>
           <GearSix size={17} />
         </IconButton>

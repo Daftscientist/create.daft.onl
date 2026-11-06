@@ -1,6 +1,7 @@
 // End-to-end encryption for synced files. The key is derived from the passphrase (PBKDF2-SHA256,
 // 310k iterations) and kept on this device as a non-extractable CryptoKey in IndexedDB; the cloud
 // only ever stores AES-GCM ciphertext plus a salt and a check value to recognise the right passphrase.
+import { scoped } from '../data/accounts'
 const ITER = 310_000
 const enc = new TextEncoder()
 const dec = new TextDecoder()
@@ -53,8 +54,8 @@ export async function storeKey(key: CryptoKey | null) {
   const db = await idb()
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction('keys', 'readwrite')
-    if (key) tx.objectStore('keys').put(key, 'library')
-    else tx.objectStore('keys').delete('library')
+    if (key) tx.objectStore('keys').put(key, scoped('library'))
+    else tx.objectStore('keys').delete(scoped('library'))
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error)
   })
@@ -63,7 +64,7 @@ export async function loadKey(): Promise<CryptoKey | null> {
   try {
     const db = await idb()
     return await new Promise((resolve) => {
-      const r = db.transaction('keys').objectStore('keys').get('library')
+      const r = db.transaction('keys').objectStore('keys').get(scoped('library'))
       r.onsuccess = () => resolve((r.result as CryptoKey) ?? null)
       r.onerror = () => resolve(null)
     })

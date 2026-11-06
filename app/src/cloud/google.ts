@@ -2,20 +2,18 @@
 // no refresh token, so after an hour Ream asks for a one-click reconnect (a user gesture is required).
 // Library files live in the hidden appDataFolder; openid/profile give the account email and avatar.
 import { CLOUD } from './config'
+import { scoped } from '../data/accounts'
 import { NeedsSignIn, ProviderFull, RemoteConflict, type CloudAccount, type CloudDrive, type RemoteFile } from './types'
 
 const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.appdata'
 type Tokens = { access: string; expiresAt: number }
-const KEY = 'ream.cloud.google'
-const load = (): Tokens | null => { try { return JSON.parse(localStorage.getItem(KEY) ?? 'null') } catch { return null } }
-const save = (t: Tokens | null) => { if (t) localStorage.setItem(KEY, JSON.stringify(t)); else localStorage.removeItem(KEY) }
 
 type TokenResponse = { access_token?: string; expires_in?: number; error?: string }
 type TokenClient = { requestAccessToken: (o?: { prompt?: string }) => void }
 declare global {
   interface Window {
     google?: { accounts: { oauth2: {
-      initTokenClient: (o: { client_id: string; scope: string; callback: (r: TokenResponse) => void; error_callback?: (e: { type: string }) => void }) => TokenClient
+      initTokenClient: (o: { client_id: string; scope: string; prompt?: string; login_hint?: string; callback: (r: TokenResponse) => void; error_callback?: (e: { type: string }) => void }) => TokenClient
       revoke: (token: string, done: () => void) => void
     } } }
   }
@@ -34,13 +32,21 @@ function loadGis() {
   return gis
 }
 // Preload so the click handler can open the window synchronously (popup blockers need the gesture).
-if (localStorage.getItem(KEY)) void loadGis().catch(() => {})
+if (Object.keys(localStorage).some((k) => k.startsWith('ream.cloud.google'))) void loadGis().catch(() => {})
+
+/** One Google account's drive. Tokens are kept under the Ream account's id; signing back in hints that account's
+ *  email so Google doesn't offer a different one. */
+export function googleDrive(accountId: string, hint?: () => string | undefined): CloudDrive {
+const KEY = scoped('ream.cloud.google', accountId)
+const load = (): Tokens | null => { try { return JSON.parse(localStorage.getItem(KEY) ?? 'null') } catch { return null } }
+const save = (t: Tokens | null) => { if (t) localStorage.setItem(KEY, JSON.stringify(t)); else localStorage.removeItem(KEY) }
 
 function requestToken(prompt: string): Promise<Tokens> {
   return new Promise((resolve, reject) => {
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: CLOUD.google.clientId,
       scope: SCOPES,
+      ...(hint?.() ? { login_hint: hint() } : {}),
       callback: (r) => {
         if (!r.access_token) return reject(new Error(r.error ?? 'Google sign-in failed'))
         const t = { access: r.access_token, expiresAt: Date.now() + ((r.expires_in ?? 3600) - 60) * 1000 }
@@ -70,12 +76,12 @@ let ids = new Map<string, string>()
 type GFile = { id: string; name: string; version: string; modifiedTime: string }
 const toFile = (f: GFile): RemoteFile => ({ name: f.name, rev: f.version, modified: Date.parse(f.modifiedTime) })
 
-export const google: CloudDrive = {
+return {
   id: 'google',
   prepare() { void loadGis().catch(() => {}) },
-  async signIn() {
+  async signIn(opts) {
     await loadGis()
-    await requestToken('consent')
+    await requestToken(opts?.another ? 'select_account consent' : 'consent')
     return this.account()
   },
   async reconnect() {
@@ -137,9 +143,11 @@ export const google: CloudDrive = {
     const id = ids.get(name)
     if (id) { await api(`https://www.googleapis.com/drive/v3/files/${id}`, { method: 'DELETE' }); ids.delete(name) }
   },
+  async forget() { save(null) },
   async signOut() {
     const t = load()
     if (t && window.google) await new Promise<void>((r) => window.google!.accounts.oauth2.revoke(t.access, r))
     save(null)
   },
+}
 }

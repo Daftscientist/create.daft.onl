@@ -2,6 +2,7 @@
 // browser apps, then a sign-in). Files live in the app folder (Apps/Ream), via Microsoft Graph.
 import { InteractionRequiredAuthError, PublicClientApplication, type AccountInfo } from '@azure/msal-browser'
 import { CLOUD, redirectUri } from './config'
+import { scoped } from '../data/accounts'
 import { NeedsSignIn, ProviderFull, RemoteConflict, type CloudAccount, type CloudDrive, type RemoteFile } from './types'
 
 const SCOPES = ['Files.ReadWrite.AppFolder', 'User.Read', 'offline_access']
@@ -17,7 +18,18 @@ function client() {
   })()
   return pca
 }
-const account = async (): Promise<AccountInfo | null> => (await client()).getAllAccounts()[0] ?? null
+/** One Microsoft account's drive. MSAL keeps every signed-in account in one cache; each Ream account remembers which
+ *  is its own (by home account id). */
+export function onedriveDrive(accountId: string): CloudDrive {
+const HOME = scoped('ream.cloud.onedrive', accountId)
+const account = async (): Promise<AccountInfo | null> => {
+  const all = (await client()).getAllAccounts(), home = localStorage.getItem(HOME)
+  if (home) return all.find((a) => a.homeAccountId === home) ?? null
+  // A library linked before accounts: the account MSAL marked active when it signed in (never just the first one).
+  const legacy = accountId === 'default' ? (await client()).getActiveAccount() : null
+  if (legacy) localStorage.setItem(HOME, legacy.homeAccountId)
+  return legacy
+}
 
 async function token(): Promise<string> {
   const p = await client()
@@ -43,21 +55,22 @@ type Item = { name: string; eTag: string; lastModifiedDateTime: string; file?: u
 const toFile = (i: Item): RemoteFile => ({ name: i.name, rev: i.eTag, modified: Date.parse(i.lastModifiedDateTime) })
 const enc = encodeURIComponent
 
-export const onedrive: CloudDrive = {
+return {
   id: 'onedrive',
   prepare() { void client() },
   async signIn() {
     const p = await client()
     const r = await p.loginPopup({ scopes: SCOPES, prompt: 'select_account' })
-    p.setActiveAccount(r.account)
+    localStorage.setItem(HOME, r.account.homeAccountId)
     return this.account()
   },
   async reconnect() {
     const p = await client()
     const acct = await account()
-    await p.acquireTokenPopup({ scopes: SCOPES, ...(acct ? { account: acct } : {}) })
+    const r = await p.acquireTokenPopup({ scopes: SCOPES, ...(acct ? { account: acct, loginHint: acct.username } : { prompt: 'select_account' }) })
+    if (!acct) localStorage.setItem(HOME, r.account.homeAccountId)
   },
-  async ready() { try { await token(); return true } catch { return false } },
+  async ready() { try { await token(); return true } catch (e) { return !(e instanceof NeedsSignIn) } },
   async account(): Promise<CloudAccount> {
     const me = await (await api('/me?$select=id,displayName,mail,userPrincipalName')).json()
     let avatar: string | undefined
@@ -101,9 +114,17 @@ export const onedrive: CloudDrive = {
     const res = await api(`/me/drive/special/approot:/${enc(name)}`, { method: 'DELETE' })
     if (!res.ok && res.status !== 404) throw new Error(`OneDrive delete failed (${res.status})`)
   },
+  async forget() {
+    const p = await client()
+    const acct = await account()
+    if (acct) await p.clearCache({ account: acct })
+    localStorage.removeItem(HOME)
+  },
   async signOut() {
     const p = await client()
     const acct = await account()
     if (acct) await p.clearCache({ account: acct })
+    localStorage.removeItem(HOME)
   },
+}
 }

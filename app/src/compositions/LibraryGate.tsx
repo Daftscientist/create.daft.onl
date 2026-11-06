@@ -7,11 +7,33 @@ import { takeOver, useOwnership } from '../storage/client'
 import { BrandMark, PRODUCT } from '../ui/Brand'
 import { Button } from '../ui/Button'
 import { EmptyState } from './PageHeader'
+import { FirstRun } from './FirstRun'
+import { adoptLegacyLibrary, needsFirstRun } from '../data/accounts'
 import s from './LibraryGate.module.css'
 
 let started = false
 
 export function LibraryGate({ children }: { children: ReactNode }) {
+  // No account yet: choose where work lives before anything opens, unless this browser already holds a library
+  // from before accounts (then it becomes the first account, untouched).
+  const first = needsFirstRun() && !new URLSearchParams(location.search).has('memory')
+  const [legacy, setLegacy] = useState<'checking' | 'none'>(first ? 'checking' : 'none')
+  useEffect(() => {
+    if (!first) return
+    void (async () => {
+      try {
+        const root = await navigator.storage.getDirectory()
+        await root.getDirectoryHandle('ream-db')
+        adoptLegacyLibrary(); location.reload(); return
+      } catch { /* no old library */ }
+      setLegacy('none')
+    })()
+  }, [first])
+  if (first) return legacy === 'checking' ? <Screen /> : <FirstRun />
+  return <Gate>{children}</Gate>
+}
+
+function Gate({ children }: { children: ReactNode }) {
   const own = useOwnership()
   const boot = useBoot()
   const [slow, setSlow] = useState(false)

@@ -4,6 +4,7 @@
 //   ream-key.json       present only with end-to-end encryption: salt + check value, never the key
 // Never syncs the SQLite file. Writes to ream-entries.json are conditional, so two devices syncing at
 // once re-read and merge instead of overwriting each other.
+import { scoped } from './accounts'
 import { isSealed, open, seal, type KeyFile } from '../cloud/crypto'
 import { RemoteConflict, type CloudDrive } from '../cloud/types'
 import { addConflictCopy, applyRemote, applyRemoteSettings, getLibrary } from './library'
@@ -19,7 +20,7 @@ type RemoteEntry = { entry?: Meta; clock: number; device: string; deleted?: true
 export type EntriesFile = { format: 1; entries: Record<string, RemoteEntry>; devices: Record<string, { name: string; seen: number }> }
 type Base = { entries: Record<string, number>; docs: Record<string, number> }
 
-const BASE_KEY = 'ream.sync.base'
+const BASE_KEY = scoped('ream.sync.base')
 export function loadBase(): Base {
   try { return { entries: {}, docs: {}, ...JSON.parse(localStorage.getItem(BASE_KEY) ?? '{}') } } catch { return { entries: {}, docs: {} } }
 }

@@ -2,6 +2,7 @@
 // saves after 600ms idle (and on blur) without adding history; ending the edit records one transaction.
 // Formatting has three targets (spec): the selected range, the caret (style for what's typed next),
 // or, when no text is being edited, every run of the selected objects.
+import { onBeforeSwitch } from '../data/accounts'
 import { getLibrary, markUnsaved, onRemoteDeck, updateSlides } from '../data/library'
 import { toast } from '../data/toasts'
 import type { SlideDoc } from '../data/types'
@@ -35,6 +36,8 @@ const listeners = new Set<() => void>()
 const emit = () => { for (const l of listeners) l() }
 export const onTextChange = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
 export const editingLive = () => live
+// Switching account mid-edit: the text being typed is saved first.
+onBeforeSwitch('commit', () => { if (live) endEdit() })
 
 /** Starts editing an object's text on the live stage. `at`: where the caret goes (client px). */
 /** The table cell under a point (or at [row, column], or the first one). */

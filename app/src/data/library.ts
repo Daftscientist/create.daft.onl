@@ -11,6 +11,7 @@ import { settleSlides } from '../editor/irdiff'
 import { slideText as textOf } from '../slides/SlideView'
 import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideDoc } from './types'
 import { deviceId, noteLocalChange } from './sync'
+import { onBeforeSwitch } from './accounts'
 import { toast } from './toasts'
 import { confirm } from '../ui/Dialog'
 
@@ -180,6 +181,13 @@ const setSave = () => {
 export const useSaveState = () => useSyncExternalStore((l) => (saveListeners.add(l), () => saveListeners.delete(l)), () => saveState)
 /** Resolves once every write queued so far is on disk (or has failed). */
 export const flushed = () => writing
+export const getSaveState = () => saveState
+// Switching account: every write reaches storage first; a failed save keeps you here (with Retry).
+onBeforeSwitch('drain', async () => {
+  await writing
+  if (saveState === 'failed') { toast({ message: 'Some changes couldn’t be saved, so you’re still here. Try again in a moment.', tone: 'danger', action: { label: 'Retry', run: retrySave } }); return false }
+  return true
+})
 
 function write(mutations: Mutation[]) {
   pending++
@@ -562,14 +570,18 @@ export function download(ids: string[], format: ExportFormat) {
   })()
 }
 
+/** Saves the whole library (every deck with its slides and pictures, every folder, trash included) to one file. */
 export function backUp() {
   const n = decks(state).filter(isLive).length
-  const t = toast({ message: `Backing up ${plural(n, 'deck')}…`, busy: true, duration: Infinity })
-  setTimeout(() => {
-    t.dismiss()
-    commit({ ...state, lastBackupAt: Date.now() })
-    toast({ message: `Backed up ${plural(n, 'deck')}`, tone: 'ok' })
-  }, 1400)
+  const at = Date.now()
+  const file = new Blob([JSON.stringify({ format: 'ream-backup', version: 1, at, entries: Object.values(state.entries), settings: { ...state.settings, ai: undefined } })], { type: 'application/json' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(file)
+  a.download = `Ream backup ${new Date(at).toISOString().slice(0, 10)}.json`
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 30_000)
+  commit({ ...state, lastBackupAt: at })
+  toast({ message: `Backed up ${plural(n, 'deck')} to your downloads`, tone: 'ok' })
 }
 
 // ---------- sync engine hooks ----------

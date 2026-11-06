@@ -1,6 +1,7 @@
 // UI-side handle to the storage worker, plus single-tab ownership (the OPFS pool is exclusive).
 import { useSyncExternalStore } from 'react'
 import type { Mutation, Op, Opened, Response } from './protocol'
+import { activeId, scoped } from '../data/accounts'
 
 let worker: Worker | null = null
 let seq = 0
@@ -24,8 +25,22 @@ function call<T>(req: Op, transfer: Transferable[] = []): Promise<T> {
   })
 }
 
+/** Where an account's library lives in OPFS. */
+export const accountDirs = (id: string) => ({ dir: id === 'default' ? '/ream-db' : `/ream-db-${id}`, blobs: id === 'default' ? 'blobs' : `blobs-${id}` })
+
+/** Deletes another account's library from this device (it must not be open in any tab). */
+export async function wipeAccount(id: string): Promise<boolean> {
+  const { dir, blobs } = accountDirs(id)
+  const root = await navigator.storage.getDirectory()
+  try {
+    await root.removeEntry(dir.slice(1), { recursive: true }).catch((e: Error) => { if (e.name !== 'NotFoundError') throw e })
+    await root.removeEntry(blobs, { recursive: true }).catch(() => {})
+    return true
+  } catch { return false }
+}
+
 export const storage = {
-  open: () => call<Opened>({ op: 'open' }),
+  open: () => call<Opened>({ op: 'open', ...accountDirs(activeId()) }),
   apply: (mutations: Mutation[]) => call<null>({ op: 'apply', mutations }),
   wipe: () => call<null>({ op: 'wipe' }),
   putBlob: (hash: string, bytes: ArrayBuffer) => call<null>({ op: 'putBlob', hash, bytes }, [bytes]),
@@ -42,7 +57,7 @@ const listeners = new Set<() => void>()
 const set = (o: Ownership) => { ownership = o; listeners.forEach((l) => l()) }
 let onOwned: (() => void) | null = null
 
-const LOCK = 'ream-library'
+const LOCK = scoped('ream-library')
 
 function hold(steal: boolean) {
   navigator.locks.request(LOCK, steal ? { steal: true } : { ifAvailable: true }, async (lock) => {

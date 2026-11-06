@@ -1,13 +1,14 @@
 // Cloud sync state (docs/design/specs/settings.md). UI phase: providers are simulated with realistic
 // timings and behaviours (Google's ~hourly tokens, Dropbox's silent refresh). The engine phase replaces
 // the simulated transport; the state model and every surface built on it stay.
+import { scoped } from './accounts'
 import { useSyncExternalStore } from 'react'
 import { toast } from './toasts'
-import { DRIVES } from '../cloud'
+import { driveFor, reauthenticate } from '../cloud'
+import { activeAccount, updateAccount } from './accounts'
 import { loadKey, newKey, storeKey, unlockKey } from '../cloud/crypto'
 import { NeedsSignIn, ProviderFull } from '../cloud/types'
-import { decks, getLibrary, isLive } from './library'
-import { ENTRIES, KEYFILE, pendingCount, readKeyFile, resetBase, rewriteAll, syncOnce, type SyncContext } from './syncEngine'
+import { KEYFILE, pendingCount, readKeyFile, rewriteAll, syncOnce, type SyncContext } from './syncEngine'
 
 import type { ProviderId } from '../cloud/types'
 export type { ProviderId }
@@ -41,7 +42,7 @@ export type SyncState = {
   dismissals: number
 }
 
-const KEY = 'ream.sync.v1'
+const KEY = scoped('ream.sync.v1')
 const initial: SyncState = {
   provider: null, account: null, deviceName: guessDevice(), auth: 'none', online: navigator.onLine, pending: 0,
   transfer: null, conflicts: 0, issue: null, lastSyncAt: null, otherDevice: null, encrypted: false, locked: false,
@@ -87,7 +88,13 @@ function load(): SyncState {
   return initial
 }
 
-let state = load()
+/** The provider is the active account's (none for a local account): sync is just how a cloud account works. */
+function forAccount(s: SyncState): SyncState {
+  const a = activeAccount()
+  if (!a || a.kind === 'local') return { ...s, provider: null, account: null, auth: 'none' }
+  return { ...s, provider: a.kind, account: a.email ?? s.account, accountName: a.name, avatar: a.avatar ?? s.avatar, auth: s.provider === a.kind ? s.auth : 'expired' }
+}
+let state = new URLSearchParams(location.search).has('sync') ? load() : forAccount(load())
 const listeners = new Set<() => void>()
 function set(next: Partial<SyncState>) {
   state = { ...state, ...next }
@@ -178,7 +185,7 @@ function schedulePush() {
 
 // ---------- the real thing ----------
 async function context(): Promise<SyncContext> {
-  return { drive: DRIVES[state.provider!], device: deviceId(), deviceName: state.deviceName, key: state.encrypted ? await loadKey() : null }
+  return { drive: driveFor(activeAccount()!), device: deviceId(), deviceName: state.deviceName, key: state.encrypted ? await loadKey() : null }
 }
 
 let running: Promise<void> | null = null
@@ -187,7 +194,7 @@ export function syncNow(): Promise<void> {
   if (!state.provider || state.locked || !state.online) return Promise.resolve()
   running ??= (async () => {
     try {
-      const drive = DRIVES[state.provider!]
+      const drive = driveFor(activeAccount()!)
       if (!(await drive.ready())) { set({ auth: 'expired' }); return }
       const result = await syncOnce(await context(), (label, done, total) => set({ transfer: { label, done, total } }))
       set({ auth: 'ok', transfer: null, pending: pendingCount(), lastSyncAt: Date.now(), issue: null, lastError: undefined,
@@ -211,49 +218,20 @@ addEventListener('focus', () => { if (canSync(state)) void syncNow() })
 setInterval(() => { if (canSync(state) && document.visibilityState === 'visible') void syncNow() }, 3 * 60_000)
 addEventListener('online', () => { if (canSync(state)) void syncNow() })
 
-/** Sign in (call from a click). Returns what the connect flow should ask next. */
-export async function connect(provider: ProviderId): Promise<'choose' | 'done' | 'cancelled' | 'locked'> {
-  set({ auth: 'authorizing', provider, lastError: undefined })
-  try {
-    const acct = await DRIVES[provider].signIn()
-    set({ auth: 'ok', account: acct.email, accountName: acct.name, avatar: acct.avatar, issue: null })
-  } catch (e) {
-    set({ provider: null, auth: 'none', account: null })
-    if ((e as Error).name === 'SignInCancelled') return 'cancelled'
-    throw e
-  }
-  const files = await DRIVES[provider].list()
-  const remoteHasLibrary = files.some((f) => f.name === ENTRIES)
-  const encrypted = files.some((f) => f.name === KEYFILE)
-  resetBase()
-  if (encrypted) { set({ encrypted: true, locked: true }); return 'locked' }
-  const localDecks = decks(getLibrary()).filter(isLive).length
-  if (remoteHasLibrary && localDecks) return 'choose'
-  await finishConnect('merge')
-  return 'done'
-}
-
-export async function finishConnect(choice: 'merge' | 'remote' | 'upload', _localDecks = 0) {
-  notifiedThisInterruption = false
-  if (choice === 'remote') {
-    const { applyRemote } = await import('./library')
-    applyRemote({ upserts: [], deletes: Object.keys(getLibrary().entries) })
-  }
-  set({ transfer: { label: 'Syncing your library', done: 0, total: 1 } })
-  await syncNow()
-  if (!state.lastError && state.provider) toast({ message: `${PROVIDERS[state.provider].name} is up to date`, tone: 'ok' })
-}
-
-export function cancelConnect() {
-  set({ provider: null, account: null, auth: 'none', transfer: null })
-}
-
 /** A user gesture: Google needs one to hand out a new token. */
 export async function reconnect() {
   if (!state.provider || state.auth === 'reconnecting') return
   set({ auth: 'reconnecting' })
   try {
-    await DRIVES[state.provider].reconnect()
+    const acct = activeAccount()!
+    const r = await reauthenticate(acct)
+    // Signed in as somebody else: their sign-in is undone; this library never syncs into their storage.
+    if (!r.ok) {
+      set({ auth: 'expired' })
+      toast({ message: `That was ${r.who.email}. Sign in as ${acct.email ?? acct.name} to sync this account, or add ${r.who.email} as another account.`, duration: 10_000 })
+      return
+    }
+    updateAccount(acct.id, { remoteId: acct.remoteId ?? r.who.id, name: r.who.name || acct.name, email: r.who.email, avatar: r.who.avatar ?? acct.avatar })
     set({ auth: 'ok' })
     notifiedThisInterruption = false
     await syncNow()
@@ -264,17 +242,16 @@ export async function reconnect() {
   }
 }
 
-export async function disconnect() {
-  const p = state.provider
-  if (p) await DRIVES[p].signOut().catch(() => {})
+/** Forgets the active account's credentials on this device (removing it does this). No revocation: other devices
+ *  signed in to the same storage keep working. */
+export async function forgetProvider() {
+  const a = activeAccount()
+  if (a && a.kind !== 'local') await driveFor(a).forget().catch(() => {})
   await storeKey(null)
-  resetBase()
-  set({ ...initial, deviceName: state.deviceName, online: state.online })
-  if (p) toast({ message: `Disconnected ${PROVIDERS[p].name}. Your library stays in this browser.` })
 }
 
 export async function unlock(passphrase: string): Promise<boolean> {
-  const file = await readKeyFile(DRIVES[state.provider!])
+  const file = await readKeyFile(driveFor(activeAccount()!))
   if (!file) { set({ locked: false, encrypted: false }); return true }
   const key = await unlockKey(passphrase, file)
   if (!key) return false
@@ -307,8 +284,11 @@ export const resolveConflicts = () => set({ conflicts: 0 })
 
 // First check on load: is the linked provider still usable without asking?
 if (state.provider && !new URLSearchParams(location.search).has('sync')) {
-  DRIVES[state.provider].prepare()
-  void DRIVES[state.provider].ready().then((ok) => {
+  const drive = driveFor(activeAccount()!)
+  drive.prepare()
+  void drive.ready().then((ok: boolean) => {
+    const a = activeAccount()!
+    if (ok && !a.remoteId) void drive.account().then((who) => updateAccount(a.id, { remoteId: who.id, name: who.name || a.name, email: who.email, avatar: who.avatar ?? a.avatar })).catch(() => {})
     set({ auth: ok ? 'ok' : 'expired', pending: pendingCount() })
     if (ok) void syncNow()
   })

@@ -1,5 +1,6 @@
 // Mobile composition (DESIGN.md §2, §6 Mobile). Composes shared compositions only.
-import { GearSix, DownloadSimple, FolderSimple, FolderSimplePlus, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
+import { AccountAvatarButton } from '../compositions/AccountSwitcher'
+import { DownloadSimple, FolderSimple, FolderSimplePlus, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
 import { AnimatePresence } from 'motion/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ActionSheet } from '../compositions/ActionSheet'
@@ -71,7 +72,7 @@ export function MobileApp() {
         <>
           <TextButton onClick={() => setSelecting(true)}>Select</TextButton>
           <IconButton label={`New in ${destName}`} size="lg" tone="plain" tooltip={false} onClick={() => setSheet({ kind: 'create' })}><Plus size={22} /></IconButton>
-          {(route.name === 'home' || (route.name === 'files' && !route.folderId)) && <IconButton label="Settings" size="lg" tone="plain" tooltip={false} onClick={() => navigate({ name: 'settings', section: null })}><GearSix size={22} /></IconButton>}
+          {(route.name === 'home' || (route.name === 'files' && !route.folderId)) && <AccountAvatarButton />}
         </>
       ),
       leading: selecting ? (

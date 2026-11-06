@@ -6,6 +6,8 @@ import type { Request, Response, Row } from './protocol'
 type DB = { exec: (o: unknown) => unknown; close: () => void }
 
 let db: DB | null = null
+// Each account has its own pool directory and blob directory (the default account keeps the original names).
+let dirs = { dir: '/ream-db', blobs: 'blobs' }
 let pool: { wipeFiles: () => Promise<void>; OpfsSAHPoolDb: new (name: string) => DB } | null = null
 
 const SCHEMA = `
@@ -18,7 +20,7 @@ const SCHEMA = `
 async function open() {
   const sqlite3 = await sqlite3InitModule()
   pool = (await (sqlite3 as unknown as { installOpfsSAHPoolVfs: (o: object) => Promise<typeof pool> })
-    .installOpfsSAHPoolVfs({ directory: '/ream-db', initialCapacity: 6 }))!
+    .installOpfsSAHPoolVfs({ directory: dirs.dir, name: `opfs-sahpool${dirs.dir.replace(/\W/g, '-')}`, initialCapacity: 6 }))!
   db = new pool.OpfsSAHPoolDb('/library.sqlite3')
   db.exec({ sql: 'PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;' })
   db.exec({ sql: SCHEMA })
@@ -30,12 +32,13 @@ function rows(sql: string, bind?: unknown[]): Row[] {
 
 async function blobDir() {
   const root = await navigator.storage.getDirectory()
-  return root.getDirectoryHandle('blobs', { create: true })
+  return root.getDirectoryHandle(dirs.blobs, { create: true })
 }
 
 async function handle(req: Request): Promise<unknown> {
   switch (req.op) {
     case 'open': {
+      dirs = { dir: req.dir, blobs: req.blobs }
       if (!db) await open()
       return {
         entries: rows('SELECT json FROM entries').map((r) => JSON.parse(r.json as string)),
@@ -66,7 +69,7 @@ async function handle(req: Request): Promise<unknown> {
       db = null
       await pool?.wipeFiles()
       const root = await navigator.storage.getDirectory()
-      await root.removeEntry('blobs', { recursive: true }).catch(() => {})
+      await root.removeEntry(dirs.blobs, { recursive: true }).catch(() => {})
       await open()
       return null
     }

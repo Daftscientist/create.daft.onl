@@ -20,7 +20,7 @@ export interface CloudDrive {
   /** Loads the provider's sign-in code ahead of time, so a later click can open its window at once. */
   prepare(): void
   /** Interactive: must run inside a user gesture (a click), because it opens a sign-in window. */
-  signIn(): Promise<CloudAccount>
+  signIn(opts?: { another?: boolean }): Promise<CloudAccount>
   /** Interactive re-authorisation for a provider whose session lapsed (Google: about hourly). */
   reconnect(): Promise<void>
   /** True when calls can be made right now without asking the user. */
@@ -32,4 +32,6 @@ export interface CloudDrive {
   put(name: string, body: string, ifRev?: string | null): Promise<RemoteFile>
   remove(name: string): Promise<void>
   signOut(): Promise<void>
+  /** Forgets this device's credentials only: no revocation, so other devices keep their access. */
+  forget(): Promise<void>
 }

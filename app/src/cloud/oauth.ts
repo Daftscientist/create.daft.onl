@@ -24,7 +24,8 @@ export class SignInCancelled extends Error {
 export function openPopup(): Window {
   const w = 520, h = 680
   const left = Math.max(0, screenX + (outerWidth - w) / 2), top = Math.max(0, screenY + (outerHeight - h) / 2)
-  const win = open('about:blank', 'ream-signin', `popup,width=${w},height=${h},left=${left},top=${top}`)
+  // A name per attempt: a second sign-in never takes over the first one's window.
+  const win = open('about:blank', `ream-signin-${Math.random().toString(36).slice(2, 8)}`, `popup,width=${w},height=${h},left=${left},top=${top}`)
   if (!win) throw new PopupBlocked()
   return win
 }
@@ -39,8 +40,17 @@ export function popupForCode(win: Window, url: string, state: string): Promise<s
       if (e.data.error) reject(e.data.error === 'access_denied' ? new SignInCancelled() : new Error(e.data.error))
       else resolve(e.data.code as string)
     }
-    const timer = setInterval(() => { if (win.closed) { cleanup(); reject(new SignInCancelled()) } }, 400)
-    let cleanup = () => { removeEventListener('message', onMessage); clearInterval(timer) }
+    // A provider page with Cross-Origin-Opener-Policy makes the window look closed at once while it's still open.
+    // Closed within the first second means that: stop watching and wait for the callback (up to 10 minutes).
+    // Closed later means the person closed it.
+    const started = Date.now()
+    const timer = setInterval(() => {
+      if (!win.closed) return
+      clearInterval(timer)
+      if (Date.now() - started > 1200) { cleanup(); reject(new SignInCancelled()) }
+    }, 400)
+    const giveUp = setTimeout(() => { cleanup(); reject(new SignInCancelled()) }, 10 * 60_000)
+    let cleanup = () => { removeEventListener('message', onMessage); clearInterval(timer); clearTimeout(giveUp) }
     // Sign-in pages may set Cross-Origin-Opener-Policy, which severs window.opener; a same-origin
     // BroadcastChannel reaches us either way.
     const channel = new BroadcastChannel('ream-auth')

@@ -1,0 +1,66 @@
+/* Desktop trigger: the account at the top of the sidebar (Notion/Slack workspace switcher). */
+.trigger { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; height: 40px; padding: 0 8px 0 6px; border-radius: var(--r-sm); text-align: left; color: var(--ink); }
+.trigger:hover, .trigger[aria-expanded="true"] { background: var(--fill); }
+.trigger:focus-visible { outline: 2px solid var(--select); outline-offset: 1px; }
+.triggerText { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.15; }
+.triggerText b { font-size: 13.5px; font-weight: 640; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.triggerText span { font-size: 11.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.caret { color: var(--ink-3); flex: none; }
+.avatarButton { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; }
+.avatarButton:focus-visible { outline: 2px solid var(--select); }
+
+.menu { display: flex; flex-direction: column; gap: 4px; padding: 6px; }
+.me { display: flex; gap: 12px; align-items: center; padding: 10px 8px 12px; }
+.meText { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.meText b { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meText > span { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status { margin-top: 3px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px !important; color: var(--ink-3) !important; }
+.status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-4, #bbb); flex: none; }
+.status[data-tone="ok"]::before { background: #1e9e62; }
+.status[data-tone="busy"]::before { background: var(--select); }
+.status[data-tone="warn"]::before { background: #f2a900; }
+.status[data-tone="danger"]::before { background: var(--danger); }
+.alert { display: grid; grid-template-columns: auto 1fr; gap: 6px 8px; align-items: start; margin: 0 2px 6px; padding: 10px 12px; border-radius: var(--r-sm); background: color-mix(in srgb, #f2a900 14%, var(--paper)); color: var(--ink); font-size: 13px; line-height: 18px; }
+.alert > svg { color: #c98a00; margin-top: 1px; }
+.alert > button { grid-column: 2; justify-self: start; }
+
+.list { list-style: none; margin: 0; padding: 4px 0; border-top: 1px solid var(--hair); display: flex; flex-direction: column; gap: 2px; }
+.row { width: 100%; display: flex; align-items: center; gap: 11px; padding: 8px; border-radius: var(--r-sm); text-align: left; min-height: 52px; }
+.row:hover:not(:disabled) { background: var(--fill); }
+.row:focus-visible { outline: 2px solid var(--select); outline-offset: -2px; }
+.row:disabled { opacity: 0.7; }
+.rowText { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.rowText b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rowText span { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rowText .signin { color: var(--warn); font-weight: 560; }
+.rowIcon { color: var(--warn); flex: none; }
+.failed { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 0 8px 8px 51px; font-size: 12px; color: var(--ink-2); }
+.link { color: var(--select); font-weight: 600; font-size: 12px; }
+.link:hover { text-decoration: underline; }
+
+.actions { border-top: 1px solid var(--hair); padding-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+.action { display: flex; align-items: center; gap: 11px; height: 40px; padding: 0 8px; border-radius: var(--r-sm); font-size: 13.5px; font-weight: 560; color: var(--ink); text-align: left; }
+.action:hover { background: var(--fill); }
+.action:focus-visible { outline: 2px solid var(--select); outline-offset: -2px; }
+.actionIcon { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--ink-2); }
+
+/* The four ways to keep your work. */
+.choices { display: flex; flex-direction: column; gap: 8px; }
+.choice { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--r-md); background: var(--paper); box-shadow: inset 0 0 0 1px var(--hair); text-align: left; min-height: 72px; transition: box-shadow var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out); }
+.choice:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--hair), var(--shadow-tile-hover); }
+.choice:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
+.choice:disabled { opacity: 0.6; }
+.choiceText { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.choiceText b { font-size: 15px; font-weight: 640; display: flex; align-items: center; gap: 8px; }
+.choiceText > span { font-size: 13px; line-height: 18px; color: var(--ink-2); }
+.tag { font-size: 11px; font-weight: 640; padding: 2px 7px; border-radius: var(--r-pill); background: var(--select-soft); color: var(--select); }
+.localMark { width: 36px; height: 36px; border-radius: 9px; background: var(--fill); display: grid; place-items: center; color: var(--ink-2); flex: none; }
+.error { font-size: 13px; color: var(--danger); }
+.note { font-size: 13px; line-height: 19px; color: var(--ink-2); margin: 0 0 12px; }
+.naming { display: flex; flex-direction: column; gap: 10px; }
+.naming .note { margin: 0; }
+.namingActions { display: flex; justify-content: flex-end; gap: 8px; }
+.spin { animation: spin 0.9s linear infinite; color: var(--ink-3); flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.5s; } }
+.waiting { font-size: 13px; color: var(--ink-2); display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }

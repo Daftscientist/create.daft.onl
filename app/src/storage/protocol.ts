@@ -10,7 +10,7 @@ export type Mutation =
   | { kind: 'meta'; key: string; value: unknown }
 
 export type Op =
-  | { op: 'open' }
+  | { op: 'open'; dir: string; blobs: string }
   | { op: 'apply'; mutations: Mutation[] }
   | { op: 'wipe' }
   | { op: 'putBlob'; hash: string; bytes: ArrayBuffer }
