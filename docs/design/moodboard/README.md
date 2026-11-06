@@ -50,3 +50,12 @@ to **take** and what to **leave**. Live links matter for the motion references: 
 | `linear-mobile.jpg` | Dense yet readable mobile type |
 | `cosmos-mobile.jpg` | Single search + one primary action, nothing else |
 | `dribbble-file-manager-mobile.jpg` | Survey of mobile file-manager patterns (mostly what to avoid: dashboards of storage charts) |
+
+## Deck editor (captured 2026-11-06)
+
+| File | Source | Take | Leave |
+|---|---|---|---|
+| `editor-excalidraw-selected.jpg` | [excalidraw.com](https://excalidraw.com) | The property panel appears only for a selection, in short labelled sections with few choices | The panel floating over the canvas; sloppiness/hand-drawn styling |
+| `editor-tldraw-selected.jpg` | [tldraw.com](https://www.tldraw.com) | Crisp 1px selection frame, square screen-sized handles, compact undo/delete cluster | Pastel colour grid as the only colour choice |
+| `editor-polotno.jpg` | [studio.polotno.com](https://studio.polotno.com) | Contextual top bar for the selected object; zoom cluster bottom-centre | A second left rail of categories (our left edge is the slide rail) |
+| (live guide) | [Keynote: sidebar](https://support.apple.com/guide/keynote/tane0a9ddb35/mac) | The right-hand Format / Animate / Document inspector, contextual to the selection | — |
