@@ -347,6 +347,12 @@ export function indent(host: HTMLElement, r: Range | null, by: 1 | -1) {
   editParas(host, r, (p) => (p.list ? { ...p, level: Math.max(0, Math.min(8, p.level + by)), listStyle: p.list === 'ul' ? (['disc', 'circle', 'square'][Math.max(0, p.level + by) % 3]) : p.listStyle } : p))
 }
 
-export function alignParas(host: HTMLElement, r: Range | null, align: string) {
-  editParas(host, r, (p) => ({ ...p, style: mergeStyle(p.style, `text-align:${align}`) }))
+/** Paragraph styles (alignment, line spacing, space before and after) on the paragraphs in range. */
+export function styleParas(host: HTMLElement, r: Range | null, css: Record<string, string | null>) {
+  editParas(host, r, (p) => {
+    let style = p.style
+    for (const [k, v] of Object.entries(css)) style = v === null ? style.split(';').filter((d) => d.split(':')[0].trim() !== k).join(';') : mergeStyle(style, `${k}:${v}`)
+    return { ...p, style }
+  })
 }
+export const alignParas = (host: HTMLElement, r: Range | null, align: string) => styleParas(host, r, { 'text-align': align })

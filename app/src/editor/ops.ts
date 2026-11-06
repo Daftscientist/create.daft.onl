@@ -437,8 +437,55 @@ export function toggleHidden(ids: string[]) {
   })
 }
 
-export function setNotes(slideId: string, notes: string) {
-  editSlides('Speaker notes', (slides) => slides.map((s) => (s.id === slideId ? { ...s, notes: notes || undefined } : s)))
+/** Slide-level attributes domOXML reads on export: data-notes (speaker notes), data-transition*. */
+export function setSlideAttrs(attrs: Record<string, string | null>, label: string, slideIds?: string[]) {
+  const ids = slideIds ?? [getEditor().slideId!]
+  editSlides(label, (slides) => {
+    let changed = false
+    const next = slides.map((s) => {
+      if (!ids.includes(s.id)) return s
+      const root = parseSlide(s.html)
+      for (const [k, v] of Object.entries(attrs)) { if (v === null || v === '') root.removeAttribute(k); else root.setAttribute(k, v) }
+      const html = root.outerHTML
+      if (html === s.html) return s
+      changed = true
+      return { ...s, html }
+    })
+    return changed ? next : false
+  })
+}
+export const setNotes = (slideId: string, notes: string) => setSlideAttrs({ 'data-notes': notes.trim() ? notes : null }, 'Speaker notes', [slideId])
+export const notesOf = (s: SlideDoc) => parseSlide(s.html).getAttribute('data-notes') ?? ''
+
+/** An object's animation (domOXML's data-animate*: one effect per object here; others are kept). */
+export type Anim = { effect: string; step: number; delay: number; duration: number }
+export function animOf(el: Element): Anim | null {
+  const effect = el.getAttribute('data-animate')?.split(/\s+/)[0]
+  if (!effect) return null
+  const n = (a: string, d: number) => { const v = parseFloat(el.getAttribute(a)?.split(/\s+/)[0] ?? ''); return Number.isFinite(v) ? v : d }
+  return { effect, step: n('data-animate-step', 0), delay: n('data-animate-delay', 0), duration: n('data-animate-duration', 500) }
+}
+export function setAnimation(ids: string[], anim: Anim | null) {
+  editSlide(anim ? 'Animation' : 'Remove animation', (root) => {
+    // A new "on click" effect goes after every click already on the slide.
+    const steps = [...root.querySelectorAll('[data-animate-step]')].flatMap((e) => e.getAttribute('data-animate-step')!.split(/\s+/).map(Number))
+    const last = Math.max(0, ...steps.filter(Number.isFinite))
+    let i = 0
+    for (const id of ids) {
+      const el = find(root, id)
+      if (!el) continue
+      if (!anim) { for (const a of ['data-animate', 'data-animate-step', 'data-animate-delay', 'data-animate-duration', 'data-animate-amount', 'data-animate-order']) el.removeAttribute(a); continue }
+      const step = anim.step < 0 ? last + 1 + i++ : anim.step
+      const keep = (a: string) => (el.getAttribute(a) ?? '').split(/\s+/).slice(1).join(' ')
+      const put = (a: string, v: string) => el.setAttribute(a, [v, keep(a)].filter(Boolean).join(' '))
+      put('data-animate', anim.effect)
+      put('data-animate-step', String(step))
+      put('data-animate-delay', String(Math.round(anim.delay)))
+      put('data-animate-duration', String(Math.round(anim.duration)))
+      if (!el.hasAttribute('data-animate-amount')) el.setAttribute('data-animate-amount', '0')
+      el.removeAttribute('data-animate-order')
+    }
+  })
 }
 
 // ---------- defaults for new objects ----------

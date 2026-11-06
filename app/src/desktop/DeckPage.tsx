@@ -1,7 +1,7 @@
 // The deck editor (docs/design/specs/editor.md). Mica header with the insert bar, undo/redo, honest save
 // status, Download, Format|Ask and Present; the slide rail; the canvas; one shared, resizable column for
 // Format or Ask. Coarse pointers (tablets in the desktop shell) get the viewer.
-import { ArrowArcLeft, ArrowArcRight, ArrowLeft, CaretDown, ChatCircleText, DownloadSimple, Image as ImageIcon, Minus, Play, Plus, Shapes, SlidersHorizontal, TextT } from '@phosphor-icons/react'
+import { ArrowArcLeft, ArrowArcRight, ArrowLeft, CaretDown, ChartBar, Table, ChatCircleText, DownloadSimple, Image as ImageIcon, Minus, Play, Plus, Shapes, SlidersHorizontal, TextT } from '@phosphor-icons/react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { download, openDeck as touchDeck, retrySave, setLastSlide, useLibrary, useSaveState } from '../data/library'
 import { useActiveModel } from '../data/ai/settings'
@@ -22,6 +22,8 @@ import { copySelection, onClipboardEvent, pasteFromMenu } from '../editor/clipbo
 import { FormatPanel } from '../editor/FormatPanel'
 import { useHistory } from '../editor/history'
 import { insertPicture, insertShape, insertText, pickPicture, SHAPES, type ShapeKind } from '../editor/insert'
+import { CHART_TYPES, insertChart } from '../editor/chart'
+import { insertTable } from '../editor/table'
 import { applyUndo, regionOf, useEditorKeys } from '../editor/keys'
 import { duplicateObjects, group, newSlide, removeObjects, reorder, toggleAttr, ungroup } from '../editor/ops'
 import { Present } from '../editor/Present'
@@ -177,6 +179,15 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
     const r = e.currentTarget.getBoundingClientRect()
     setMenu({ anchor: { x: r.left, y: r.bottom + 6 }, label: 'Shape', items: SHAPES.map((x) => ({ label: x.label, run: () => insertShape(x.kind, visibleCentre()) })) })
   }
+  const tableMenu = (e: React.MouseEvent) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const sizes: [number, number][] = [[2, 2], [3, 3], [4, 3], [5, 4], [6, 5], [8, 6]]
+    setMenu({ anchor: { x: r.left, y: r.bottom + 6 }, label: 'Table', items: sizes.map(([rw, c]) => ({ label: `${c} columns × ${rw} rows`, run: () => insertTable(rw, c, visibleCentre()) })) })
+  }
+  const chartMenu = (e: React.MouseEvent) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    setMenu({ anchor: { x: r.left, y: r.bottom + 6 }, label: 'Chart', items: CHART_TYPES.map((t) => ({ label: t.label, run: () => insertChart(t.type, visibleCentre()) })) })
+  }
   const downloadMenu = (e: React.MouseEvent) => {
     const r = e.currentTarget.getBoundingClientRect()
     setMenu({ anchor: { x: r.right, y: r.bottom + 6, align: 'end' }, label: 'Download', items: [
@@ -189,7 +200,15 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
   const onDrop = (e: React.DragEvent) => {
     const kind = e.dataTransfer.getData('application/x-ream-insert')
     const at = slidePoint(e.clientX, e.clientY)
-    if (kind) { e.preventDefault(); e.stopPropagation(); if (kind === 'text') insertText(at); else if (kind === 'picture') void pic(at); else insertShape(kind as ShapeKind, at); return }
+    if (kind) {
+      e.preventDefault(); e.stopPropagation()
+      if (kind === 'text') insertText(at)
+      else if (kind === 'picture') void pic(at)
+      else if (kind === 'table') insertTable(3, 3, at)
+      else if (kind === 'chart') insertChart('column', at)
+      else insertShape(kind as ShapeKind, at)
+      return
+    }
     const file = [...e.dataTransfer.files].find((f) => f.type.startsWith('image/'))
     if (file) { e.preventDefault(); e.stopPropagation(); void insertPicture(file, at, size) }
   }
@@ -211,6 +230,8 @@ export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) 
             <InsertButton label="Text" hint="Insert a text box" iconOnly={iconOnly} icon={<TextT size={16} />} onClick={() => insertText(visibleCentre())} onDragStart={dragInsert('text')} />
             <InsertButton label="Shape" hint="Insert a shape" iconOnly={iconOnly} icon={<Shapes size={16} />} onClick={insertMenu} onDragStart={dragInsert('rect')} caret />
             <InsertButton label="Picture" hint="Insert a picture" iconOnly={iconOnly} icon={<ImageIcon size={16} />} onClick={() => void pic()} onDragStart={dragInsert('picture')} />
+            <InsertButton label="Table" hint="Insert a table" iconOnly={iconOnly || width < 1440} icon={<Table size={16} />} onClick={tableMenu} onDragStart={dragInsert('table')} caret />
+            <InsertButton label="Chart" hint="Insert a chart" iconOnly={iconOnly || width < 1440} icon={<ChartBar size={16} />} onClick={chartMenu} onDragStart={dragInsert('chart')} caret />
           </div>
         )}
         {!viewer && width >= 760 && (

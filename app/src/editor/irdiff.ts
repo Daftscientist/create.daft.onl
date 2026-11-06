@@ -11,6 +11,9 @@ import type { SlideDoc } from '../data/types'
 const GEOMETRY = new Set(['left', 'top', 'width', 'height', 'transform', 'transform-origin'])
 // Payloads that change whenever their node moves (domOXML re-derives them), so they don't make a node dirty.
 const MOVE_PAYLOADS = ['data-domoxml-group']
+// Animations are slide-level in the IR (SlideIR.animations): changing one keeps its node exact.
+const ANIM = ['data-animate', 'data-animate-step', 'data-animate-delay', 'data-animate-duration', 'data-animate-amount', 'data-animate-order']
+const animOf = (el: Element) => ANIM.map((a) => el.getAttribute(a) ?? '').join('|')
 
 export const parseSlide = (html: string): HTMLElement => {
   const body = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body
@@ -30,7 +33,7 @@ function withoutGeometry(el: Element): string {
   const c = el.cloneNode(true) as HTMLElement
   const strip = (x: HTMLElement) => {
     for (const p of [...x.style]) if (GEOMETRY.has(p)) x.style.removeProperty(p)
-    for (const a of MOVE_PAYLOADS) x.removeAttribute(a)
+    for (const a of [...MOVE_PAYLOADS, ...ANIM]) x.removeAttribute(a)
   }
   strip(c)
   // A group's geometry is its children's (it is display:contents).
@@ -52,10 +55,12 @@ export function settleSlide(prev: SlideDoc, next: SlideDoc): SlideDoc {
   const dirty = new Set(next.irDirty ?? [])
   const moved = new Set(next.irMoved ?? [])
   let htmlChanged = false
+  let anim = !!next.irAnim
   for (const [id, el] of topNodes(b)) {
     const old = before.get(id)
     if (!old) continue // a new object: never in the IR, captured anyway
     if (old.outerHTML === el.outerHTML) continue
+    if (animOf(old) !== animOf(el)) anim = true
     // A group moves as a whole only when its payload moved with it (the editor keeps it in step);
     // children moved some other way are left to the capture, which rebuilds the group.
     const isGroup = el.classList.contains('domoxml-group')
@@ -74,9 +79,12 @@ export function settleSlide(prev: SlideDoc, next: SlideDoc): SlideDoc {
   }
   const out: SlideDoc = { ...next }
   if (htmlChanged) out.html = b.outerHTML
-  if (!next.ir) { delete out.irDirty; delete out.irMoved; delete out.irSlide; return out }
+  if (!next.ir) { delete out.irDirty; delete out.irMoved; delete out.irSlide; delete out.irAnim; return out }
   out.irDirty = [...dirty]
   out.irMoved = [...moved]
+  // A deleted animated object takes its animation with it: the capture's list is the truth then too.
+  const after = topNodes(b)
+  if (anim || [...before].some(([id, el]) => !after.has(id) && el.hasAttribute('data-animate'))) out.irAnim = true
   if (next.irSlide || slideAttrs(a) !== slideAttrs(b)) out.irSlide = true
   return out
 }

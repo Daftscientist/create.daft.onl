@@ -415,8 +415,8 @@ export const clampZoom = (z: number) => Math.min(4, Math.max(0.1, z))
 
 /** Text can be edited in shapes, text boxes and table cells; not in pictures or kept payloads. */
 export function canEditText(el: HTMLElement): boolean {
-  if (el.tagName === 'IMG' || el.classList.contains('domoxml-preserved') || isGroup(el) || el.tagName.toLowerCase() === 'svg') return false
-  if (el.tagName === 'TABLE') return false
+  if (el.tagName === 'IMG' || el.classList.contains('domoxml-preserved') || isGroup(el) || el.tagName.toLowerCase() === 'svg' || el.hasAttribute('data-chart')) return false
+  if (el.tagName === 'TABLE') return true
   return hasText(el) || !!textHost(el)
 }
 

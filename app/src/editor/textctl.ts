@@ -7,7 +7,7 @@ import type { SlideDoc } from '../data/types'
 import { transact } from './history'
 import { cleanForStore, editSlide, find, openDeck, parasOf, removeObjects, runsOf, setParaStyle, setRunStyle, textHost, type Css } from './ops'
 import { getEditor, setEditor } from './session'
-import { alignParas, editParas, indent, insertStyled, normalizeHost, rangeIn, readParas, renderParas, restoreCaret, saveCaret, styleAt, styleRange, toggleList } from './text'
+import { editParas, styleParas, indent, insertStyled, normalizeHost, rangeIn, readParas, renderParas, restoreCaret, saveCaret, styleAt, styleRange, toggleList } from './text'
 
 type Live = {
   id: string
@@ -29,22 +29,31 @@ export const onTextChange = (l: () => void) => { listeners.add(l); return () => 
 export const editingLive = () => live
 
 /** Starts editing an object's text on the live stage. `at`: where the caret goes (client px). */
-export function beginEdit(stage: HTMLElement, id: string, at?: { x: number; y: number }) {
-  if (live?.id === id) { if (at) placeCaret(live, at); return }
+/** The table cell under a point (or at [row, column], or the first one). */
+function cellOf(table: HTMLElement, root: ShadowRoot, at?: { x: number; y: number }, cell?: [number, number]): HTMLElement | null {
+  if (cell) return (table.querySelectorAll('tr')[cell[0]]?.children[cell[1]] as HTMLElement | undefined) ?? null
+  if (at) for (const e of root.elementsFromPoint(at.x, at.y)) { const td = e.closest('td, th'); if (td && table.contains(td)) return td as HTMLElement }
+  return table.querySelector('td, th')
+}
+
+export function beginEdit(stage: HTMLElement, id: string, at?: { x: number; y: number }, cell?: [number, number]) {
+  if (live?.id === id && !cell && live.el.tagName !== 'TABLE') { if (at) placeCaret(live, at); return }
   endEdit({ keepSession: true })
   const el = stage.querySelector<HTMLElement>(`[data-domoxml-node-id="${CSS.escape(id)}"]`)
   const deck = openDeck()
   const slideId = getEditor().slideId
   if (!el || !deck || !slideId) return
-  let host = textHost(el)
+  const table = el.tagName === 'TABLE'
+  let host = table ? cellOf(el, stage.getRootNode() as ShadowRoot, at, cell) : textHost(el)
   if (!host) return
-  if (!host.querySelector('.domoxml-text, li')) {
+  if (table && !host.querySelector('.domoxml-text, li')) host.insertAdjacentHTML('beforeend', '<div class="domoxml-text" style="white-space:pre-wrap;text-align:left"><span><br></span></div>')
+  if (!table && !host.querySelector('.domoxml-text, li')) {
     // A shape without text: give it an empty centred paragraph in the deck's text style.
     host.style.display = 'flex'; host.style.flexDirection = 'column'; host.style.justifyContent = 'center'
     host.insertAdjacentHTML('beforeend', `<div class="domoxml-text" style="white-space:pre-wrap;text-align:center"><span style="font-family:Instrument Sans,sans-serif;font-size:18pt;font-weight:400;font-style:normal;color:rgba(255,255,255,1)"><br></span></div>`)
     el.setAttribute('data-ream-empty', '')
   }
-  host = textHost(el)!
+  if (!table) host = textHost(el)!
   const root = stage.getRootNode() as ShadowRoot
   host.setAttribute('contenteditable', 'true')
   host.setAttribute('spellcheck', 'true')
@@ -65,6 +74,14 @@ export function beginEdit(stage: HTMLElement, id: string, at?: { x: number; y: n
     }
   }
   const onKey = (e: KeyboardEvent) => {
+    if (table && e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !readParas(host).some((p) => p.list)) {
+      // Tab moves to the next cell (⇧Tab the previous), as in PowerPoint.
+      e.preventDefault(); e.stopPropagation()
+      const cells = [...el.querySelectorAll<HTMLElement>('td, th')]
+      const next = cells[cells.indexOf(host) + (e.shiftKey ? -1 : 1)]
+      if (next) { const tr = next.parentElement!; beginEdit(stage, id, undefined, [[...el.querySelectorAll('tr')].indexOf(tr as HTMLTableRowElement), [...tr.children].indexOf(next)]) }
+      return
+    }
     if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey) {
       const r = rangeIn(root)
       const inList = readParas(host).some((p) => p.list)
@@ -232,13 +249,12 @@ export function formatRuns(css: Css, label = 'Format text') {
 export function formatParas(css: Css) {
   const l = live
   if (l) {
-    const r = liveRange(l)
-    if (css['text-align']) alignParas(l.host, r, css['text-align'])
+    styleParas(l.host, liveRange(l), css)
     saveSoon(l)
     emit()
     return
   }
-  setParaStyle(getEditor().sel, css, 'Align text')
+  setParaStyle(getEditor().sel, css, css['text-align'] ? 'Align text' : 'Paragraph spacing')
 }
 
 export function list(kind: 'ul' | 'ol') {
@@ -264,7 +280,7 @@ export function shiftIndent(by: 1 | -1) {
 }
 
 /** What the text controls show: the style at the caret (editing) or of the first run (object). */
-export type TextState = { family: string; sizePt: number; bold: boolean; italic: boolean; underline: boolean; color: string; align: string; list: 'ul' | 'ol' | null }
+export type TextState = { family: string; sizePt: number; bold: boolean; italic: boolean; underline: boolean; color: string; align: string; list: 'ul' | 'ol' | null; lineHeight: number; before: number; after: number }
 export function textState(stage: HTMLElement | null): TextState | null {
   const l = live
   let node: Element | null = null
@@ -295,6 +311,10 @@ export function textState(stage: HTMLElement | null): TextState | null {
     color: p.color ?? cs.color,
     align: para ? getComputedStyle(para).textAlign.replace('start', 'left').replace('end', 'right') : 'left',
     list: para?.tagName === 'LI' ? (para.parentElement?.tagName === 'OL' ? 'ol' : 'ul') : null,
+    // Line spacing as PowerPoint's multiple of single spacing (domOXML writes 1.2 × the multiple).
+    lineHeight: (() => { const lh = (para as HTMLElement | null)?.style.lineHeight; const v = lh ? parseFloat(lh) : NaN; return Number.isFinite(v) && !/px|pt/.test(lh!) ? Math.round((v / 1.2) * 100) / 100 : 1 })(),
+    before: para ? Math.round(parseFloat(getComputedStyle(para).marginTop) * 0.75 * 10) / 10 : 0,
+    after: para ? Math.round(parseFloat(getComputedStyle(para).marginBottom) * 0.75 * 10) / 10 : 0,
   }
 }
 

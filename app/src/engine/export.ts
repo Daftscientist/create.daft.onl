@@ -33,7 +33,7 @@ function irIds(ir: string): Set<string> {
 
 async function slidePayload(sl: SlideDoc, css: string, w: number, h: number): Promise<object> {
   if (!sl.ir) return { snapshot: await captureSlide(sl.html, css, w, h) }
-  if (!sl.irDirty?.length && !sl.irMoved?.length && !sl.irSlide) return { ir: sl.ir }
+  if (!sl.irDirty?.length && !sl.irMoved?.length && !sl.irSlide && !sl.irAnim) return { ir: sl.ir }
   const slide = parseSlide(sl.html)
   const nodes = topNodes(slide)
   const order = [...nodes.keys()]
@@ -47,8 +47,8 @@ async function slidePayload(sl: SlideDoc, css: string, w: number, h: number): Pr
   const known = irIds(sl.ir)
   const dirty = sl.irDirty ?? []
   // Only what the IR can't supply needs the browser: edited and new objects, or a changed background.
-  const needsCapture = sl.irSlide || dirty.some((id) => nodes.has(id)) || order.some((id) => !known.has(id)) || nodes.size < slide.children.length
-  return { ir: sl.ir, order, moved, dirty, slideChanged: !!sl.irSlide, ...(needsCapture ? { snapshot: await captureSlide(sl.html, css, w, h) } : {}) }
+  const needsCapture = sl.irSlide || sl.irAnim || dirty.some((id) => nodes.has(id)) || order.some((id) => !known.has(id)) || nodes.size < slide.children.length
+  return { ir: sl.ir, order, moved, dirty, slideChanged: !!sl.irSlide, animChanged: !!sl.irAnim, ...(needsCapture ? { snapshot: await captureSlide(sl.html, css, w, h) } : {}) }
 }
 
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)

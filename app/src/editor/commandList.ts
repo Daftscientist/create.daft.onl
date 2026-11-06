@@ -5,6 +5,8 @@ import { liveStage, visibleCentre } from './Canvas'
 import { applyUndo } from './keys'
 import { align, distribute, duplicateObjects, duplicateSlides, deleteSlides, group, newSlide, removeObjects, reorder, toggleAttr, toggleHidden, ungroup } from './ops'
 import { insertPicture, insertShape, insertText, pickPicture, SHAPES } from './insert'
+import { CHART_TYPES, insertChart } from './chart'
+import { insertTable } from './table'
 import { getEditor, setEditor } from './session'
 import { list } from './textctl'
 
@@ -21,6 +23,8 @@ export function editorCommands(): EditorCommand[] {
     { id: 'e-text', title: 'Insert text box', keywords: 'add text', run: () => insertText(visibleCentre()) },
     ...SHAPES.map((x) => ({ id: `e-shape-${x.kind}`, title: `Insert ${x.label.toLowerCase()}`, keywords: 'shape add', run: () => insertShape(x.kind, visibleCentre()) })),
     { id: 'e-picture', title: 'Insert picture…', keywords: 'image photo add', run: () => void pickPicture().then((f) => f && insertPicture(f, visibleCentre(), size)) },
+    { id: 'e-table', title: 'Insert table', keywords: 'grid', run: () => insertTable(3, 3, visibleCentre()) },
+    ...CHART_TYPES.map((t) => ({ id: `e-chart-${t.type}`, title: `Insert ${t.label.toLowerCase()} chart`, keywords: 'graph data', run: () => insertChart(t.type, visibleCentre()) })),
     { id: 'e-new-slide', title: 'New slide', hint: '⌘↵', run: () => newSlide() },
     { id: 'e-blank-slide', title: 'New blank slide', run: () => newSlide('blank') },
     ...(slide ? [

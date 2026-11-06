@@ -16,15 +16,19 @@ import { Tooltip } from '../ui/Tooltip'
 import { liveStage } from './Canvas'
 import { boxOf, isGroup, members, unionBox, type Box } from './geometry'
 import { readPicture, pickPicture } from './insert'
-import { align, distribute, editSlide, find, group, hasText, moveToIndex, reorder, setAnchor, setBackground, setBoxes, setObjectStyle, textHost, toggleAttr, ungroup, type Align } from './ops'
+import { align, animOf, distribute, editSlide, find, group, hasText, moveToIndex, notesOf, reorder, setAnchor, setAnimation, setBackground, setBoxes, setNotes, setObjectStyle, setSlideAttrs, textHost, toggleAttr, ungroup, type Align } from './ops'
 import { select, setEditor, useEditor } from './session'
-import { formatParas, formatRuns, list, onTextChange, shiftIndent, textState } from './textctl'
+import { editingLive, endEdit, formatParas, formatRuns, list, onTextChange, shiftIndent, textState } from './textctl'
+import { CHART_TYPES, readSpec, setChart } from './chart'
+import { ChartData } from './ChartData'
+import { activeCell, borderCells, fillCells, tableOp } from './table'
 import { formatLength, localUnit, parseLength, parseNumber } from './units'
 import s from './FormatPanel.module.css'
 
-export type Kind = 'text' | 'shape' | 'picture' | 'preserved' | 'group' | 'table' | 'svg'
+export type Kind = 'text' | 'shape' | 'picture' | 'preserved' | 'group' | 'table' | 'svg' | 'chart'
 export function kindOf(el: HTMLElement): Kind {
   if (isGroup(el)) return 'group'
+  if (el.hasAttribute('data-chart')) return 'chart'
   if (el.classList.contains('domoxml-preserved')) return 'preserved'
   if (el.tagName === 'IMG') return 'picture'
   if (el.tagName === 'TABLE') return 'table'
@@ -34,7 +38,7 @@ export function kindOf(el: HTMLElement): Kind {
   if (el.querySelector(':scope > img, :scope img:only-child') && !hasText(el)) return 'picture'
   return filled ? 'shape' : 'text'
 }
-const KIND_NAME: Record<Kind, string> = { text: 'Text box', shape: 'Shape', picture: 'Picture', preserved: 'Chart', group: 'Group', table: 'Table', svg: 'Shape' }
+const KIND_NAME: Record<Kind, string> = { text: 'Text box', shape: 'Shape', picture: 'Picture', preserved: 'Chart', group: 'Group', table: 'Table', svg: 'Shape', chart: 'Chart' }
 export function objectName(el: HTMLElement): string {
   const k = kindOf(el)
   const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
@@ -88,6 +92,10 @@ export function FormatPanel({ deck, slide, index, onClose }: { deck: Deck; slide
         {styleable && kinds.some((k) => k !== 'text') && <EffectsSection sec={sec('effects', false)} els={els} ids={sel} />}
         {showText && kinds[0] !== 'text' && <TextSection sec={sec('text')} colors={deckColors} ids={sel} />}
         {els.length === 1 && kinds[0] === 'picture' && <PictureSection sec={sec('picture')} el={els[0]} id={sel[0]} />}
+        {els.length === 1 && kinds[0] === 'chart' && <ChartSection sec={sec('chart')} el={els[0]} id={sel[0]} />}
+        {els.length === 1 && kinds[0] === 'table' && <TableSection sec={sec('table')} el={els[0]} id={sel[0]} colors={deckColors} />}
+        {els.length === 1 && (kinds[0] === 'picture' || kinds[0] === 'chart' || kinds[0] === 'preserved' || kinds[0] === 'shape' || kinds[0] === 'svg') && <AltTextSection sec={sec('alt', false)} el={els[0]} id={sel[0]} />}
+        {els.length > 0 && <AnimateSection sec={sec('animate', false)} els={els} ids={sel} />}
         {els.length > 0 && <ArrangeSection sec={sec('arrange', els.length > 1 || kinds[0] === 'preserved')} els={els} ids={sel} size={deck.size ?? { w: 1280, h: 720 }} />}
       </div>
     </aside>
@@ -130,6 +138,11 @@ function TextSection({ sec, colors, ids }: { sec: Sec; colors: string[]; ids: st
         <Toggle label="Middle" on={false} onClick={() => setAnchor(ids, 'middle')}><AlignCenterVertical size={15} /></Toggle>
         <Toggle label="Bottom" on={false} onClick={() => setAnchor(ids, 'bottom')}><AlignBottom size={15} /></Toggle>
       </Row>
+      <Row label="Spacing">
+        <NumberField label="line" value={t.lineHeight} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0.5, Math.min(5, v)) }} onCommit={(v) => formatParas({ 'line-height': `${Math.round(v * 1.2 * 1000) / 1000}` })} step={0.1} hint="A multiple, like 1.15" />
+        <NumberField label="before" value={t.before} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(200, v)) }} onCommit={(v) => formatParas({ 'margin-top': v ? `${v}pt` : null })} hint="Points, like 6" />
+        <NumberField label="after" value={t.after} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(200, v)) }} onCommit={(v) => formatParas({ 'margin-bottom': v ? `${v}pt` : null })} hint="Points, like 6" />
+      </Row>
       <Row label="Lists">
         <Toggle label="Bullets" on={t.list === 'ul'} onClick={() => list('ul')}><ListBullets size={15} /></Toggle>
         <Toggle label="Numbering" on={t.list === 'ol'} onClick={() => list('ol')}><ListNumbers size={15} /></Toggle>
@@ -156,6 +169,8 @@ function FillSection({ sec, els, ids, colors }: { sec: Sec; els: HTMLElement[]; 
   const fill = svg ? path?.getAttribute('fill') ?? null : transparent(st.backgroundColor) ? null : st.backgroundColor
   const gradient = !svg && st.backgroundImage.includes('gradient')
   const picFill = !svg && st.backgroundImage.includes('url(')
+  // A two-colour linear gradient is editable here; anything richer stays as it came, behind a chip.
+  const ours = gradient ? parseGradient(first.style.backgroundImage) : null
   const bw = svg ? parseFloat(path?.getAttribute('stroke-width') ?? '0') : parseFloat(st.borderTopWidth) || 0
   const bc = svg ? path?.getAttribute('stroke') ?? null : bw ? st.borderTopColor : null
   const isRect = !svg && !st.clipPath.includes('polygon') && st.borderRadius !== '50%' && els.every((e) => kindOf(e) !== 'picture' || true)
@@ -163,10 +178,22 @@ function FillSection({ sec, els, ids, colors }: { sec: Sec; els: HTMLElement[]; 
   const pt = (px: number) => Math.round(px * 0.75 * 100) / 100
   return (
     <Section title="Fill · Border" {...sec}>
+      {!svg && !picFill && (
+        <Row label="Kind">
+          <button type="button" className={s.chipBtn} aria-pressed={!gradient} onClick={() => gradient && setObjectStyle(ids, { 'background-image': null, 'background-color': ours?.[1] ?? colors[0] ?? '#e8603c' }, 'Fill')}>Solid</button>
+          <button type="button" className={s.chipBtn} aria-pressed={gradient} onClick={() => !gradient && setObjectStyle(ids, { 'background-image': grad(90, fill ?? colors[0] ?? '#e8603c', colors[1] ?? '#ffffff'), 'background-color': null }, 'Gradient fill')}>Gradient</button>
+        </Row>
+      )}
       <Row label="Fill">
-        {gradient || picFill
-          ? <KeptChip label={gradient ? 'Gradient' : 'Picture fill'} onReplace={() => setObjectStyle(ids, { 'background-image': null, 'background-color': colors[0] ?? '#e8603c' }, 'Fill')} />
-          : <ColorWell label="Fill" value={fill} colors={colors} none="No fill" mixed={mixed((e) => css(e).backgroundColor)} onChange={(c) => setObjectStyle(ids, { 'background-color': c ?? 'transparent', 'background-image': null }, 'Fill')} />}
+        {picFill || (gradient && !ours)
+          ? <KeptChip label={gradient ? 'Gradient' : 'Picture fill'} onReplace={() => setObjectStyle(ids, { 'background-image': gradient ? grad(90, colors[0] ?? '#e8603c', colors[1] ?? '#ffffff') : null, 'background-color': gradient ? null : colors[0] ?? '#e8603c' }, 'Fill')} />
+          : gradient && ours
+            ? <>
+                <ColorWell label="Gradient start" value={ours[1]} colors={colors} onChange={(c) => c && setObjectStyle(ids, { 'background-image': grad(ours[0], c, ours[2]) }, 'Gradient fill')} />
+                <ColorWell label="Gradient end" value={ours[2]} colors={colors} onChange={(c) => c && setObjectStyle(ids, { 'background-image': grad(ours[0], ours[1], c) }, 'Gradient fill')} />
+                <NumberField label="°" value={ours[0]} format={(v) => `${v}°`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : ((Math.round(v) % 360) + 360) % 360 }} onCommit={(a) => setObjectStyle(ids, { 'background-image': grad(a, ours[1], ours[2]) }, 'Gradient angle')} hint="An angle, like 90" />
+              </>
+            : <ColorWell label="Fill" value={fill} colors={colors} none="No fill" mixed={mixed((e) => css(e).backgroundColor)} onChange={(c) => setObjectStyle(ids, { 'background-color': c ?? 'transparent', 'background-image': null }, 'Fill')} />}
       </Row>
       <Row label="Border">
         <ColorWell label="Border colour" value={bc} colors={colors} none="No border" onChange={(c) => setObjectStyle(ids, c ? { 'border-style': 'solid', 'border-color': c, 'border-width': bw ? `${bw}px` : '2px' } : { 'border-style': null, 'border-color': null, 'border-width': null }, 'Border')} />
@@ -301,6 +328,7 @@ function SlidePanel({ deck, slide, sec, colors }: { deck: Deck; slide: SlideDoc;
         </Row>
         {missing.map((f) => <p key={f} className={s.note}>{f} isn’t available here; showing a similar font. Exports keep {f}.</p>)}
       </Section>
+      <TransitionSection slide={slide} deck={deck} sec={sec('transition', false)} />
       <Section title="Objects on this slide" {...sec('objects')}>
         {!objects.length && <p className={s.note}>Nothing on this slide yet. Add text, a shape or a picture from the header.</p>}
         <ol className={s.objects} aria-label="Objects, front to back">
@@ -331,11 +359,12 @@ function SlidePanel({ deck, slide, sec, colors }: { deck: Deck; slide: SlideDoc;
 }
 
 function NotesField({ slide }: { slide: SlideDoc }) {
-  const [text, setText] = useState(slide.notes ?? '')
-  useEffect(() => setText(slide.notes ?? ''), [slide.id, slide.notes])
+  const stored = notesOf(slide)
+  const [text, setText] = useState(stored)
+  useEffect(() => setText(stored), [slide.id, stored])
   return (
     <textarea className={s.notes} value={text} placeholder="Notes for the presenter" aria-label="Speaker notes"
-      onChange={(e) => setText(e.target.value)} onBlur={() => { if (text !== (slide.notes ?? '')) void import('./ops').then((m) => m.setNotes(slide.id, text)) }} />
+      onChange={(e) => setText(e.target.value)} onBlur={() => { if (text !== stored) setNotes(slide.id, text) }} />
   )
 }
 
@@ -373,3 +402,143 @@ function fontExists(f: string): boolean {
   return a !== b || a2 !== b2
 }
 void textHost
+
+// ---------- motion (domOXML's data-transition* and data-animate*, written natively on export) ----------
+
+const TRANSITIONS = ['none', 'fade', 'push', 'wipe', 'split', 'cover', 'uncover', 'zoom', 'dissolve', 'morph', 'cut'] as const
+const DIRECTIONAL = new Set(['push', 'wipe', 'cover', 'uncover'])
+const DIRECTIONS = [['l', 'From right'], ['r', 'From left'], ['u', 'From bottom'], ['d', 'From top']] as const
+const cap = (x: string) => x[0].toUpperCase() + x.slice(1)
+
+function TransitionSection({ slide, deck, sec }: { slide: SlideDoc; deck: Deck; sec: Sec }) {
+  const root = new DOMParser().parseFromString(slide.html, 'text/html').querySelector('.domoxml-slide')
+  const type = root?.getAttribute('data-transition') ?? 'none'
+  const dur = Number(root?.getAttribute('data-transition-duration') ?? 700)
+  const dir = root?.getAttribute('data-transition-direction') ?? 'l'
+  const [menu, setMenu] = useState<MenuAnchor | null>(null)
+  const set = (attrs: Record<string, string | null>, all = false) => setSlideAttrs(attrs, 'Transition', all ? deck.slides.map((x) => x.id) : undefined)
+  return (
+    <Section title="Transition" {...sec}>
+      <Row label="Effect">
+        <button type="button" className={s.select} aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom + 4 }) }}>{cap(type)}</button>
+        <Menu open={!!menu} anchor={menu} label="Transition" onClose={() => setMenu(null)} items={TRANSITIONS.map((t) => ({ label: cap(t), selected: t === type, run: () => set(t === 'none' ? { 'data-transition': null, 'data-transition-duration': null, 'data-transition-direction': null } : { 'data-transition': t }) }))} />
+      </Row>
+      {type !== 'none' && type !== 'cut' && (
+        <Row label="Duration">
+          <NumberField label="s" value={dur / 1000} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0.1, Math.min(10, v)) }} onCommit={(v) => set({ 'data-transition-duration': String(Math.round(v * 1000)) })} hint="Use seconds, like 0.7" />
+        </Row>
+      )}
+      {DIRECTIONAL.has(type) && (
+        <Row label="Direction">
+          {DIRECTIONS.map(([d, label]) => <button key={d} type="button" className={s.chipBtn} aria-pressed={dir === d} onClick={() => set({ 'data-transition-direction': d })}>{label.replace('From ', '')}</button>)}
+        </Row>
+      )}
+      {type !== 'none' && deck.slides.length > 1 && <Row><button type="button" className={s.linkBtn} onClick={() => set({ 'data-transition': type, 'data-transition-duration': root?.getAttribute('data-transition-duration') ?? null, 'data-transition-direction': root?.getAttribute('data-transition-direction') ?? null }, true)}>Apply to all slides</button></Row>}
+    </Section>
+  )
+}
+
+const EFFECTS = [['appear', 'Appear'], ['fade', 'Fade in'], ['grow', 'Grow'], ['spin', 'Spin'], ['fade-out', 'Fade out'], ['disappear', 'Disappear']] as const
+
+function AnimateSection({ sec, els, ids }: { sec: Sec; els: HTMLElement[]; ids: string[] }) {
+  const a = animOf(els[0])
+  const [menu, setMenu] = useState<MenuAnchor | null>(null)
+  const label = a ? EFFECTS.find(([k]) => k === a.effect)?.[1] ?? a.effect : 'None'
+  return (
+    <Section title="Animate" {...sec} aside={a ? <span className={s.badge}>{a.step === 0 ? 'With slide' : `Click ${a.step}`}</span> : undefined}>
+      <Row label="Effect">
+        <button type="button" className={s.select} aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom + 4 }) }}>{label}</button>
+        <Menu open={!!menu} anchor={menu} label="Animation" onClose={() => setMenu(null)} items={[
+          { label: 'None', selected: !a, run: () => setAnimation(ids, null) },
+          { kind: 'header', content: 'Entrance' }, ...EFFECTS.slice(0, 2).map(([k, l]) => ({ label: l, selected: a?.effect === k, run: () => setAnimation(ids, { effect: k, step: a?.step ?? -1, delay: a?.delay ?? 0, duration: a?.duration ?? 500 }) })),
+          { kind: 'header', content: 'Emphasis' }, ...EFFECTS.slice(2, 4).map(([k, l]) => ({ label: l, selected: a?.effect === k, run: () => setAnimation(ids, { effect: k, step: a?.step ?? -1, delay: a?.delay ?? 0, duration: a?.duration ?? 1000 }) })),
+          { kind: 'header', content: 'Exit' }, ...EFFECTS.slice(4).map(([k, l]) => ({ label: l, selected: a?.effect === k, run: () => setAnimation(ids, { effect: k, step: a?.step ?? -1, delay: a?.delay ?? 0, duration: a?.duration ?? 500 }) })),
+        ]} />
+      </Row>
+      {a && <>
+        <Row label="Start">
+          <button type="button" className={s.chipBtn} aria-pressed={a.step > 0} onClick={() => a.step === 0 && setAnimation(ids, { ...a, step: -1 })}>On click</button>
+          <button type="button" className={s.chipBtn} aria-pressed={a.step === 0} onClick={() => setAnimation(ids, { ...a, step: 0 })}>With slide</button>
+        </Row>
+        <Row label="Timing">
+          <NumberField label="s" value={a.duration / 1000} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0.05, Math.min(60, v)) }} onCommit={(v) => setAnimation(ids, { ...a, duration: v * 1000 })} hint="Duration in seconds" />
+          <NumberField label="delay" value={a.delay / 1000} format={(v) => `${v}`} parse={(x, c) => { const v = parseNumber(x, c); return v === null ? null : Math.max(0, Math.min(60, v)) }} onCommit={(v) => setAnimation(ids, { ...a, delay: v * 1000 })} hint="Delay in seconds" />
+        </Row>
+      </>}
+    </Section>
+  )
+}
+
+// ---------- charts, tables, alt text ----------
+
+function ChartSection({ sec, el, id }: { sec: Sec; el: HTMLElement; id: string }) {
+  const spec = readSpec(el)
+  const [editing, setEditing] = useState(false)
+  if (!spec) return null
+  return (
+    <Section title="Chart" {...sec}>
+      <Row label="Type">
+        {CHART_TYPES.map((t) => <button key={t.type} type="button" className={s.chipBtn} aria-pressed={spec.type === t.type} onClick={() => setChart(id, t.type === 'pie' ? { ...spec, type: t.type, series: spec.series.slice(0, 1) } : { ...spec, type: t.type })}>{t.label}</button>)}
+      </Row>
+      <Row><Button variant="secondary" onClick={() => setEditing(true)}>Edit data…</Button></Row>
+      <p className={s.note}>Exports as a native PowerPoint chart, with its data, so Edit Data works there too.</p>
+      {editing && <ChartData id={id} spec={spec} onClose={() => setEditing(false)} />}
+    </Section>
+  )
+}
+
+function TableSection({ sec, el, id, colors }: { sec: Sec; el: HTMLElement; id: string; colors: string[] }) {
+  const live = editingLive()
+  const at = activeCell(el, live && el.contains(live.host) ? live.host : null)
+  const editingCell = !!(live && el.contains(live.host))
+  const op = (o: Parameters<typeof tableOp>[1]) => { endEdit(); tableOp(id, o, at) }
+  const rows = el.querySelectorAll('tr').length, cols = el.querySelectorAll('col').length || el.querySelector('tr')?.children.length || 0
+  return (
+    <Section title="Table" {...sec} aside={<span className={s.badge}>{rows} × {cols}</span>}>
+      <Row label="Rows">
+        <button type="button" className={s.chipBtn} onClick={() => op('row-above')}>Above</button>
+        <button type="button" className={s.chipBtn} onClick={() => op('row-below')}>Below</button>
+        <button type="button" className={s.chipBtn} disabled={rows < 2} onClick={() => op('del-row')}>Delete</button>
+      </Row>
+      <Row label="Columns">
+        <button type="button" className={s.chipBtn} onClick={() => op('col-left')}>Left</button>
+        <button type="button" className={s.chipBtn} onClick={() => op('col-right')}>Right</button>
+        <button type="button" className={s.chipBtn} disabled={cols < 2} onClick={() => op('del-col')}>Delete</button>
+      </Row>
+      <Row label={editingCell ? 'This cell' : 'Cells'}>
+        <ColorWell label="Cell fill" value={null} colors={colors} none="No fill" onChange={(c) => fillCells(id, c, editingCell ? at : 'all')} />
+        {!editingCell && <><span className={s.hint}>Header</span><ColorWell label="Header fill" value={null} colors={colors} none="No fill" onChange={(c) => fillCells(id, c, 'header')} /></>}
+        <span className={s.hint}>Borders</span>
+        <ColorWell label="Borders" value={null} colors={colors} none="No borders" onChange={(c) => borderCells(id, c)} />
+      </Row>
+      <p className={s.hint}>Double-click a cell to type. Tab moves to the next cell.</p>
+    </Section>
+  )
+}
+
+function AltTextSection({ sec, el, id }: { sec: Sec; el: HTMLElement; id: string }) {
+  const stored = el.getAttribute('alt') ?? el.getAttribute('aria-label') ?? ''
+  const [text, setText] = useState(stored)
+  useEffect(() => setText(stored), [id, stored])
+  const save = () => {
+    if (text === stored) return
+    editSlide('Alt text', (root) => {
+      const e = find(root, id)
+      if (!e) return false
+      if (e.tagName === 'IMG') e.setAttribute('alt', text)
+      else if (text) e.setAttribute('aria-label', text)
+      else e.removeAttribute('aria-label')
+    })
+  }
+  return (
+    <Section title="Alt text" {...sec}>
+      <textarea className={s.notes} style={{ minHeight: 64 }} value={text} placeholder="Describe it for people who can’t see it" aria-label="Alt text" onChange={(e) => setText(e.target.value)} onBlur={save} />
+    </Section>
+  )
+}
+
+const grad = (angle: number, a: string, b: string) => `linear-gradient(${angle}deg, ${a}, ${b})`
+function parseGradient(v: string): [number, string, string] | null {
+  const m = /^linear-gradient\((-?[\d.]+)deg,\s*(rgba?\([^)]*\)|#[0-9a-f]{3,8}|[a-z]+),\s*(rgba?\([^)]*\)|#[0-9a-f]{3,8}|[a-z]+)\)$/i.exec(v.trim())
+  return m ? [parseFloat(m[1]), m[2], m[3]] : null
+}

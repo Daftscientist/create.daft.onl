@@ -82,7 +82,7 @@ def _patched(node, geometry):
     return type(node).model_validate(data)
 
 
-def _splice(original, captured, order, moved, dirty, slide_changed):
+def _splice(original, captured, order, moved, dirty, slide_changed, anim_changed=False):
     """Per-object exactness (Ream's editor spec, contract 2): every node that wasn't edited ships its
     original IR (patched with its new box when it was moved), in the slide's current order; edited and
     new nodes come from the capture."""
@@ -104,7 +104,10 @@ def _splice(original, captured, order, moved, dirty, slide_changed):
         else:
             contents.extend(n for n, _ in buckets.get(nid, []))
     base = captured if slide_changed and captured is not None else original
-    return base.model_copy(update={"contents": contents, "width": original.width, "height": original.height})
+    update = {"contents": contents, "width": original.width, "height": original.height}
+    if anim_changed and captured is not None:
+        update["animations"] = captured.animations
+    return base.model_copy(update=update)
 
 
 def export_pptx(payload):
@@ -133,7 +136,10 @@ def export_pptx(payload):
         if s.get("ir"):
             original = SlideIR.model_validate_json(s["ir"])
             irs.append(
-                _splice(original, captured, s.get("order", []), s.get("moved", {}), set(s.get("dirty", [])), s.get("slideChanged", False))
+                _splice(
+                    original, captured, s.get("order", []), s.get("moved", {}), set(s.get("dirty", [])),
+                    s.get("slideChanged", False), s.get("animChanged", False),
+                )
                 if "order" in s
                 else original
             )

@@ -66,6 +66,9 @@ function setTransform(el: HTMLElement, rot: number) {
   else el.style.removeProperty('transform')
 }
 
+/** Kinds of object that redraw for a new size (tables scale their grid, charts redraw). */
+export const resizeHooks: ((el: HTMLElement, w: number, h: number) => void)[] = []
+
 /** Writes an object's box. A group maps its members (and its payload) from the old box to the new one. */
 export function setBox(el: HTMLElement, b: Box) {
   if (isGroup(el)) {
@@ -82,6 +85,7 @@ export function setBox(el: HTMLElement, b: Box) {
     }
     return
   }
+  for (const hook of resizeHooks) hook(el, Math.max(1, b.w), Math.max(1, b.h))
   el.style.left = `${round(b.x)}px`
   el.style.top = `${round(b.y)}px`
   el.style.width = `${round(Math.max(1, b.w))}px`
