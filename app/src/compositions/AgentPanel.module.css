@@ -69,3 +69,9 @@
 .visionActions { display: flex; gap: 6px; flex-wrap: wrap; }
 .composer > .talk { grid-area: talk; }
 .mic { display: inline-block; vertical-align: -1px; margin-right: 6px; color: var(--ink-3); }
+.talk { display: flex; flex-direction: column; gap: 6px; }
+.bubbleMe { align-self: flex-end; max-width: 85%; padding: 8px 12px; border-radius: 16px 16px 4px 16px; background: var(--fill-2); font-size: 13.5px; line-height: 20px; }
+.bubbleMe[data-live] { opacity: 0.7; }
+.bubbleReam { align-self: flex-start; max-width: 85%; padding: 8px 12px; border-radius: 16px 16px 16px 4px; background: var(--paper); box-shadow: 0 0 0 1px var(--hair); font-size: 13.5px; line-height: 20px; }
+.work { display: flex; flex-direction: column; gap: 6px; padding: 2px 0; }
+.workLine { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); }

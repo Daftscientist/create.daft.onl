@@ -3,7 +3,7 @@
 // chat model with its reasoning level, text to speech and a voice). One is active; Ask's voice mode uses it.
 import { PencilSimple, Trash } from '@phosphor-icons/react'
 import { useState } from 'react'
-import { browserCanListen, deleteVoiceAgent, saveVoiceAgent, speaker, type VoiceAgent } from '../data/ai/voice'
+import { browserCanListen, fileTranscribers, deleteVoiceAgent, saveVoiceAgent, speaker, type VoiceAgent } from '../data/ai/voice'
 import { VoicePicker } from './VoicePicker'
 import { modelsFor, REASONING_LEVELS, useAi, type ModelRef, type ReasoningLevel } from '../data/ai/settings'
 import { Button, IconButton } from '../ui/Button'
@@ -48,7 +48,7 @@ const TITLES: Record<Step, string> = { kind: 'What kind of voice?', model: 'Whic
  *  what was chosen. Editing an existing one opens at its kind with every answer filled in. */
 function AgentDialog({ agent, onClose }: { agent: VoiceAgent | null; onClose: () => void }) {
   const ai = useAi()
-  const voiceModels = modelsFor(ai, 'voice'), chat = modelsFor(ai, 'text'), stt = modelsFor(ai, 'transcription'), tts = modelsFor(ai, 'speech')
+  const voiceModels = modelsFor(ai, 'voice'), chat = modelsFor(ai, 'text'), stt = fileTranscribers(ai), tts = modelsFor(ai, 'speech')
   const [kind, setKind] = useState<VoiceAgent['kind']>(agent?.kind ?? (voiceModels.length ? 'live' : 'parts'))
   const [step, setStep] = useState<Step>('kind')
   const [name, setName] = useState(agent?.name ?? '')

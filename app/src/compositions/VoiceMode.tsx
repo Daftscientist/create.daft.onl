@@ -1,9 +1,9 @@
-// Ask, by voice (spec: live voice). Replaces the message box while on: the thread above stays the same (what you
-// said, what Ream did and said, its tools and edits), and this bar shows who's talking, what it heard so far, the
-// voice agent in use, mute and back to typing.
+// Ask, by voice (spec: live voice). Replaces the message box while on. The conversation shows in the thread as
+// bubbles (yours as you speak, Ream's split at its pauses) with its deck work as quiet rows; this bar shows the
+// state, the voice in use, mute, stop and back to typing.
 import { Microphone, MicrophoneSlash, Waveform, Keyboard, CaretDown } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
-import { activeVoiceAgent, isEcho, listen, speaker, startLive, voiceChosen, type Listener, type Live, type Speaker } from '../data/ai/voice'
+import { activeVoiceAgent, startConversation, voiceChosen, type Conversation, type VoiceState } from '../data/ai/voice'
 import { Popover } from '../ui/Popover'
 import { VoicePicker } from './VoicePicker'
 import { setAi, useAi, type ModelRef, type ReasoningLevel } from '../data/ai/settings'
@@ -11,82 +11,50 @@ import { navigate } from '../lib/router'
 import { Button, IconButton } from '../ui/Button'
 import s from './VoiceMode.module.css'
 
-type State = 'starting' | 'listening' | 'hearing' | 'thinking' | 'speaking' | 'working' | 'error'
-const LABEL: Record<State, string> = { starting: 'Starting…', listening: 'Listening', hearing: 'Hearing you', thinking: 'Thinking', speaking: 'Speaking', working: 'Working on the deck', error: 'Voice stopped' }
+type State = VoiceState | 'error'
+const LABEL: Record<State, string> = { connecting: 'Starting…', listening: 'Listening', hearing: 'Hearing you', thinking: 'Thinking', speaking: 'Speaking', working: 'Working on the deck', error: 'Voice stopped' }
 
-export function VoiceMode({ onSend, onUser, onAssistant, onExit, onStop }: {
-  /** One turn of deck work; resolves with the reply to say. */
-  onSend: (text: string, o: { model?: ModelRef | null; reasoning?: ReasoningLevel; voice: true }) => Promise<string>
-  /** Live voice: what was said each way, shown in the thread. */
-  onUser: (text: string) => void
-  onAssistant: (text: string, done: boolean) => void
-  onExit: () => void
+export function VoiceMode({ onStart, onHeard, onSaid, delegate, onStop, onExit }: {
+  /** A voice is starting (or switched): which model does its deck work. */
+  onStart: (thinker: { model?: ModelRef | null; reasoning?: ReasoningLevel }) => void
+  onHeard: (text: string, final: boolean) => void
+  onSaid: (text: string, fresh: boolean) => void
+  delegate: (request: string, progress: (label: string) => void) => Promise<string>
+  /** Stop: cancel the deck work as well as the speech. */
   onStop: () => void
+  onExit: () => void
 }) {
   const ai = useAi()
   // The first time, choose how Ream talks before anything starts listening.
   const [ready, setReady] = useState(() => voiceChosen(ai))
   const agent = ready ? activeVoiceAgent(ai) : null
   const [chooser, setChooser] = useState<HTMLElement | null>(null)
-  const [state, setState] = useState<State>('starting')
-  const [heard, setHeard] = useState('')
+  const [state, setState] = useState<State>('connecting')
   const [error, setError] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
-  const live = useRef<{ listener?: Listener; speaker?: Speaker; live?: Live } | null>(null)
-  const lastSaid = useRef('')
-  const send = useRef(onSend); send.current = onSend
-  const user = useRef(onUser); user.current = onUser
-  const assistant = useRef(onAssistant); assistant.current = onAssistant
+  const convo = useRef<Conversation | null>(null)
+  const cb = useRef({ onStart, onHeard, onSaid, delegate, onStop })
+  cb.current = { onStart, onHeard, onSaid, delegate, onStop }
 
   useEffect(() => {
     if (!agent) return
     let gone = false
-    const cur: { listener?: Listener; speaker?: Speaker; live?: Live } = {}
-    live.current = cur
-    setState('starting'); setError(null)
-    const fail = (m: string) => { if (!gone) { setError(m); setState('error') } }
-    ;(async () => {
-      try {
-        if (agent.kind === 'parts') {
-          cur.speaker = speaker(agent)
-          cur.listener = await listen(agent, {
-            onPartial: (t) => { if (!gone) { setHeard(t); if (t) setState('hearing') } },
-            onError: fail,
-            onUtterance: async (t) => {
-              // Ream's own reply heard back through the speakers: not something the user said.
-              if (isEcho(t, lastSaid.current)) { setHeard(''); return }
-              cur.listener?.mute(true); setHeard(''); setState('thinking')
-              try {
-                const reply = await send.current(t, { model: agent.llm, reasoning: agent.reasoning, voice: true })
-                if (gone) return
-                if (reply.trim()) { lastSaid.current = reply; setState('speaking'); await cur.speaker?.say(reply) }
-              } finally { if (!gone) { cur.listener?.mute(false); setState('listening') } }
-            },
-          })
-          if (gone) cur.listener.stop(); else setState('listening')
-        } else {
-          cur.live = await startLive(agent, {
-            instructions: 'You are Ream, a friendly presentation assistant, talking with the user about the deck they have open. Keep spoken replies short. For anything that reads or changes the deck (slides, text, design, notes, comments), call work_on_deck with a clear, complete request, then tell the user briefly what was done.',
-            tools: [{
-              name: 'work_on_deck',
-              description: 'Hand a request to Ream’s deck assistant, which can read and change anything in the open deck. Returns what it did.',
-              parameters: { type: 'object', properties: { request: { type: 'string', description: 'What to do, in full' } }, required: ['request'] },
-              run: async (args) => send.current(String(args.request ?? ''), { model: agent.supervisor, reasoning: agent.reasoning, voice: true }),
-            }],
-            onUser: (t) => user.current(t),
-            onAssistant: (t, done) => assistant.current(t, done),
-            onState: (x) => { if (!gone) setState(x === 'connecting' ? 'starting' : x) },
-            onError: fail,
-          })
-          if (gone) cur.live.stop()
-        }
-      } catch (e) { fail((e as Error).message) }
-    })()
-    return () => { gone = true; cur.listener?.stop(); cur.speaker?.stop(); cur.live?.stop() }
+    setState('connecting'); setError(null)
+    cb.current.onStart(agent.kind === 'live' ? { model: agent.supervisor, reasoning: agent.reasoning } : { model: agent.llm, reasoning: agent.reasoning })
+    void startConversation(agent, {
+      // A session that outlived its effect (StrictMode's double run, or a switch while connecting) must never
+      // reach the thread: that was every exchange showing twice.
+      onHeard: (t, f) => { if (!gone) cb.current.onHeard(t, f) },
+      onSaid: (t, f) => { if (!gone) cb.current.onSaid(t, f) },
+      onState: (x) => { if (!gone) { setState(x); if (x === 'listening') setError(null) } },
+      onError: (m) => { if (!gone) { setError(m); setState('error') } },
+      delegate: (r, p) => (gone ? Promise.resolve('That voice session ended.') : cb.current.delegate(r, p)),
+    }).then((c) => { if (gone) c.stop(); else convo.current = c }).catch((e) => { if (!gone) { setError((e as Error).message); setState('error') } })
+    return () => { gone = true; convo.current?.stop(); convo.current = null; cb.current.onStop() }
   }, [agent?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toggleMute = () => { const m = !muted; setMuted(m); live.current?.listener?.mute(m); live.current?.live?.mute(m) }
-  const interrupt = () => { live.current?.speaker?.stop(); onStop() }
+  const toggleMute = () => { const m = !muted; setMuted(m); convo.current?.mute(m) }
+  const interrupt = () => { convo.current?.interrupt(); onStop() }
 
   if (!ready) {
     return (
@@ -114,8 +82,8 @@ export function VoiceMode({ onSend, onUser, onAssistant, onExit, onStop }: {
       <div className={s.status}>
         <span className={s.orb} data-state={state} aria-hidden><Waveform size={18} weight="bold" /></span>
         <span className={s.what}>
-          <b role="status" aria-live="polite">{muted ? 'Muted' : LABEL[state]}</b>
-          <span className={s.heard}>{error ?? (heard || (state === 'listening' ? 'Say what you’d like to change' : ''))}</span>
+          <b role="status" aria-live="polite">{muted ? 'Muted' : error && state !== 'listening' ? 'Something went wrong' : LABEL[state]}</b>
+          <span className={s.heard}>{error ?? (state === 'listening' ? 'Talk any time; you can interrupt Ream' : state === 'working' ? 'Doing it now; Ream will tell you' : '')}</span>
         </span>
       </div>
       <div className={s.row}>

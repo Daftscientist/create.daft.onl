@@ -33,6 +33,9 @@ import s from './AgentPanel.module.css'
 type Step = { label: string; ms: number }
 /** One slide a turn changed, frozen as it was when the turn ended (a deleted slide as it was before). */
 type Change = { kind: 'added' | 'edited' | 'deleted' | 'moved'; number: number; slide: SlideDoc }
+type Edit = { before: SlideDoc[]; after: SlideDoc[]; undone?: boolean }
+/** A voice conversation, in order: what you said, what Ream said (a bubble per pause), and the deck work it did. */
+type TalkItem = { kind: 'heard'; text: string; done?: boolean } | { kind: 'said'; text: string } | { kind: 'work'; label: string; done: boolean; changes?: Change[]; edit?: Edit }
 /** What happened in a turn, in order: the model's words between (or before) its steps. */
 type Item = { kind: 'text'; text: string } | { kind: 'step'; label: string }
 type Turn = {
@@ -42,6 +45,8 @@ type Turn = {
   log?: Item[]
   /** Said aloud (voice mode). */
   voice?: boolean
+  /** A voice conversation (this turn is the whole session). */
+  talk?: TalkItem[]
   /** Names of the files attached to the message. */
   files?: string[]
   text: string
@@ -70,7 +75,6 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   const ready = !!useActiveModel()
   const busy = useRef(false)
   const [voice, setVoice] = useState(false)
-  const liveAt = useRef(0)
   const [files, setFiles] = useState<Attachment[]>([])
   // The model asked to see slides it can't: the run waits on the user's choice here.
   const visionWait = useRef<((c: 'retry' | 'continue') => void) | null>(null)
@@ -194,29 +198,103 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
     setFiles((x) => [...x, ...out])
   }
 
+  /** Puts back what an edit changed: only its slides, and only those nobody changed since (editor spec, contract 5).
+   *  Slides it added go too, unless they've been edited. */
+  const revert = (edit: Edit): boolean => {
+    const d = getLibrary().entries[deck.id] as Deck
+    if (d.slides === edit.after) { updateSlides(deck.id, edit.before, { exact: true }); return true }
+    const before = new Map(edit.before.map((x) => [x.id, x]))
+    const after = new Map(edit.after.map((x) => [x.id, x]))
+    let skipped = 0, reverted = 0
+    const slides = d.slides.flatMap((x) => {
+      const a = after.get(x.id), b = before.get(x.id)
+      if (!a || a === b) return [x]
+      if (!b) { if (x === a || x.html === a.html) { reverted++; return [] } skipped++; return [x] }
+      if (x === a || x.html === a.html) { reverted++; return [b] }
+      skipped++
+      return [x]
+    })
+    if (!reverted) { toast({ message: 'Those slides changed after this edit, so it wasn’t undone.' }); return false }
+    updateSlides(deck.id, slides, { exact: true })
+    if (skipped) toast({ message: `${skipped === 1 ? 'One slide was' : `${skipped} slides were`} changed since and kept as they are.` })
+    return true
+  }
   const undo = (i: number) => {
     const t = turns[i]
-    if (!t.edit || t.edit.undone) return
-    const d = getLibrary().entries[deck.id] as Deck
-    if (d.slides === t.edit.after) updateSlides(deck.id, t.edit.before, { exact: true })
-    else {
-      // Only this turn's slides go back, and only those nobody changed since (editor spec, contract 5).
-      const before = new Map(t.edit.before.map((x) => [x.id, x]))
-      const after = new Map(t.edit.after.map((x) => [x.id, x]))
-      let skipped = 0, reverted = 0
-      const slides = d.slides.map((x) => {
-        const a = after.get(x.id), b = before.get(x.id)
-        if (!a || !b || a === b) return x
-        if (x === a || x.html === a.html) { reverted++; return b }
-        skipped++
-        return x
-      })
-      if (!reverted) { toast({ message: 'Those slides changed after this edit, so it wasn’t undone.' }); return }
-      updateSlides(deck.id, slides, { exact: true })
-      if (skipped) toast({ message: `${skipped === 1 ? 'One slide was' : `${skipped} slides were`} changed since and kept as they are.` })
-    }
+    if (!t.edit || t.edit.undone || !revert(t.edit)) return
     setTurns((ts) => ts.map((x, j) => (j === i ? { ...x, edit: { ...x.edit!, undone: true } } : x)))
   }
+
+  // ---- voice: a conversation turn, with hidden deck work ----
+  const talkAt = useRef(0), talkSeq = useRef(0)
+  // Started by the Talk button (one turn per voice session; switching voices keeps it).
+  const startTalk = () => { talkAt.current = Date.now() * 100 + (talkSeq.current++ % 100); setTurns((ts) => [...ts.filter((t) => !(t.voice && t.talk && !t.talk.length)), { prompt: '', slide, steps: [], voice: true, talk: [], text: '', state: 'done', startedAt: talkAt.current }]) }
+  const patchTalk = (fn: (items: TalkItem[]) => TalkItem[]) => setTurns((ts) => ts.map((t) => (t.startedAt === talkAt.current && t.talk ? { ...t, talk: fn(t.talk) } : t)))
+  const heard = (text: string, final: boolean) => patchTalk((items) => {
+    const last = items[items.length - 1]
+    if (last?.kind === 'heard' && !last.done) return [...items.slice(0, -1), { kind: 'heard', text, done: final }]
+    return text ? [...items, { kind: 'heard', text, done: final }] : items
+  })
+  const said = (text: string, fresh: boolean) => patchTalk((items) => {
+    const last = items[items.length - 1]
+    if (!fresh && last?.kind === 'said') return [...items.slice(0, -1), { kind: 'said', text }]
+    return [...items, { kind: 'said', text }]
+  })
+  const workChain = useRef<Promise<unknown>>(Promise.resolve())
+  const working = useRef(new Set<AbortController>())
+  /** Stop (or leaving voice) stops the deck work too: the running job aborts, queued ones never start. */
+  const cancelWork = () => { for (const ac of working.current) ac.abort(); working.current.clear() }
+  /** The voice's delegated work: the deck agent, hidden. Its activity shows on a work row; what changed shows as a
+   *  card; its words go back to the voice to say, not into the thread. One job at a time. */
+  const delegate = (request: string, progress: (label: string) => void): Promise<string> => {
+    const ac = new AbortController(); working.current.add(ac)
+    const job = workChain.current.then(async () => {
+      if (ac.signal.aborted) return 'Stopped before it started; nothing was changed.'
+      patchTalk((items) => [...items, { kind: 'work', label: 'Working on it', done: false }])
+      const setWork = (fn: (w: TalkItem & { kind: 'work' }) => TalkItem & { kind: 'work' }) => patchTalk((items) => {
+        const at = items.map((x) => x.kind).lastIndexOf('work')
+        return at < 0 ? items : items.map((x, i) => (i === at && x.kind === 'work' ? fn(x) : x))
+      })
+      const before = (getLibrary().entries[deck.id] as Deck).slides
+      const lockedIds = new Set<string>()
+      let reply = ''
+      const st = getEditor(), stage = liveStage()
+      try {
+        await runAgent({
+          deckId: deck.id, prompt: request, history: [], signal: ac.signal,
+          context: { slide, selection: st.sel.map((sid) => { const el = stage && find(stage, sid); return { id: sid, name: el ? objectName(el) : sid } }), editsSince: userEditsSince(deck.id, mark.current) },
+          model: voiceThinker.current?.model, reasoning: voiceThinker.current?.reasoning,
+          on: (ev) => {
+            if (ev.type === 'activity') { setWork((w) => ({ ...w, label: ev.label })); progress(ev.label) }
+            else if (ev.type === 'text') reply += ev.delta
+            else if (ev.type === 'changed') dispatchEvent(new CustomEvent('ream:ai-edit', { detail: ev }))
+            else if (ev.type === 'need-vision') ev.resolve('continue')
+            else if (ev.type === 'edit') {
+              const d = getLibrary().entries[deck.id] as Deck
+              const ids = ev.slides.map((n) => d.slides[n - 1]?.id).filter((x): x is string => !!x && !lockedIds.has(x))
+              if (ids.length) { ids.forEach((x) => lockedIds.add(x)); setEditor((e) => ({ locked: [...e.locked, ...ids] })) }
+            }
+          },
+        })
+      } catch (e) { reply = ac.signal.aborted ? 'Stopped, as asked.' : `It didn’t work: ${(e as Error).message}` }
+      finally {
+        working.current.delete(ac)
+        if (lockedIds.size) setEditor((e) => ({ locked: e.locked.filter((x) => !lockedIds.has(x)) }))
+        mark.current = historyMark()
+      }
+      const after = (getLibrary().entries[deck.id] as Deck).slides
+      const changes = before !== after ? changesOf(before, after) : []
+      setWork((w) => ({ ...w, done: true, label: changes.length ? summary(changes) : ac.signal.aborted ? 'Stopped' : 'Looked at the deck', changes: changes.length ? changes : undefined, edit: changes.length ? { before, after } : undefined }))
+      return ac.signal.aborted ? `Stopped, as asked.${changes.length ? ` Before stopping: ${summary(changes)}.` : ' Nothing was changed.'}` : reply.trim()
+    })
+    workChain.current = job.catch(() => undefined)
+    return job
+  }
+  const voiceThinker = useRef<{ model?: ModelRef | null; reasoning?: ReasoningLevel } | null>(null)
+  const undoWork = (turnAt: number, itemAt: number) => setTurns((ts) => ts.map((t) => {
+    if (t.startedAt !== turnAt || !t.talk) return t
+    return { ...t, talk: t.talk.map((x, i) => (i === itemAt && x.kind === 'work' && x.edit && !x.edit.undone && revert(x.edit) ? { ...x, edit: { ...x.edit, undone: true } } : x)) }
+  }))
 
   const suggestions = [`Tighten the wording on slide ${slide + 1}`, 'Make a summary slide', `Turn slide ${slide + 1} into a chart`]
 
@@ -241,6 +319,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
         )}
         {turns.map((t, i) => (
           <div key={i} className={s.turn}>
+            {t.talk ? <TalkView turn={t} deck={deck} onUndo={(k) => undoWork(t.startedAt, k)} /> : <>
             <div className={s.user}>{t.voice && <Microphone size={12} weight="bold" className={s.mic} aria-label="Said aloud" />}{t.prompt}<span className={s.ctx}>Slide {t.slide + 1}{t.files?.length ? ` · ${t.files.join(', ')}` : ''}</span></div>
             {t.log ? <Log turn={t} line={line} /> : <>
               {t.state === 'running' && !t.text ? <Activity line={line} /> : t.steps.length > 0 && (
@@ -261,6 +340,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
                 {!t.edit.undone && t.state !== 'running' && <button type="button" className={s.undo} onClick={() => undo(i)}>Undo</button>}
               </div>
             ) : null}
+            </>}
           </div>
         ))}
       {vision && <VisionCard onChoice={chooseVision} />}
@@ -268,11 +348,12 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
 
       {voice ? (
         <VoiceMode
-          onSend={(text, o) => send(text, undefined, o)}
-          onUser={(text) => { liveAt.current = Date.now(); setTurns((ts) => [...ts, { prompt: text, slide, steps: [], log: [], voice: true, text: '', state: 'done', startedAt: liveAt.current }]) }}
-          onAssistant={(text) => setTurns((ts) => ts.map((t) => (t.startedAt === liveAt.current && t.voice ? { ...t, text, log: [{ kind: 'text', text }] } : t)))}
-          onExit={() => setVoice(false)}
-          onStop={() => abort.current?.abort()}
+          onStart={(thinker) => { voiceThinker.current = thinker }}
+          onHeard={heard}
+          onSaid={said}
+          delegate={delegate}
+          onStop={cancelWork}
+          onExit={() => { cancelWork(); setVoice(false); setTurns((ts) => ts.filter((t) => !(t.voice && t.talk && !t.talk.length))) }}
         />
       ) : (
       <form className={s.composer} onSubmit={(e) => { e.preventDefault(); void send(draft) }}
@@ -288,7 +369,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
             <input ref={picker} type="file" multiple hidden accept="image/*,.pdf,.txt,.md,.csv,.json,.html,.xml" onChange={(e) => { if (e.target.files) void attach(e.target.files); e.target.value = '' }} />
             <ModelPicker variant="chip" /><ReasoningPicker />
           </span>
-          <IconButton label="Talk to Ream" size="sm" tone="plain" type="button" className={s.talk} onClick={() => setVoice(true)}><Waveform size={16} weight="bold" /></IconButton>
+          <IconButton label="Talk to Ream" size="sm" tone="plain" type="button" className={s.talk} onClick={() => { startTalk(); setVoice(true) }}><Waveform size={16} weight="bold" /></IconButton>
           <textarea
             ref={input}
             rows={1}
@@ -420,6 +501,26 @@ function VisionCard({ onChoice }: { onChoice: (c: 'retry' | 'continue') => void 
       </div>
       <Menu open={!!menu} anchor={menu} label="Model for pictures" onClose={() => setMenu(null)} search={options.length > 10 ? 'Find a model' : undefined}
         items={options.map((m) => ({ label: m.id, hint: providerName(m.provider, browser), run: () => { setAi({ visionModel: m }); onChoice('retry') } }))} />
+    </div>
+  )
+}
+
+/** A voice conversation: your bubbles on the right, Ream's on the left (one per pause), and its deck work as a quiet
+ *  row with what changed. */
+function TalkView({ turn, deck, onUndo }: { turn: Turn; deck: Deck; onUndo: (itemAt: number) => void }) {
+  return (
+    <div className={s.talk}>
+      {(turn.talk ?? []).map((x, k) => x.kind === 'heard'
+        ? <div key={k} className={s.bubbleMe} data-live={!x.done || undefined}><Microphone size={11} weight="bold" className={s.mic} aria-hidden />{x.text}</div>
+        : x.kind === 'said'
+          ? (/[\p{L}\p{N}]/u.test(x.text) ? <div key={k} className={s.bubbleReam}>{x.text}</div> : null)
+          : (
+            <div key={k} className={s.work}>
+              <div className={s.workLine} role={x.done ? undefined : 'status'}>{x.done ? <Check size={12} weight="bold" /> : <span className={s.dot} aria-hidden />}{x.label}</div>
+              {x.changes && x.edit && <ChangeCard deck={deck} changes={x.changes} undone={!!x.edit.undone} onUndo={() => onUndo(k)} />}
+            </div>
+          ))}
+      {!turn.talk?.length && <p className={s.meta}>Listening. Say what you’d like to change.</p>}
     </div>
   )
 }
