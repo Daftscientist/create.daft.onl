@@ -1,5 +1,6 @@
 import type { Account } from '../data/accounts'
 import { dropboxDrive } from './dropbox'
+import { fakeDrive } from './fake'
 import { googleDrive } from './google'
 import { onedriveDrive } from './onedrive'
 import { scoped } from '../data/accounts'
@@ -11,7 +12,9 @@ export function driveFor(a: Pick<Account, 'id' | 'kind'> & { email?: string }): 
   const k = `${a.kind}:${a.id}`
   let d = made.get(k)
   if (!d) {
-    if (a.kind === 'dropbox') d = dropboxDrive(a.id)
+    const fake = import.meta.env.DEV ? localStorage.getItem('ream.fakecloud') : null
+    if (fake) d = fakeDrive(fake)
+    else if (a.kind === 'dropbox') d = dropboxDrive(a.id)
     else if (a.kind === 'google') d = googleDrive(a.id, () => a.email)
     else if (a.kind === 'onedrive') d = onedriveDrive(a.id)
     else throw new Error('A local account has no cloud drive.')

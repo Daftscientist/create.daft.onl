@@ -9,9 +9,10 @@ import { blankSlide, SAMPLE_IDS, sampleLibrary, sampleSlides } from './fixtures'
 import { withFamilyNames } from '../slides/fonts'
 import { settleSlides } from '../editor/irdiff'
 import { slideText as textOf } from '../slides/SlideView'
-import type { Deck, Entry, ExportFormat, Folder, LibraryState, SlideDoc } from './types'
+import type { Chat, Deck, Entry, ExportFormat, Folder, LibraryState, SlideDoc } from './types'
 import { deviceId, noteLocalChange } from './sync'
 import { onBeforeSwitch } from './accounts'
+import { adoptLibraryPrefs, type DevicePrefs } from './prefs'
 import { toast } from './toasts'
 import { confirm } from '../ui/Dialog'
 
@@ -25,7 +26,10 @@ const emit = () => { for (const l of listeners) l() }
 export type BootState = 'booting' | 'ready' | 'failed'
 let boot: BootState = 'booting'
 let bootError = ''
-const setBoot = (b: BootState) => { boot = b; emit() }
+let booted: () => void
+/** Resolves once the library has opened (sync must not run before: opening would overwrite what it brought in). */
+export const whenBooted = new Promise<void>((r) => { booted = r })
+const setBoot = (b: BootState) => { boot = b; emit(); if (b === 'ready') booted() }
 export const useBoot = () => useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => boot)
 export const getBootError = () => bootError
 
@@ -46,7 +50,7 @@ function fromOpened(o: Awaited<ReturnType<typeof storage.open>>): LibraryState {
     if (x.type === 'deck' && x.status === 'importing') x = { ...x, status: 'failed', phase: undefined, error: 'The import was interrupted. Try again.' }
     entries[e.id] = x
   }
-  return { entries, lastBackupAt: (o.meta.lastBackupAt as number | null) ?? null, tombstones: (o.meta.tombstones as Record<string, number> | undefined) ?? {}, settings: (o.meta.settings as LibraryState['settings']) ?? {} }
+  return { entries, lastBackupAt: (o.meta.lastBackupAt as number | null) ?? null, tombstones: (o.meta.tombstones as Record<string, number> | undefined) ?? {}, settings: (o.meta.settings as LibraryState['settings']) ?? {}, chats: Object.fromEntries(Object.entries(o.meta).filter(([k, v]) => k.startsWith('chat:') && v).map(([k, v]) => [k.slice(5), v as Chat])) }
 }
 
 /** A new library starts empty. `?demo` fills it with the sample decks (for trying the UI). */
@@ -94,6 +98,7 @@ export function bootLibrary() {
       const opened = await storage.open()
       state = opened.meta.seeded ? fromOpened(opened) : await seed(demo)
       if (opened.meta.seeded && !opened.meta.samplesRemoved) await removeSeededSamples()
+      adoptLibraryPrefs(state.settings?.appearance as Partial<DevicePrefs> | undefined, (appearance) => setLibrarySettings({ appearance }))
       setBoot('ready')
     } catch (e) {
       bootError = (e as Error).message
@@ -121,6 +126,10 @@ function diff(prev: LibraryState, next: LibraryState): Mutation[] {
   if (prev.lastBackupAt !== next.lastBackupAt) out.push({ kind: 'meta', key: 'lastBackupAt', value: next.lastBackupAt })
   if (prev.tombstones !== next.tombstones) out.push({ kind: 'meta', key: 'tombstones', value: next.tombstones ?? {} })
   if (prev.settings !== next.settings) out.push({ kind: 'meta', key: 'settings', value: next.settings ?? {} })
+  if (prev.chats !== next.chats) {
+    const a = prev.chats ?? {}, b = next.chats ?? {}
+    for (const id of new Set([...Object.keys(a), ...Object.keys(b)])) if (a[id] !== b[id]) out.push({ kind: 'meta', key: `chat:${id}`, value: b[id] ?? null })
+  }
   return out
 }
 
@@ -610,9 +619,25 @@ export function addConflictCopy(d: Deck, deviceName: string) {
 export function setLibrarySettings(update: Record<string, unknown>) {
   commit({ ...state, settings: { ...state.settings, ...update, clock: tick() } })
 }
+/** Ask's conversation for a deck. */
+export const chatFor = (deckId: string): unknown[] => state.chats?.[deckId]?.turns ?? []
+/** Saves Ask's conversation (stamped, so it syncs and the newest wins). */
+export function setChat(deckId: string, turns: unknown[]) {
+  const chats = { ...state.chats }
+  if (turns.length) chats[deckId] = { clock: tick(), device: deviceId(), turns }
+  else delete chats[deckId]
+  commit({ ...state, chats }, true)
+}
+/** Conversations pulled from the cloud. */
+export function applyRemoteChats(changed: Record<string, Chat | null>) {
+  const chats = { ...state.chats }
+  for (const [id, c] of Object.entries(changed)) { if (c) chats[id] = c; else delete chats[id] }
+  commit({ ...state, chats }, true, 'remote')
+}
 /** Settings pulled from the cloud, applied as-is. */
 export function applyRemoteSettings(settings: LibraryState['settings']) {
   commit({ ...state, settings }, true, 'remote')
+  adoptLibraryPrefs(settings?.appearance as Partial<DevicePrefs> | undefined, (appearance) => setLibrarySettings({ appearance }))
 }
 
 /** Replaces a deck's slides in one change (editor, agent, reorders). `exact`: the slides are an

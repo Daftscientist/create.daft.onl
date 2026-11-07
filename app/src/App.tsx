@@ -5,6 +5,7 @@ import { DesktopApp } from './desktop/DesktopApp'
 import { MobileApp } from './mobile/MobileApp'
 import { useShell } from './lib/shell'
 import { useDevicePrefs } from './data/prefs'
+if (import.meta.env.DEV) void import('./lib/devhooks')
 
 export function App() {
   const shell = useShell()

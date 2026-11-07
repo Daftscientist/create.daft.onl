@@ -1,4 +1,5 @@
 // Per-view display preferences (sort, grid/list), remembered across visits (DESIGN.md "Lists at scale").
+import { scoped } from '../data/accounts'
 import { useState } from 'react'
 import type { Entry } from '../data/types'
 
@@ -8,11 +9,11 @@ export type Prefs = { sort: SortKey; view: ViewMode }
 
 export function usePrefs(key: string, initial: Prefs): [Prefs, (p: Partial<Prefs>) => void] {
   const [prefs, setPrefs] = useState<Prefs>(() => {
-    try { return { ...initial, ...JSON.parse(localStorage.getItem(`office.prefs.${key}`) ?? '{}') } } catch { return initial }
+    try { return { ...initial, ...JSON.parse(localStorage.getItem(scoped(`office.prefs.${key}`)) ?? '{}') } } catch { return initial }
   })
   const update = (p: Partial<Prefs>) => setPrefs((prev) => {
     const next = { ...prev, ...p }
-    try { localStorage.setItem(`office.prefs.${key}`, JSON.stringify(next)) } catch { /* in-memory only */ }
+    try { localStorage.setItem(scoped(`office.prefs.${key}`), JSON.stringify(next)) } catch { /* in-memory only */ }
     return next
   })
   return [prefs, update]

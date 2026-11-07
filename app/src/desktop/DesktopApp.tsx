@@ -1,4 +1,5 @@
 // Desktop composition (DESIGN.md §2): frame + sidebar + inset panel. Composes only.
+import { RemoteDeckGate } from '../compositions/RemoteDeckGate'
 import { Plus, UploadSimple } from '@phosphor-icons/react'
 import { AnimatePresence, LayoutGroup } from 'motion/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -69,7 +70,7 @@ export function DesktopApp() {
   if (route.name === 'deck') {
     return (
       <ActionsContext.Provider value={actions}>
-        <DeckPage deckId={route.deckId} slide={route.slide} />
+        <RemoteDeckGate deckId={route.deckId}><DeckPage deckId={route.deckId} slide={route.slide} /></RemoteDeckGate>
         <AnimatePresence>{palette && <CommandPalette key="cp" onClose={() => setPalette(false)} />}</AnimatePresence>
         <AnimatePresence><ConfirmHost /></AnimatePresence>
         <AnimatePresence><SyncFlowHost /></AnimatePresence>

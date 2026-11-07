@@ -13,7 +13,7 @@ const ICON: Record<Summary['tone'], React.ReactNode> = {
   danger: <CloudWarning size={16} />,
   muted: <HardDrives size={16} />,
 }
-const ACTION_LABEL = { reconnect: 'Reconnect', review: 'Review', unlock: 'Unlock', 'open-provider': 'Manage' } as const
+const ACTION_LABEL = { reconnect: 'Sign in', review: 'Review', unlock: 'Unlock', 'open-provider': 'Manage' } as const
 
 export function useSyncSummary() {
   const sync = useSync()
@@ -24,7 +24,7 @@ export function runSyncAction(a: NonNullable<Summary['action']>) {
   if (a === 'reconnect') void reconnect()
   else if (a === 'unlock') openSyncFlow('unlock')
   else if (a === 'review') navigate({ name: 'files', folderId: null })
-  else navigate({ name: 'settings', section: 'accounts' })
+  else navigate({ name: 'settings', section: 'storage' })
 }
 
 /** Sidebar footer / mobile Files card: two quiet lines, no stacked buttons. The action is an inline text
@@ -34,11 +34,14 @@ export function SyncStatus({ sub, noticeShown = false }: { sub?: string; noticeS
   const detail = sum.detail ?? sub
   // While the in-page notice offers the action, the footer only states the situation (no second button).
   const action = noticeShown && noticeReason(sync) ? undefined : sum.action
+  // Sync is invisible while it works: the line only appears when something needs you (sign in, unlock, full,
+  // conflicts) or during an account's first sync on this device. Local accounts show their backup state.
+  if (sync.provider && (sum.tone === 'ok' || (sum.tone === 'busy' && !sync.transfer) || (sum.tone === 'muted' && !sync.pending))) return null
   return (
     <div className={s.status} data-tone={sum.tone}>
       <span className={s.icon} aria-hidden>{sync.locked ? <Lock size={16} /> : sync.provider ? ICON[sum.tone] : <HardDrives size={16} />}</span>
       <div className={s.body}>
-        <button type="button" className={s.line} onClick={() => navigate({ name: 'settings', section: 'accounts' })}>{sum.title}</button>
+        <button type="button" className={s.line} onClick={() => navigate({ name: 'settings', section: 'storage' })}>{sum.title}</button>
         {(detail || action) && (
           <span className={s.sub}>
             {detail}

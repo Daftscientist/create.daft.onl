@@ -12,6 +12,8 @@ export type Account = {
   name: string
   email?: string
   avatar?: string
+  /** Local accounts: the seed of their generated face (lib/avatar). */
+  avatarSeed?: string
   /** Monogram colour for local accounts (and a fallback when a photo fails). */
   hue: number
   /** The provider's own id for the signed-in user: the same person signing in twice is one account. */

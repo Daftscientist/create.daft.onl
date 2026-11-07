@@ -8,7 +8,12 @@ import { driveFor, reauthenticate } from '../cloud'
 import { activeAccount, updateAccount } from './accounts'
 import { loadKey, newKey, storeKey, unlockKey } from '../cloud/crypto'
 import { NeedsSignIn, ProviderFull } from '../cloud/types'
-import { KEYFILE, pendingCount, readKeyFile, rewriteAll, syncOnce, type SyncContext } from './syncEngine'
+import { fetchContent, KEYFILE, pendingCount, readKeyFile, rewriteAll, syncOnce, type SyncContext } from './syncEngine'
+import { applyRemote, getLibrary, whenBooted } from './library'
+// (After this module and the library have both loaded: they import each other.)
+let libraryOpen = false
+setTimeout(() => void whenBooted.then(() => { libraryOpen = true }), 0)
+import type { Deck } from './types'
 
 import type { ProviderId } from '../cloud/types'
 export type { ProviderId }
@@ -137,13 +142,13 @@ export function summary(s: SyncState, now = Date.now()): Summary {
   const waiting = s.pending ? `${s.pending} ${s.pending === 1 ? 'change' : 'changes'} waiting` : undefined
   if (s.locked) return make('warn', `${name} library is locked`, 'Enter your passphrase', 'unlock')
   if (s.auth === 'reconnecting') return make('busy', `Reconnecting ${name}…`)
-  if (needsSignIn(s)) return make('warn', `${name} paused`, waiting ?? 'Sign in to sync', 'reconnect')
+  if (needsSignIn(s)) return make('warn', s.provider === 'google' ? 'Google Drive access expired' : `Signed out of ${name}`, waiting ?? 'Your work is safe here until you sign in', 'reconnect')
   if (s.issue === 'provider-full') return make('danger', `${name} is full`, waiting, 'open-provider')
   if (s.issue === 'folder-deleted') return make('danger', `Ream’s folder was deleted from ${name}`)
   if (s.conflicts) return make('warn', `${s.conflicts} ${s.conflicts === 1 ? 'conflict' : 'conflicts'}`, 'Choose which copies to keep', 'review')
   if (!s.online) return make('muted', 'Offline', waiting ?? 'Changes are saved here')
   if (s.transfer) return make('busy', s.transfer.label, `${Math.round((s.transfer.done / Math.max(1, s.transfer.total)) * 100)}%`)
-  if (s.pending) return make('busy', `Syncing ${s.pending} ${s.pending === 1 ? 'change' : 'changes'}…`)
+  if (s.pending) return make('ok', 'Up to date')
   return make('ok', `Synced with ${name}`, s.lastSyncAt ? relShort(now - s.lastSyncAt) : undefined)
 }
 function relShort(ms: number) {
@@ -183,6 +188,40 @@ function schedulePush() {
   pushTimer = window.setTimeout(() => void syncNow(), 3000)
 }
 
+// ---------- content on demand ----------
+// A cloud account's decks can be on this device as details only (after its first sync); their slides come from the
+// account when opened, and quietly in the background until everything is cached.
+const fetching = new Map<string, Promise<boolean>>()
+export function ensureContent(id: string): Promise<boolean> {
+  const d = getLibrary().entries[id]
+  if (!d || d.type !== 'deck' || !d.remote) return Promise.resolve(true)
+  if (!state.provider || !d.docRev) return Promise.resolve(false)
+  const known = fetching.get(id)
+  if (known) return known
+  const rev = d.docRev
+  const p = (async () => {
+    try {
+      const c = await fetchContent(await context(), id, rev)
+      const cur = getLibrary().entries[id]
+      if (!c || cur?.type !== 'deck') return false
+      if (cur.docRev !== rev) return !cur.remote
+      applyRemote({ upserts: [{ ...cur, slides: c.slides, css: c.css, size: c.size, remote: undefined }], deletes: [] })
+      return true
+    } catch { return false } finally { fetching.delete(id) }
+  })()
+  fetching.set(id, p)
+  return p
+}
+let prefetchTimer: number | undefined
+function schedulePrefetch() {
+  clearTimeout(prefetchTimer)
+  prefetchTimer = window.setTimeout(async () => {
+    const waiting = Object.values(getLibrary().entries).filter((e): e is Deck => e.type === 'deck' && !!e.remote && e.trashedAt === null)
+    for (const d of waiting.slice(0, 6)) { if (!canSync(state)) return; await ensureContent(d.id) }
+    if (waiting.length > 6) schedulePrefetch()
+  }, 1500)
+}
+
 // ---------- the real thing ----------
 async function context(): Promise<SyncContext> {
   return { drive: driveFor(activeAccount()!), device: deviceId(), deviceName: state.deviceName, key: state.encrypted ? await loadKey() : null }
@@ -191,14 +230,16 @@ async function context(): Promise<SyncContext> {
 let running: Promise<void> | null = null
 /** Runs one sync and maps provider failures onto the status model. */
 export function syncNow(): Promise<void> {
-  if (!state.provider || state.locked || !state.online) return Promise.resolve()
+  if (!state.provider || state.locked || !state.online || !libraryOpen) return Promise.resolve()
   running ??= (async () => {
     try {
       const drive = driveFor(activeAccount()!)
       if (!(await drive.ready())) { set({ auth: 'expired' }); return }
+      // Only an account's first sync on this device shows progress; every later one is silent.
       const result = await syncOnce(await context(), (label, done, total) => set({ transfer: { label, done, total } }))
       set({ auth: 'ok', transfer: null, pending: pendingCount(), lastSyncAt: Date.now(), issue: null, lastError: undefined,
-        conflicts: state.conflicts + result.conflicts, otherDevice: result.otherDevice })
+        conflicts: state.conflicts + result.conflicts })
+      schedulePrefetch()
       if (result.conflicts) toast({ message: `${result.conflicts} ${result.conflicts === 1 ? 'deck was' : 'decks were'} changed on two devices. Both versions are kept.` })
     } catch (e) {
       set({ transfer: null })
@@ -206,7 +247,8 @@ export function syncNow(): Promise<void> {
       else if (e instanceof ProviderFull) set({ issue: 'provider-full' })
       else if ((e as Error).name === 'Locked') set({ locked: true })
       else if (!navigator.onLine) set({ online: false })
-      else { set({ lastError: (e as Error).message }); toast({ message: `Sync failed: ${(e as Error).message}`, tone: 'danger' }) }
+      // Anything else (an outage, throttling) is retried quietly on the next round.
+      else set({ lastError: (e as Error).message })
     } finally {
       running = null
     }
@@ -241,6 +283,8 @@ export async function reconnect() {
     if ((e as Error).name === 'PopupBlocked') toast({ message: 'Your browser blocked the sign-in window. Allow pop-ups for this site and try again.' })
   }
 }
+
+export const markSignedOut = () => set({ auth: 'expired' })
 
 /** Forgets the active account's credentials on this device (removing it does this). No revocation: other devices
  *  signed in to the same storage keep working. */
@@ -286,7 +330,7 @@ export const resolveConflicts = () => set({ conflicts: 0 })
 if (state.provider && !new URLSearchParams(location.search).has('sync')) {
   const drive = driveFor(activeAccount()!)
   drive.prepare()
-  void drive.ready().then((ok: boolean) => {
+  void new Promise((r) => setTimeout(r, 0)).then(() => whenBooted).then(() => { libraryOpen = true; return drive.ready() }).then((ok: boolean) => {
     const a = activeAccount()!
     if (ok && !a.remoteId) void drive.account().then((who) => updateAccount(a.id, { remoteId: who.id, name: who.name || a.name, email: who.email, avatar: who.avatar ?? a.avatar })).catch(() => {})
     set({ auth: ok ? 'ok' : 'expired', pending: pendingCount() })

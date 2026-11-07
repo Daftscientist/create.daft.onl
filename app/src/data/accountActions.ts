@@ -1,9 +1,10 @@
 // What you can do with accounts (spec: accounts): add one (a provider sign-in or a new local library), sign back
 // in, check whether a session still works, remove one from this device. Switching itself reloads (accounts.ts).
 import { driveFor, reauthenticate } from '../cloud'
+import { cameoAvatar } from '../lib/avatar'
 import { storage, wipeAccount } from '../storage/client'
 import { activeId, addAccount, findSame, forgetAccount, getAccounts, reserveId, switchTo, updateAccount, type Account, type AccountKind } from './accounts'
-import { forgetProvider } from './sync'
+import { forgetProvider, markSignedOut } from './sync'
 
 /** Everything kept in localStorage per account (the default account's are unsuffixed). */
 const SCOPED_KEYS = ['ream.sync.v1', 'ream.sync.base', 'ream.cloud.dropbox', 'ream.cloud.google', 'ream.cloud.onedrive']
@@ -38,8 +39,8 @@ export async function addCloudAccount(kind: Exclude<AccountKind, 'local'>, cance
   return { account: addAccount({ id, kind, name: who.name || who.email, email: who.email, avatar: who.avatar, remoteId: who.id }), existed: false }
 }
 
-export function addLocalAccount(name: string): Account {
-  return addAccount({ kind: 'local', name: name.trim() || 'Personal' })
+export function addLocalAccount(name: string, seed: string): Account {
+  return addAccount({ kind: 'local', name: name.trim() || 'Personal', avatarSeed: seed, avatar: cameoAvatar(seed) })
 }
 
 export type Health = 'ok' | 'signin' | 'local' | 'offline'
@@ -75,4 +76,11 @@ export async function removeAccount(a: Account): Promise<boolean> {
   const next = forgetAccount(a.id)
   if (a.id === activeId()) { if (next) switchTo(next.id); else location.href = '/' }
   return true
+}
+
+/** Signs out of a cloud account but keeps it in the switcher (signed out): its device copy stays until unlinked. */
+export async function signOutAccount(a: Account) {
+  if (a.kind === 'local') return
+  if (a.id === activeId()) { await forgetProvider(); markSignedOut() }
+  else await driveFor(a).forget().catch(() => {})
 }

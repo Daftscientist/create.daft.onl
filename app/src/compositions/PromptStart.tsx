@@ -1,6 +1,7 @@
 // Home's prompt (spec: Home): describe a presentation and Ream builds it, slide by slide, in a new deck with
 // Ask open, so you watch it arrive and can steer it. Shown when a model is available (a provider, or the
 // browser's own); otherwise a one-line pointer to Settings.
+import { scoped } from '../data/accounts'
 import { ArrowUp, Paperclip, Sparkle, X } from '@phosphor-icons/react'
 import { useRef, useState } from 'react'
 import type { Attachment } from '../data/ai/agent'
@@ -33,7 +34,7 @@ export function PromptStart() {
     const id = newDeck(null)
     rename(id, prompt.split(/\s+/).slice(0, 6).join(' ').replace(/[.,;:!?]+$/, '').slice(0, 60) || 'New presentation', { quiet: true })
     setPendingAsk(id, { prompt, files, fresh: true })
-    try { localStorage.setItem('ream.editor.column', 'ask') } catch { /* ok */ }
+    try { localStorage.setItem(scoped('ream.editor.column'), 'ask') } catch { /* ok */ }
     navigate({ name: 'deck', deckId: id })
   }
   const attach = async (list: FileList) => {

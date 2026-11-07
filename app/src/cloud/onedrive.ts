@@ -3,7 +3,7 @@
 import { InteractionRequiredAuthError, PublicClientApplication, type AccountInfo } from '@azure/msal-browser'
 import { CLOUD, redirectUri } from './config'
 import { scoped } from '../data/accounts'
-import { NeedsSignIn, ProviderFull, RemoteConflict, type CloudAccount, type CloudDrive, type RemoteFile } from './types'
+import { CursorReset, NeedsSignIn, ProviderFull, RemoteConflict, type CloudAccount, type CloudDrive, type RemoteFile } from './types'
 
 const SCOPES = ['Files.ReadWrite.AppFolder', 'User.Read', 'offline_access']
 let pca: Promise<PublicClientApplication> | null = null
@@ -51,7 +51,7 @@ async function api(path: string, init: RequestInit = {}) {
   return res
 }
 
-type Item = { name: string; eTag: string; lastModifiedDateTime: string; file?: unknown }
+type Item = { name: string; eTag: string; lastModifiedDateTime: string; file?: unknown; deleted?: unknown }
 const toFile = (i: Item): RemoteFile => ({ name: i.name, rev: i.eTag, modified: Date.parse(i.lastModifiedDateTime) })
 const enc = encodeURIComponent
 
@@ -92,6 +92,27 @@ return {
       url = j['@odata.nextLink'] ? j['@odata.nextLink'].replace(GRAPH, '') : null
     }
     return out.map(toFile)
+  },
+  async changes(cursor) {
+    const changed: RemoteFile[] = [], removed: string[] = []
+    let url: string = cursor ?? '/me/drive/special/approot/delta?$select=name,eTag,lastModifiedDateTime,file,deleted'
+    for (;;) {
+      const res = await api(url.replace(GRAPH, ''))
+      if (res.status === 410) throw new CursorReset()
+      if (!res.ok) throw new Error(`OneDrive changes failed (${res.status})`)
+      const j: { value: Item[]; '@odata.nextLink'?: string; '@odata.deltaLink'?: string } = await res.json()
+      for (const i of j.value) { if (i.deleted) { if (i.name) removed.push(i.name) } else if (i.file) changed.push(toFile(i)) }
+      if (j['@odata.deltaLink']) return { changed, removed, cursor: j['@odata.deltaLink'], full: !cursor }
+      url = j['@odata.nextLink']!
+    }
+  },
+  async quota() {
+    try {
+      const res = await api('/me/drive?$select=quota')
+      if (!res.ok) return null
+      const q = (await res.json()).quota as { used?: number; total?: number }
+      return q?.total ? { used: q.used ?? 0, total: q.total } : null
+    } catch { return null }
   },
   async get(name) {
     const meta = await api(`/me/drive/special/approot:/${enc(name)}?$select=eTag`)

@@ -2,6 +2,7 @@
 // galleries, undo/redo, honest save status, Ask, Download and Present. Below: the slide rail, then the stage
 // column (context bar, canvas, notes drawer), and the Ask column when open. Tablets edit too (touch-sized handles,
 // pinch to zoom); phones have their own shell.
+import { scoped } from '../data/accounts'
 import { ArrowArcLeft, ArrowArcRight, ArrowLeft, CaretDown, ChartBar, Table, ChatCircleText, DownloadSimple, Image as ImageIcon, Minus, Play, Plus, Shapes, TextT } from '@phosphor-icons/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { download, openDeck as touchDeck, retrySave, setLastSlide, useLibrary, useSaveState } from '../data/library'
@@ -59,8 +60,8 @@ function useWidth() {
   useEffect(() => { const on = () => setW(innerWidth); addEventListener('resize', on); return () => removeEventListener('resize', on) }, [])
   return w
 }
-const read = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
-const write = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* ok */ } }
+const read = (k: string) => { try { return localStorage.getItem(scoped(k)) } catch { return null } }
+const write = (k: string, v: string) => { try { localStorage.setItem(scoped(k), v) } catch { /* ok */ } }
 
 export function DeckPage({ deckId, slide }: { deckId: string; slide?: number }) {
   const lib = useLibrary()

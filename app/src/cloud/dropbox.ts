@@ -3,7 +3,7 @@
 import { CLOUD, redirectUri } from './config'
 import { openPopup, pkce, popupForCode, randomState } from './oauth'
 import { scoped } from '../data/accounts'
-import { NeedsSignIn, ProviderFull, RemoteConflict, type CloudAccount, type CloudDrive, type RemoteFile } from './types'
+import { CursorReset, NeedsSignIn, ProviderFull, RemoteConflict, type CloudAccount, type CloudDrive, type RemoteFile } from './types'
 
 type Tokens = { access: string; refresh: string; expiresAt: number }
 
@@ -82,6 +82,21 @@ export function dropboxDrive(accountId: string): CloudDrive {
         if (!page.has_more) return out
         page = await rpc('files/list_folder/continue', { cursor: page.cursor })
       }
+    },
+    async changes(cursor) {
+      const changed: RemoteFile[] = [], removed: string[] = []
+      type Page = { entries: Meta[]; cursor: string; has_more: boolean }
+      let page: Page
+      try { page = cursor ? await rpc<Page>('files/list_folder/continue', { cursor }) : await rpc<Page>('files/list_folder', { path: '', include_deleted: false }) }
+      catch (e) { if (cursor && (e as { status?: number }).status === 409) throw new CursorReset(); throw e }
+      for (;;) {
+        for (const e of page.entries) { if (e['.tag'] === 'file') changed.push(toFile(e)); else if (e['.tag'] === 'deleted') removed.push(e.name) }
+        if (!page.has_more) return { changed, removed, cursor: page.cursor, full: !cursor }
+        page = await rpc<Page>('files/list_folder/continue', { cursor: page.cursor })
+      }
+    },
+    async quota() {
+      try { const q = await rpc<{ used: number; allocation: { allocated?: number } }>('users/get_space_usage'); return q.allocation.allocated ? { used: q.used, total: q.allocation.allocated } : null } catch { return null }
     },
     async get(name) {
       const res = await fetch('https://content.dropboxapi.com/2/files/download', {

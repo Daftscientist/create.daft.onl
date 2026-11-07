@@ -1,4 +1,5 @@
 // Mobile composition (DESIGN.md §2, §6 Mobile). Composes shared compositions only.
+import { RemoteDeckGate } from '../compositions/RemoteDeckGate'
 import { AccountAvatarButton } from '../compositions/AccountSwitcher'
 import { DownloadSimple, FolderSimple, FolderSimplePlus, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
 import { AnimatePresence } from 'motion/react'
@@ -85,7 +86,7 @@ export function MobileApp() {
     },
   }
 
-  if (route.name === 'deck') return <><MobileViewer deckId={route.deckId} slide={route.slide} /><Toaster /></>
+  if (route.name === 'deck') return <><RemoteDeckGate deckId={route.deckId}><MobileViewer deckId={route.deckId} slide={route.slide} /></RemoteDeckGate><Toaster /></>
 
   const ids = [...selected]
   const batch = selecting ? (

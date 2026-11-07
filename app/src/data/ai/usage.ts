@@ -1,10 +1,11 @@
-// What Ream sent to AI providers from this browser (spec: Usage): requests, tokens and pictures per provider
-// and model, by day. Kept in this browser only; the provider's own dashboard is the bill.
+// What Ream sent to AI providers from this account on this browser (spec: Usage): requests, tokens and pictures
+// per provider and model, by day. The provider's own dashboard is the bill.
+import { scoped } from '../accounts'
 import { useSyncExternalStore } from 'react'
 
 export type Count = { requests: number; input: number; output: number; reasoning: number; cached: number; pictures: number }
 type Store = Record<string, Record<string, Count>> // "provider:model" → "YYYY-MM-DD" → counts
-const KEY = 'ream.usage'
+const KEY = scoped('ream.usage')
 const zero = (): Count => ({ requests: 0, input: 0, output: 0, reasoning: 0, cached: 0, pictures: 0 })
 let store: Store = (() => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} } })()
 const listeners = new Set<() => void>()

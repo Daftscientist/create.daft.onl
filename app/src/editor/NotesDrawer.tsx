@@ -1,5 +1,6 @@
 // Speaker notes under the slide (spec v3: Notes drawer), PowerPoint's notes pane. Closed it's a strip with the
 // first line; open it's a resizable pane (80px to 40% of the window, remembered). Saves on blur and 600ms idle.
+import { scoped } from '../data/accounts'
 import { CaretDown, CaretUp } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 import type { SlideDoc } from '../data/types'
@@ -9,8 +10,8 @@ import s from './NotesDrawer.module.css'
 
 const OPEN_KEY = 'ream.editor.notes'
 const H_KEY = 'ream.editor.notesHeight'
-const read = (k: string) => { try { return localStorage.getItem(k) } catch { return null } }
-const write = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { /* ok */ } }
+const read = (k: string) => { try { return localStorage.getItem(scoped(k)) } catch { return null } }
+const write = (k: string, v: string) => { try { localStorage.setItem(scoped(k), v) } catch { /* ok */ } }
 const clampH = (h: number) => Math.round(Math.min(innerHeight * 0.4, Math.max(80, h)))
 
 export function NotesDrawer({ slide }: { slide: SlideDoc }) {

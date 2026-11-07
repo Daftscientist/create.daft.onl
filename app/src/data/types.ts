@@ -36,6 +36,10 @@ export type Deck = {
   device?: string
   /** Sync: when the deck's slides or theme last changed. */
   docClock?: number
+  /** Sync: the cloud copy of the content this device has (an immutable revision in the account's storage). */
+  docRev?: string
+  /** Sync: only the deck's details are on this device so far; its slides come from the account when opened. */
+  remote?: true
   sizeBytes: number
   slides: SlideDoc[]
   /** Imported decks: their slide size and shared CSS (embedded @font-face). Stored with the slides. */
@@ -71,7 +75,10 @@ export type LibraryState = {
   /** Sync: ids deleted permanently on this device, with the clock of the deletion. */
   tombstones?: Record<string, number>
   /** Library-wide settings that sync (AI providers and model). `clock` orders changes across devices. */
-  settings?: { ai?: unknown; clock?: number }
+  settings?: { ai?: unknown; appearance?: unknown; clock?: number }
+  /** Ask's conversation per deck. Kept with the account and synced, like the decks. */
+  chats?: Record<string, Chat>
 }
+export type Chat = { clock: number; device?: string; turns: unknown[] }
 
 export type ExportFormat = 'pptx' | 'html'

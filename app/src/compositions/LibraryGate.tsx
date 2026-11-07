@@ -8,6 +8,7 @@ import { BrandMark, PRODUCT } from '../ui/Brand'
 import { Button } from '../ui/Button'
 import { EmptyState } from './PageHeader'
 import { FirstRun } from './FirstRun'
+import { AccountPicker, noteSeen, shouldPick } from './AccountPicker'
 import { adoptLegacyLibrary, needsFirstRun } from '../data/accounts'
 import s from './LibraryGate.module.css'
 
@@ -29,7 +30,10 @@ export function LibraryGate({ children }: { children: ReactNode }) {
       setLegacy('none')
     })()
   }, [first])
+  const [pick, setPick] = useState(() => !first && shouldPick())
+  useEffect(() => { if (!first && !pick) noteSeen() }, [first, pick])
   if (first) return legacy === 'checking' ? <Screen /> : <FirstRun />
+  if (pick) return <AccountPicker onContinue={() => setPick(false)} />
   return <Gate>{children}</Gate>
 }
 

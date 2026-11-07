@@ -1,5 +1,5 @@
 // A deck's cover (or any slide) with its engine states. Every thumbnail in the app is this component.
-import { Warning } from '@phosphor-icons/react'
+import { CloudArrowDown, Warning } from '@phosphor-icons/react'
 import { motion } from 'motion/react'
 import type { Deck } from '../data/types'
 import { SlideView } from '../slides/SlideView'
@@ -23,6 +23,9 @@ export function DeckThumb({ deck, slide = 0, layoutId, className }: { deck: Deck
         <span className={s.phase}>Couldn’t import</span>
       </div>
     )
+  }
+  if (deck.remote && !deck.slides.length) {
+    return <div className={`${s.thumb} ${s.state} ${className ?? ''}`} title="In your account; opens from there"><CloudArrowDown size={18} /></div>
   }
   const doc = deck.slides[Math.min(slide, deck.slides.length - 1)]
   return (

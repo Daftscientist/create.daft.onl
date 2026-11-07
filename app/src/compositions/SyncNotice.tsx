@@ -18,10 +18,10 @@ export function SyncNotice() {
     return <Notice icon={<Lock size={16} />} title={`Your ${name} library is encrypted`} actions={<Button variant="secondary" onClick={() => openSyncFlow('unlock')}>Unlock</Button>}>Enter your passphrase to bring in decks from your other devices.</Notice>
   }
   if (reason.kind === 'full') {
-    return <Notice tone="danger" icon={<CloudWarning size={16} />} title={`${name} is full`} actions={<Button variant="secondary" onClick={() => navigate({ name: 'settings', section: 'accounts' })}>Manage</Button>}>{sync.pending} changes are saved in this browser and will sync when there’s space.</Notice>
+    return <Notice tone="danger" icon={<CloudWarning size={16} />} title={`${name} is full`} actions={<Button variant="secondary" onClick={() => navigate({ name: 'settings', section: 'storage' })}>Manage</Button>}>{sync.pending} changes are saved in this browser and will sync when there’s space.</Notice>
   }
   if (reason.kind === 'deleted') {
-    return <Notice tone="danger" icon={<CloudWarning size={16} />} title={`Ream’s folder was deleted from ${name}`} actions={<Button variant="secondary" onClick={() => navigate({ name: 'settings', section: 'accounts' })}>Upload again</Button>}>Your library is still here in this browser.</Notice>
+    return <Notice tone="danger" icon={<CloudWarning size={16} />} title={`Ream’s folder was deleted from ${name}`} actions={<Button variant="secondary" onClick={() => navigate({ name: 'settings', section: 'storage' })}>Upload again</Button>}>Your library is still here in this browser.</Notice>
   }
   const title = reason.kind === 'waiting'
     ? `${name} sync is paused`

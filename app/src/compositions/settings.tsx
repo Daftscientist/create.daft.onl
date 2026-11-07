@@ -1,20 +1,15 @@
 // Settings sections (docs/design/specs/settings.md). Both shells render these; they only frame them.
 import {
-  Archive, Database, UsersThree, DownloadSimple, Info, Keyboard, Palette, Sparkle,
+  Database, Info, Keyboard, Palette, Sparkle,
   ChartBar, Cube, Waveform,
 } from '@phosphor-icons/react'
-import { useEffect, useState, type ReactNode } from 'react'
-import { backUp, decks, isLive, useLibrary } from '../data/library'
+import { useState, type ReactNode } from 'react'
 import { setPrefs, useDevicePrefs } from '../data/prefs'
-import { navigate } from '../lib/router'
-import { toast } from '../data/toasts'
-import { bytes, count, relTimeInline } from '../lib/format'
 import { KEYMAP } from '../lib/keymap'
 import { useBrowserModel } from '../data/ai/browser'
 import { providerName, type ModelProvider } from '../data/ai/settings'
 import { clearUsage, usageByDay, usageSince, useUsageVersion } from '../data/ai/usage'
 import { AiMark } from './AiMark'
-import { persistStorage } from '../storage/client'
 import { PRODUCT } from '../ui/Brand'
 import { Button, Keys } from '../ui/Button'
 import { SettingGroup, SettingRow } from '../ui/Field'
@@ -22,16 +17,15 @@ import { Segmented } from '../ui/Segmented'
 import { useShell } from '../lib/shell'
 import { VoiceAgentsSettings } from './VoiceAgents'
 import { AiModels, AiProviders } from './AiSettings'
-import { AccountsSettings } from './AccountsSettings'
+import { StorageSettings } from './StorageSettings'
 import s from './settings.module.css'
 
-export type SectionDef = { id: string; label: string; group: 'This browser' | 'Library' | 'AI' | 'Ream'; icon: ReactNode; render: () => ReactNode; preview?: boolean; keyboardOnly?: boolean }
+export type SectionDef = { id: string; label: string; group: 'General' | 'Library' | 'AI' | 'Ream'; icon: ReactNode; render: () => ReactNode; preview?: boolean; keyboardOnly?: boolean }
 
 export const SECTIONS: SectionDef[] = [
-  { id: 'appearance', label: 'Appearance', group: 'This browser', icon: <Palette size={18} />, render: () => <Appearance /> },
-  { id: 'shortcuts', label: 'Keyboard shortcuts', group: 'This browser', icon: <Keyboard size={18} />, render: () => <Shortcuts />, keyboardOnly: true },
-  { id: 'storage', label: 'Storage', group: 'Library', icon: <Database size={18} />, render: () => <Storage /> },
-  { id: 'accounts', label: 'Accounts', group: 'Library', icon: <UsersThree size={18} />, render: () => <AccountsSettings /> },
+  { id: 'appearance', label: 'Appearance', group: 'General', icon: <Palette size={18} />, render: () => <Appearance /> },
+  { id: 'shortcuts', label: 'Keyboard shortcuts', group: 'General', icon: <Keyboard size={18} />, render: () => <Shortcuts />, keyboardOnly: true },
+  { id: 'storage', label: 'Storage', group: 'Library', icon: <Database size={18} />, render: () => <StorageSettings /> },
   { id: 'ai', label: 'Providers', group: 'AI', icon: <Sparkle size={18} />, render: () => <AiProviders /> },
   { id: 'models', label: 'Models', group: 'AI', icon: <Cube size={18} />, render: () => <AiModels /> },
   { id: 'voice', label: 'Voice', group: 'AI', icon: <Waveform size={18} />, render: () => <VoiceAgentsSettings /> },
@@ -87,55 +81,6 @@ function Shortcuts() {
 
 // ---------- Library ----------
 
-function useEstimate() {
-  const [est, setEst] = useState<{ usage: number; quota: number; persisted: boolean } | null>(null)
-  const refresh = async () => {
-    try {
-      const e = await navigator.storage.estimate()
-      setEst({ usage: e.usage ?? 0, quota: e.quota ?? 0, persisted: await navigator.storage.persisted() })
-    } catch { setEst(null) }
-  }
-  useEffect(() => { void refresh() }, [])
-  return [est, refresh] as const
-}
-
-function Storage() {
-  const lib = useLibrary()
-  const [est, refresh] = useEstimate()
-  const n = decks(lib).filter(isLive).length
-  const pct = est && est.quota ? Math.min(100, (est.usage / est.quota) * 100) : 0
-  return (
-    <>
-      <SettingGroup title="This browser">
-        <SettingRow label={`${count(n, 'deck')} · ${est ? bytes(est.usage) : '—'} used`} description={est ? `${bytes(est.quota)} available to ${PRODUCT} in this browser` : 'Storage size isn’t available in this browser'}>
-          {pct >= 1 && <span className={s.meter} role="img" aria-label={`${Math.round(pct)}% of available space used`}><i style={{ width: `${pct}%` }} /></span>}
-        </SettingRow>
-        <SettingRow
-          label="Keep my library"
-          description={est?.persisted ? 'This browser won’t clear your library to free up space.' : 'Without this, the browser may clear your library when the device is low on space.'}
-        >
-          {est?.persisted ? <span className={s.ok}>On</span> : <Button variant="secondary" onClick={async () => { const ok = await persistStorage(); await refresh(); toast({ message: ok ? 'Your library is kept in this browser' : 'The browser declined. Back up regularly or connect sync.' }) }}>Turn on</Button>}
-        </SettingRow>
-      </SettingGroup>
-      <SettingGroup title="Backups">
-        <SettingRow label="Back up now" description={lib.lastBackupAt ? `Last backup ${relTimeInline(lib.lastBackupAt)}. Saves every deck and folder to one file.` : 'Saves every deck and folder to one file.'}>
-          <Button variant="secondary" icon={<Archive size={15} />} onClick={backUp}>Back up</Button>
-        </SettingRow>
-        <SettingRow label="Restore from a backup" description="You’ll see what’s inside before anything changes. Nothing here is deleted.">
-          <Button variant="secondary" onClick={() => toast({ message: 'Restoring arrives with the storage engine. Nothing was changed.' })}>Choose file…</Button>
-        </SettingRow>
-        <SettingRow label="Export every deck" description="A .zip of PowerPoint files, for use anywhere.">
-          <Button variant="secondary" icon={<DownloadSimple size={15} />} onClick={() => toast({ message: `Exporting ${count(n, 'deck')} arrives with the engine.` })}>Export</Button>
-        </SettingRow>
-      </SettingGroup>
-      <SettingGroup title="Accounts">
-        <SettingRow label="Remove this library from this browser" description="Removing an account, and what happens to its files, is in Settings → Accounts.">
-          <Button variant="secondary" onClick={() => navigate({ name: 'settings', section: 'accounts' })}>Open Accounts</Button>
-        </SettingRow>
-      </SettingGroup>
-    </>
-  )
-}
 
 // ---------- AI usage ----------
 

@@ -3,7 +3,7 @@
 // Library files live in the hidden appDataFolder; openid/profile give the account email and avatar.
 import { CLOUD } from './config'
 import { scoped } from '../data/accounts'
-import { NeedsSignIn, ProviderFull, RemoteConflict, type CloudAccount, type CloudDrive, type RemoteFile } from './types'
+import { CursorReset, NeedsSignIn, ProviderFull, RemoteConflict, type CloudAccount, type CloudDrive, type RemoteFile } from './types'
 
 const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.appdata'
 type Tokens = { access: string; expiresAt: number }
@@ -73,6 +73,14 @@ async function api(url: string, init: RequestInit = {}) {
 }
 
 let ids = new Map<string, string>()
+/** A file's id by name: from what this session has seen, else one query (never a whole listing). */
+async function findId(name: string): Promise<string | undefined> {
+  if (ids.has(name)) return ids.get(name)
+  const q = new URLSearchParams({ spaces: 'appDataFolder', q: `name = '${name.replace(/'/g, "\\'")}' and trashed = false`, fields: 'files(id,name)', pageSize: '1' })
+  const j = await (await api(`https://www.googleapis.com/drive/v3/files?${q}`)).json() as { files: { id: string; name: string }[] }
+  if (j.files[0]) ids.set(name, j.files[0].id)
+  return j.files[0]?.id
+}
 type GFile = { id: string; name: string; version: string; modifiedTime: string }
 const toFile = (f: GFile): RemoteFile => ({ name: f.name, rev: f.version, modified: Date.parse(f.modifiedTime) })
 
@@ -105,9 +113,37 @@ return {
     ids = new Map(out.map((f) => [f.name, f.id]))
     return out.map(toFile)
   },
+  async changes(cursor) {
+    if (!cursor) {
+      // The start token first, so nothing changing during the listing is missed.
+      const { startPageToken } = await (await api('https://www.googleapis.com/drive/v3/changes/startPageToken?supportsAllDrives=false')).json()
+      return { changed: await this.list(), removed: [], cursor: startPageToken, full: true }
+    }
+    const changed: RemoteFile[] = [], removed: string[] = []
+    let token = cursor
+    for (;;) {
+      const q = new URLSearchParams({ pageToken: token, spaces: 'appDataFolder', pageSize: '1000', fields: 'nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,version,modifiedTime,trashed))' })
+      const res = await api(`https://www.googleapis.com/drive/v3/changes?${q}`)
+      if (res.status === 400 || res.status === 404) throw new CursorReset()
+      const j = await res.json() as { nextPageToken?: string; newStartPageToken?: string; changes: { fileId: string; removed?: boolean; file?: GFile & { trashed?: boolean } }[] }
+      for (const c of j.changes) {
+        if (c.removed || !c.file || c.file.trashed) { const name = [...ids].find(([, v]) => v === c.fileId)?.[0]; if (name) { ids.delete(name); removed.push(name) } }
+        else { ids.set(c.file.name, c.file.id); changed.push(toFile(c.file)) }
+      }
+      if (j.newStartPageToken) return { changed, removed, cursor: j.newStartPageToken, full: false }
+      token = j.nextPageToken!
+    }
+  },
+  async quota() {
+    try {
+      const res = await api('https://www.googleapis.com/drive/v3/about?fields=storageQuota')
+      if (!res.ok) return null
+      const q = (await res.json()).storageQuota as { limit?: string; usage?: string }
+      return q.limit ? { used: Number(q.usage ?? 0), total: Number(q.limit) } : null
+    } catch { return null }
+  },
   async get(name) {
-    if (!ids.has(name)) await this.list()
-    const id = ids.get(name)
+    const id = await findId(name)
     if (!id) return null
     const meta: GFile = await (await api(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,name,version,modifiedTime`)).json()
     const res = await api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`)
@@ -115,8 +151,7 @@ return {
     return { text: await res.text(), rev: meta.version }
   },
   async put(name, body, ifRev) {
-    if (!ids.has(name)) await this.list()
-    const id = ids.get(name)
+    const id = await findId(name)
     if (id && ifRev) {
       // Drive has no conditional write on media uploads: check the version first (best effort).
       const meta: GFile = await (await api(`https://www.googleapis.com/drive/v3/files/${id}?fields=version`)).json()
@@ -139,8 +174,7 @@ return {
     return toFile(f)
   },
   async remove(name) {
-    if (!ids.has(name)) await this.list()
-    const id = ids.get(name)
+    const id = await findId(name)
     if (id) { await api(`https://www.googleapis.com/drive/v3/files/${id}`, { method: 'DELETE' }); ids.delete(name) }
   },
   async forget() { save(null) },

@@ -10,3 +10,7 @@
 }
 .badge svg rect { fill: var(--paper); }
 .warn { position: absolute; top: -1px; right: -1px; width: 30%; height: 30%; min-width: 8px; min-height: 8px; border-radius: 50%; background: #f2a900; box-shadow: 0 0 0 2px var(--paper); }
+.art { width: 100%; height: 100%; border-radius: 50%; display: block; overflow: hidden; background: radial-gradient(circle at 50% 35%, hsl(var(--h) 80% 90%), hsl(calc(var(--h) + 30) 60% 78%)); }
+.art img { width: 100%; height: 100%; display: block; }
+:global(html[data-theme="dark"]) .art { background: radial-gradient(circle at 50% 35%, hsl(var(--h) 40% 42%), hsl(calc(var(--h) + 30) 35% 28%)); }
+@media (prefers-color-scheme: dark) { :global(html:not([data-theme="light"])) .art { background: radial-gradient(circle at 50% 35%, hsl(var(--h) 40% 42%), hsl(calc(var(--h) + 30) 35% 28%)); } }

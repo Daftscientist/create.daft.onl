@@ -64,3 +64,27 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.5s; } }
 .waiting { font-size: 13px; color: var(--ink-2); display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.rowWrap { display: flex; align-items: center; gap: 2px; }
+.rowWrap .row { flex: 1; min-width: 0; }
+.more { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--ink-3); }
+.more:hover, .more[aria-expanded="true"] { background: var(--fill); color: var(--ink); }
+.more:focus-visible { outline: 2px solid var(--select); }
+@media (any-pointer: coarse) { .more { width: 44px; height: 44px; } }
+.rowActions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 8px 10px 51px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: var(--r-pill); background: var(--fill); font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.chip:hover { background: var(--fill-2); }
+.chip[data-danger] { color: var(--danger); }
+.chip:focus-visible { outline: 2px solid var(--select); }
+@media (any-pointer: coarse) { .chip { height: 40px; padding: 0 14px; font-size: 14px; } }
+.rename { font: inherit; font-weight: 640; font-size: 14px; color: var(--ink); background: var(--paper); border: 0; outline: 2px solid var(--select); border-radius: var(--r-xs); padding: 1px 4px; margin: 0 -4px; min-width: 0; }
+.failedLine { font-size: 12px; color: var(--ink-2); padding: 0 8px 8px 64px; margin: 0; }
+.me .more { margin-left: auto; align-self: flex-start; }
+.localForm { display: flex; flex-direction: column; gap: 12px; }
+.face { position: relative; align-self: center; width: 112px; height: 112px; border-radius: 50%; background: radial-gradient(circle at 50% 40%, var(--select-soft), var(--fill)); margin: 4px 0 6px; }
+.face img { width: 100%; height: 100%; border-radius: 50%; }
+.dice { position: absolute; right: -6px; bottom: -2px; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--paper); color: var(--ink); box-shadow: var(--shadow-tile-hover); transition: transform var(--dur-2) var(--ease-out); }
+.dice:hover { background: var(--fill); }
+.dice:focus-visible { outline: 2px solid var(--select); }
+.dice[data-spin] { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .dice { transition: none; } }
+:global(html[data-motion="reduce"]) .dice { transition: none; }

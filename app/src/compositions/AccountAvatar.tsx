@@ -4,6 +4,7 @@ import { Laptop } from '@phosphor-icons/react'
 import { useState } from 'react'
 import type { Account } from '../data/accounts'
 import { ProviderMark } from './ProviderMark'
+import { cameoAvatar } from '../lib/avatar'
 import s from './AccountAvatar.module.css'
 
 export function AccountAvatar({ account, size = 28, badge = true, warn = false }: { account: Account; size?: number; badge?: boolean; warn?: boolean }) {
@@ -12,7 +13,10 @@ export function AccountAvatar({ account, size = 28, badge = true, warn = false }
   const b = Math.max(12, Math.round(size * 0.46))
   return (
     <span className={s.wrap} style={{ width: size, height: size }} aria-hidden>
-      {account.avatar && !broken
+      {account.kind === 'local'
+        // Local accounts: a generated face on a soft tint (accounts from before faces get one from their id).
+        ? <span className={s.art} style={{ '--h': account.hue } as React.CSSProperties}><img src={account.avatar ?? cameoAvatar(account.avatarSeed ?? account.id)} alt="" /></span>
+        : account.avatar && !broken
         ? <img className={s.photo} src={account.avatar} alt="" referrerPolicy="no-referrer" onError={() => setBroken(true)} />
         : <span className={s.mono} style={{ '--h': account.hue, fontSize: Math.round(size * 0.44) } as React.CSSProperties}>{letter}</span>}
       {badge && (

@@ -15,7 +15,7 @@ import { liveStage } from '../editor/Canvas'
 import { objectName } from '../editor/Sections'
 import { find } from '../editor/ops'
 import { Menu, type MenuAnchor } from '../ui/Menu'
-import { getLibrary, updateSlides } from '../data/library'
+import { getLibrary, updateSlides, chatFor, setChat } from '../data/library'
 import { toast } from '../data/toasts'
 import type { Deck, SlideDoc } from '../data/types'
 import { navigate } from '../lib/router'
@@ -61,10 +61,9 @@ type Turn = {
 }
 
 const DWELL = 1600
-const key = (deckId: string) => `ream.agent.${deckId}`
 
 export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number; onClose: () => void }) {
-  const [turns, setTurns] = useState<Turn[]>(() => { try { return JSON.parse(localStorage.getItem(key(deck.id)) ?? '[]') } catch { return [] } })
+  const [turns, setTurns] = useState<Turn[]>(() => chatFor(deck.id) as Turn[])
   const [draft, setDraft] = useState('')
   const [line, setLine] = useState<string | null>(null)
   const sched = useRef({ shownAt: 0, next: null as string | null, timer: 0 })
@@ -95,7 +94,16 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   // The box grows with what you type and shrinks back once it's sent.
   useEffect(() => { if (!draft && input.current) input.current.style.height = '' }, [draft])
-  useEffect(() => { try { localStorage.setItem(key(deck.id), JSON.stringify(turns.map((t) => (t.state === 'running' ? { ...t, state: 'stopped' } : t)))) } catch { /* ok */ } }, [turns, deck.id])
+  // The conversation belongs to the account (stored and synced with the library); saved a moment after it settles.
+  const unsaved = useRef<(() => void) | null>(null)
+  useEffect(() => {
+    if (turns === chatFor(deck.id)) return
+    const save = () => { unsaved.current = null; setChat(deck.id, turns.map((x) => (x.state === 'running' ? { ...x, state: 'stopped' } : x))) }
+    unsaved.current = save
+    const t = setTimeout(save, 900)
+    return () => clearTimeout(t)
+  }, [turns, deck.id])
+  useEffect(() => () => unsaved.current?.(), [])
   useEffect(() => { if (atBottom.current) thread.current?.scrollTo({ top: thread.current.scrollHeight }) }, [turns, line])
 
   // ---- activity scheduler ----
