@@ -1,6 +1,6 @@
 # Interactive answers with OpenUI (proposal v2)
 
-Status: **proposal, needs the user's approval before any build**, 2026-11-07. v1 of this proposal was reviewed by a
+Status: **approved for phase 1** (2026-11-07), with the user's decisions in §9 (they change §2, §5.2–5.3 and §8). v1 of this proposal was reviewed by a
 Claude subagent (21 findings) and Codex high (26); v2 below has every confirmed finding folded in (triage at the end).
 From the user: "use https://www.openui.com/ … sort out the component list and how we can fit it with our UI really
 nice, and work out how self-contained experiences (interactivity) can actually work: local state, conversational
@@ -22,8 +22,8 @@ contents), and it is an expression language over our components: literals, refer
 |---|---|
 | **Computation** | Everything a block does (sliders, tabs, sorting, totals) runs in the browser. No model call, no network. |
 | **What reaches the AI provider** | Only what you send: a message you typed, or a button's message that you can read on the button before pressing it. The values in a block go with it only when you press one of its buttons, and the bubble shows them. |
-| **What's saved and synced** | The answer (prose + block program) with the chat, as today. A block's current values (slider positions, picks) are saved per block, separately from the conversation, when you let go of a control (not on every movement), and sync with the account like the chat. |
-| **Changes to your work** | Never directly from a block. A block can only *draft* a request into your message box (with the decks and data it concerns shown); you press Send. The agent then does it with its usual Open/Undo cards. |
+| **What's saved and synced** | The answer (prose + block program) with the chat, as today. View-only values (slider positions, tabs, sorting) stay on this device, saved when you let go of a control. Anything with an effect is recorded in the chat as a receipt and synced (§9.4). |
+| **Changes to your work** | Two ways: a fixed set of direct, local actions that name their target and leave Undo (§9.3), or a *draft* in your message box for anything that needs the agent. |
 | **Links** | One policy for every link Ream shows (prose and blocks): the "Open example.com?" sheet with the full address, http(s) only. (Or no links at all: decision 2.) |
 | **Snapshots** | A block shows the data it was made with. It never silently updates while the prose next to it stays the same. (Refreshing from decks is phase 2, as an explicit button that shows what changed.) |
 
@@ -187,15 +187,24 @@ cites, marks the block "Sources changed", and offers **Refresh** showing what ch
 2. Refresh from decks (live data), "Put on a slide" for charts/tables (direct, with Undo), blocks in deck Ask.
 3. Pin a block to the project (a saved view beside Chats/Files): the start of project memory.
 
-## 9. Decisions for the user
-1. **Dependency**: vendor OpenUI's pinned files into the repo (recommended: nothing runs at install, no telemetry), or
-   install from npm with install scripts disabled?
-2. **Links**: allow links out of answers and blocks behind the "Open example.com?" sheet (recommended), or no links?
-3. **Changes from blocks**: always drafted into your message box for you to send (recommended), or allow direct
-   actions like "Put on a slide" with Undo early (phase 1 instead of 2)?
-4. **Block values** (slider positions, picks): saved with the chat and synced (recommended, matches "everything per
-   account"), or kept on this device only?
-5. **On by default** for capable models (recommended), or a switch in Settings → AI?
+## 9. Decisions (the user, 2026-11-07)
+1. Build phase 1, with OpenUI **vendored** (pinned files in the repo; nothing runs at install).
+2. **Links allowed** behind the "Open example.com?" sheet, for prose and blocks alike.
+3. **Direct changes with Undo** (instead of only drafting). So phase 1 gains direct actions, under these limits (the
+   prompt-injection defence moves into the actions themselves):
+   - A fixed set of deterministic, local operations, no free-form agent work: `@PutOnSlide(deckId, after?)` (the
+     block's Chart or Table, or the whole Card, becomes a new slide in that deck), `@NewDeckFrom(name)` (a new deck in
+     this project from the block). Only decks in this project.
+   - The button must name the effect and target ("Put on a slide in Q3 review"); the gate checks the label matches the
+     action and refuses otherwise.
+   - Each leaves a normal Open/Undo card in the thread (and is recorded in the turn).
+   - Anything needing the agent (rewrite, restyle, edit existing slides) stays **Draft** (into your message box).
+   - Ask turns started from buttons stay read-only.
+4. **Values**: what only changes the view (slider positions, tabs, sorting, filters, unsent picks) is kept **on this
+   device** (per account, never synced, never sent anywhere unless you press a button that sends it). What has an
+   effect (a submitted choice, a message sent from a block, a slide put on a deck, a download) is **recorded in the
+   chat** and synced, as a receipt on that block.
+5. On by default for capable models (no switch in v1).
 
 ## Review triage (v1 → v2)
 Accepted from both reviewers: built-in name collisions removed; prompt options and preamble corrected; devtools
