@@ -73,6 +73,8 @@ export async function runProjectAgent(opts: {
   files?: Attachment[]
   history: ModelMessage[]
   signal: AbortSignal
+  /** A turn started from a button in an interactive block: it may read, never change (spec: generative-ui.md §5.2). */
+  readOnly?: boolean
   on: (e: ProjectEvent) => void
 }): Promise<void> {
   const chosen = opts.model ?? getActiveModel()
@@ -130,7 +132,7 @@ export async function runProjectAgent(opts: {
       execute: async ({ deck: id }) => {
         const d = await loaded(deck(id))
         const cap = slim ? 12 : 80
-        return { deck: d.id, name: d.name, total: d.slides.length, note: d.slides.length > cap ? `Only the first ${cap} slides are shown.` : undefined, slides: d.slides.slice(0, cap).map((s, i) => ({ slide: i + 1, hidden: s.hidden || undefined, text: slideText(s).slice(0, slim ? 300 : 1500), notes: parseSlide(s.html).getAttribute('data-notes')?.slice(0, 800) || undefined })) }
+        return { deck: d.id, name: d.name, total: d.slides.length, note: d.slides.length > cap ? `Only the first ${cap} slides are shown.` : undefined, slides: d.slides.slice(0, cap).map((s, i) => ({ slide: i + 1, slideId: s.id, hidden: s.hidden || undefined, text: slideText(s).slice(0, slim ? 300 : 1500), notes: parseSlide(s.html).getAttribute('data-notes')?.slice(0, 800) || undefined })) }
       },
     }),
     edit_deck: tool({
@@ -174,7 +176,9 @@ export async function runProjectAgent(opts: {
   const FALLBACK: Record<string, string> = { read_deck: 'Reading a deck', edit_deck: 'Changing a deck', create_deck: 'Making a deck', rename_deck: 'Renaming a deck', move_into_project: 'Bringing a deck in', rename_project: 'Renaming the project' }
 
   const p0 = project(opts.projectId)
-  const sys = system(p0, slim)
+  // Interactive blocks (spec: generative-ui.md): taught to capable models; the library loads only when needed.
+  const blocks = slim ? '' : `\n\n${(await import('../../genui/library')).blockPrompt()}`
+  const sys = system(p0, slim) + blocks + (opts.readOnly ? '\n\nThis message came from a button the person pressed in one of your blocks. You may read decks and answer (with a block if useful), but you cannot change anything in this turn; if a change is wanted, offer a @Draft or @PutOnSlide button instead.' : '')
   const context = brief(p0, slim)
 
   if (slim) {
@@ -212,7 +216,7 @@ export async function runProjectAgent(opts: {
   const result = streamText({
     model, system: sys,
     messages: [...opts.history, { role: 'user', content }],
-    tools,
+    tools: opts.readOnly ? { read_deck: tools.read_deck } : tools,
     reasoning: opts.reasoning ?? reasoningFor(ai, chosen),
     stopWhen: isStepCount(16),
     maxRetries: 5,

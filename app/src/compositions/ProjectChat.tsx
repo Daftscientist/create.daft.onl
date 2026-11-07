@@ -4,11 +4,11 @@
 // composer docked under it.
 import { ArrowClockwise, ArrowDown, ArrowUp, ArrowUUpLeft, Check, Copy, Paperclip, Stop, X } from '@phosphor-icons/react'
 import { AnimatePresence, motion } from 'motion/react'
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Attachment } from '../data/ai/agent'
 import { useActiveModel } from '../data/ai/settings'
 import { childrenOf, openDeck, useLibrary } from '../data/library'
-import { chooseVision, getDraft, isRunning, retry, send, setDraft, stop, thread, undo, useRuns, type Item, type Turn, type Work } from '../data/projectRuns'
+import { chooseVision, getDraft, onDraft, isRunning, retry, send, setDraft, stop, thread, undo, useRuns, type Item, type Turn, type Work } from '../data/projectRuns'
 import { toast } from '../data/toasts'
 import type { Deck } from '../data/types'
 import { navigate } from '../lib/router'
@@ -16,6 +16,23 @@ import { Button, IconButton } from '../ui/Button'
 import { VisionCard } from './AgentPanel'
 import { DeckThumb } from './DeckThumb'
 import { Markdown } from './Markdown'
+import { FENCE, splitAnswer, summariseBlocks } from '../genui/transcript'
+
+// Interactive blocks load OpenUI only when an answer first contains one (spec: generative-ui.md §7).
+const Block = lazy(() => import('../genui/Block'))
+const hasOpenBlock = (text: string) => { const n = text.split('\n').filter((l) => /^\s{0,3}```/.test(l)).length; return text.includes('```' + FENCE) && n % 2 === 1 }
+
+/** One stretch of the answer: prose as Markdown, blocks as live interface. */
+function Answer({ text, turn, group, projectId, chatId, running }: { text: string; turn: Turn; group: number; projectId: string; chatId: string; running: boolean }) {
+  const parts = splitAnswer(text, turn.startedAt + group / 1000)
+  return (
+    <>
+      {parts.map((p) => p.kind === 'prose'
+        ? <Markdown key={`p${p.text.length}-${p.text.slice(0, 12)}`} text={p.text.trim()} className={s.prose} />
+        : <Suspense key={p.key} fallback={<div className={s.blockLoading} />}><Block id={p.id} program={p.program} streaming={!p.closed && running} unfinished={!p.closed && !running} projectId={projectId} chatId={chatId} turnAt={turn.startedAt} /></Suspense>)}
+    </>
+  )
+}
 import { ModelPicker, ReasoningPicker } from './ModelPicker'
 import s from './ProjectChat.module.css'
 
@@ -98,7 +115,7 @@ function ThreadView({ projectId, chatId, turns, line, lineDeck, running, vision 
     <div className={s.threadWrap}>
       <div className={s.thread} ref={box} role="log" aria-label="Conversation" onScroll={(e) => { const el = e.currentTarget; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; if (follow.current) setBehind(false) }}>
         <div className={s.column}>
-          {turns.map((t, i) => <TurnView key={t.startedAt} turn={t} chatId={chatId} last={i === turns.length - 1} line={line} lineDeck={lineDeck} onRetry={() => retry(projectId, chatId)} />)}
+          {turns.map((t, i) => <TurnView key={t.startedAt} turn={t} projectId={projectId} chatId={chatId} last={i === turns.length - 1} line={line} lineDeck={lineDeck} onRetry={() => retry(projectId, chatId)} />)}
           {vision && <VisionCard onChoice={(c) => chooseVision(chatId, c)} />}
         </div>
       </div>
@@ -115,7 +132,7 @@ function ThreadView({ projectId, chatId, turns, line, lineDeck, running, vision 
   )
 }
 
-function TurnView({ turn: t, chatId, last, line, lineDeck, onRetry }: { turn: Turn; chatId: string; last: boolean; line: string | null; lineDeck: string | null; onRetry: () => void }) {
+function TurnView({ turn: t, projectId, chatId, last, line, lineDeck, onRetry }: { turn: Turn; projectId: string; chatId: string; last: boolean; line: string | null; lineDeck: string | null; onRetry: () => void }) {
   const running = t.state === 'running'
   const [copied, setCopied] = useState(false)
   // The model's words between its steps, in order; each run of steps folds into one quiet line.
@@ -125,16 +142,28 @@ function TurnView({ turn: t, chatId, last, line, lineDeck, onRetry }: { turn: Tu
     if (it.kind === 'step') { if (g?.kind === 'steps') g.items.push(it); else groups.push({ kind: 'steps', items: [it] }) }
     else if (it.text.trim()) groups.push({ kind: 'text', text: it.text })
   }
-  const copy = async () => { try { await navigator.clipboard.writeText(t.text.trim()); setCopied(true); setTimeout(() => setCopied(false), 1400) } catch { toast({ message: 'Couldn’t copy. Select the text and copy it instead.' }) } }
+  // A block that spans tool steps is one block: its text groups are joined (the steps between show after it).
+  for (let j = 0; j < groups.length; j++) {
+    const g = groups[j]
+    if (g.kind !== 'text') continue
+    while (hasOpenBlock(g.text)) {
+      const k = groups.findIndex((x, i) => i > j && x.kind === 'text')
+      if (k < 0) break
+      g.text += (groups[k] as { text: string }).text
+      groups.splice(k, 1)
+    }
+  }
+  const copy = async () => { try { await navigator.clipboard.writeText(summariseBlocks(t.text, false).trim()); setCopied(true); setTimeout(() => setCopied(false), 1400) } catch { toast({ message: 'Couldn’t copy. Select the text and copy it instead.' }) } }
   return (
     <section className={s.turn} aria-label="Message">
       <div className={s.you}>
+        {t.from && <small className={s.from}>From “{t.from}”</small>}
         <p>{t.prompt}</p>
         {!!t.files?.length && <small>{t.files.join(' · ')}</small>}
       </div>
       <div className={s.ream}>
         {groups.map((g, j) => g.kind === 'text'
-          ? <Markdown key={j} text={g.text.trim()} className={s.prose} />
+          ? <Answer key={j} text={g.text} turn={t} group={j} projectId={projectId} chatId={chatId} running={running} />
           : (running && j === groups.length - 1) ? null : <Steps key={j} items={g.items} />)}
         {running && <Activity line={line} deck={lineDeck} />}
         {t.thought && <details className={s.steps}><summary>Thought it through</summary><p className={s.thought}>{t.thought}</p></details>}
@@ -234,6 +263,8 @@ const Composer = forwardRef<ComposerHandle, { projectId: string; chatId: string;
   const set = (v: string) => { setText(v); setDraft(projectId, v) }
   useImperativeHandle(ref, () => ({ fill: (v) => { set(v); requestAnimationFrame(() => { const el = area.current; if (!el) return; el.focus(); el.setSelectionRange(v.length, v.length); grow() }) } }))
   useEffect(() => { grow(); if (autoFocus) area.current?.focus({ preventScroll: true }) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // A block's Draft button puts its request here, ready to edit and send.
+  useEffect(() => onDraft(projectId, (v) => { set(v); requestAnimationFrame(() => { const el = area.current; if (!el) return; el.focus(); el.setSelectionRange(v.length, v.length); grow() }) }), [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
   // ⌘J puts you in the composer from anywhere on the project page.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); area.current?.focus() } }

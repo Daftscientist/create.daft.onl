@@ -108,3 +108,5 @@
 :global(html[data-motion="reduce"]) .dot, :global(html[data-motion="reduce"]) .intro { animation: none; }
 .file[data-reading] { padding: 0 10px; color: var(--ink-2); }
 [data-layout="phone"] .steps summary { min-height: 44px; }
+.from { font-size: 12px; font-weight: 560; color: var(--ink-3); }
+.blockLoading { min-height: 120px; border-radius: var(--r-md); background: var(--paper); box-shadow: var(--shadow-tile), 0 0 0 1px var(--hair); }

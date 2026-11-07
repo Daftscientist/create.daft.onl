@@ -7,13 +7,14 @@ import { scoped } from './accounts'
 import type { Attachment } from './ai/agent'
 import { runProjectAgent, type DeckWork } from './ai/projectAgent'
 import { chatFor, getLibrary, projectChats, setChat, trash, updateSlides } from './library'
+import { summariseBlocks } from '../genui/transcript'
 import { toast } from './toasts'
 import type { SlideDoc } from './types'
 
 export type Item = { kind: 'text'; text: string } | { kind: 'step'; label: string; deck?: string }
 /** A deck a turn worked on, as kept in the chat. Made decks keep only a fingerprint (Undo moves them to Trash). */
 export type Work = { deckId: string; name: string; created: boolean; before?: SlideDoc[]; after?: SlideDoc[]; madeKey?: string; summary?: string; undone?: boolean }
-export type Turn = { prompt: string; files?: string[]; log: Item[]; text: string; thought?: string; error?: string; decks?: Work[]; state: 'running' | 'done' | 'stopped'; startedAt: number; ms?: number }
+export type Turn = { prompt: string; files?: string[]; /** Sent by pressing a button in an interactive block (its title). */ from?: string; log: Item[]; text: string; thought?: string; error?: string; decks?: Work[]; state: 'running' | 'done' | 'stopped'; startedAt: number; ms?: number }
 export type Thread = { id: string; turns: Turn[]; line: string | null; lineDeck: string | null; vision: boolean }
 
 const DWELL = 1600
@@ -95,14 +96,20 @@ const keep = (w: DeckWork): Work => (w.created
   : { deckId: w.deckId, name: w.name, created: false, before: w.before ?? undefined, after: w.after, summary: w.summary })
 
 /** Sends a message in a project chat. Resolves when the turn ends. */
-export async function send(projectId: string, id: string, prompt: string, files: Attachment[] = []) {
+export async function send(projectId: string, id: string, prompt: string, files: Attachment[] = [], opts: { from?: string; readOnly?: boolean } = {}) {
   const text = prompt.trim()
   if (!text || runs.has(id)) return
   openChat.set(projectId, id)
-  const history: ModelMessage[] = thread(id).turns.flatMap((t) => [{ role: 'user' as const, content: t.prompt }, ...(t.text ? [{ role: 'assistant' as const, content: t.text }] : [])])
+  // Earlier blocks go to the model as a short note; only the newest block's program is sent whole.
+  const past = thread(id).turns
+  const lastBlockTurn = past.map((t) => t.text.includes('```openui-lang')).lastIndexOf(true)
+  const history: ModelMessage[] = past.flatMap((t, i) => [
+    { role: 'user' as const, content: t.from ? `(Pressed a button in your block "${t.from}"): ${t.prompt}` : t.prompt },
+    ...(t.text ? [{ role: 'assistant' as const, content: summariseBlocks(t.text, i === lastBlockTurn) }] : []),
+  ])
   const abort = new AbortController()
   runs.set(id, { abort, vision: null, sched: { shownAt: 0, next: null, timer: 0 } })
-  patch(id, (t) => ({ turns: [...t.turns, { prompt: text, files: files.map((f) => f.name), log: [], text: '', state: 'running', startedAt: Date.now() }] }))
+  patch(id, (t) => ({ turns: [...t.turns, { prompt: text, files: files.map((f) => f.name), from: opts.from, log: [], text: '', state: 'running', startedAt: Date.now() }] }))
   const log = (item: Item) => patchLast(id, (t) => {
     const last = t.log[t.log.length - 1]
     if (item.kind === 'text' && last?.kind === 'text') return { ...t, log: [...t.log.slice(0, -1), { kind: 'text', text: last.text + item.text }] }
@@ -110,7 +117,7 @@ export async function send(projectId: string, id: string, prompt: string, files:
   })
   try {
     await runProjectAgent({
-      projectId, prompt: text, files, history, signal: abort.signal,
+      projectId, prompt: opts.from ? `(Pressed a button in your block "${opts.from}"): ${text}` : text, files, history, signal: abort.signal, readOnly: opts.readOnly,
       on: (ev) => {
         if (ev.type === 'thinking') { if (ev.on) show(id, 'Thinking', null); else patchLast(id, (t) => ({ ...t, thought: ev.summary })) }
         else if (ev.type === 'activity') {
@@ -179,3 +186,24 @@ export function undo(id: string, turnAt: number, deckId: string) {
 const draftKey = (projectId: string) => scoped(`ream.draft.${projectId}`)
 export function getDraft(projectId: string): string { try { return localStorage.getItem(draftKey(projectId)) ?? '' } catch { return '' } }
 export function setDraft(projectId: string, text: string) { try { if (text) localStorage.setItem(draftKey(projectId), text); else localStorage.removeItem(draftKey(projectId)) } catch { /* this visit only */ } }
+
+/** Something a block did (put a slide on a deck, made a deck): recorded on its turn with the usual Open/Undo card. */
+export function recordWork(id: string, turnAt: number, w: Work) {
+  const keepW: Work = w.created ? { ...w, madeKey: fingerprint(w.after ?? []), after: undefined } : w
+  patch(id, (t) => ({ turns: t.turns.map((x) => (x.startedAt === turnAt ? { ...x, decks: [...(x.decks ?? []), keepW] } : x)) }))
+  save(id)
+}
+
+// ---- drafts from blocks: a request put into the project's message box ----
+const draftListeners = new Map<string, Set<(text: string) => void>>()
+export function draftInto(projectId: string, text: string) {
+  const ls = draftListeners.get(projectId)
+  if (ls?.size) ls.forEach((l) => l(text))
+  else setDraft(projectId, text)
+}
+export function onDraft(projectId: string, l: (text: string) => void) {
+  let set = draftListeners.get(projectId)
+  if (!set) draftListeners.set(projectId, (set = new Set()))
+  set.add(l)
+  return () => { set!.delete(l) }
+}

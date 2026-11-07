@@ -1,6 +1,7 @@
 // Markdown for chat answers (spec: projects): paragraphs, headings, lists, quotes, code, bold, italic, inline code and
 // links, rendered as React elements (never innerHTML), so half-streamed text is always safe and simply grows.
 import type { ReactNode } from 'react'
+import { openLink } from '../lib/links'
 import s from './Markdown.module.css'
 
 type Block =
@@ -67,7 +68,7 @@ function inline(text: string, key = 'i'): ReactNode[] {
     if (m[1] !== undefined) out.push(<code key={k}>{m[1]}</code>)
     else if (m[2] !== undefined || m[3] !== undefined) out.push(<strong key={k}>{inline(m[2] ?? m[3], k)}</strong>)
     else if (m[4] !== undefined || m[5] !== undefined) out.push(<em key={k}>{inline(m[4] ?? m[5], k)}</em>)
-    else out.push(<a key={k} href={m[7]} target="_blank" rel="noreferrer noopener">{m[6]}</a>)
+    else out.push(<a key={k} href={m[7]} target="_blank" rel="noreferrer noopener" onClick={(e) => { e.preventDefault(); void openLink(m[7]) }} title={m[7]}>{m[6]}</a>)
     last = re.lastIndex
   }
   if (last < text.length) out.push(text.slice(last))

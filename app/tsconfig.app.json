@@ -21,7 +21,14 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* Vendored OpenUI (vendor/openui) */
+    "paths": {
+      "@openuidev/react-lang": ["./vendor/openui/react-lang/index.d.mts"],
+      "@openuidev/lang-core": ["./vendor/openui/lang-core/index.d.mts"],
+      "@openuidev/observability": ["./vendor/openui/observability/index.d.mts"]
+    }
   },
   "include": ["src"]
 }
