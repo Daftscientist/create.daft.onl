@@ -79,6 +79,7 @@ export type LibraryState = {
   /** Ask's conversation per deck. Kept with the account and synced, like the decks. */
   chats?: Record<string, Chat>
 }
-export type Chat = { clock: number; device?: string; turns: unknown[] }
+/** A conversation: Ask's per deck (keyed by deck id), or one of a project's chats (keyed `<projectId>~<threadId>`). */
+export type Chat = { clock: number; device?: string; turns: unknown[]; title?: string }
 
 export type ExportFormat = 'pptx' | 'html'

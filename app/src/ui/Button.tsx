@@ -4,7 +4,7 @@ import { Tooltip } from './Tooltip'
 import s from './Button.module.css'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
-type Size = 'md' | 'lg'
+type Size = 'sm' | 'md' | 'lg'
 
 export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant

@@ -16,7 +16,7 @@ export function TabBar({ tab, onTab, onSearch, batch, hidden }: {
   if (hidden) return null
   const tabs = [
     { id: 'recents' as const, label: 'Home', icon: <House size={22} weight={tab === 'recents' ? 'bold' : 'regular'} /> },
-    { id: 'files' as const, label: 'Files', icon: <FolderSimple size={22} weight={tab === 'files' ? 'fill' : 'regular'} /> },
+    { id: 'files' as const, label: 'Projects', icon: <FolderSimple size={22} weight={tab === 'files' ? 'fill' : 'regular'} /> },
   ]
   return (
     <div className={s.dock}>

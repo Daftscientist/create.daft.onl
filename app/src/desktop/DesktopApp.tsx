@@ -21,7 +21,7 @@ import { DeckPage } from './DeckPage'
 import { Sidebar } from './Sidebar'
 import { rememberLibraryRoute, SettingsContent, SettingsSidebar } from './SettingsPage'
 import { SyncFlowHost } from '../compositions/SyncFlows'
-import { FilesView, RecentsView, StarredView, TrashView } from './views'
+import { ProjectsView, ProjectView, RecentsView, StarredView, TrashView } from './views'
 import s from './DesktopApp.module.css'
 
 export function DesktopApp() {
@@ -30,9 +30,9 @@ export function DesktopApp() {
   const [ql, setQl] = useState<{ deckId: string; slide: number } | null>(null)
   const panel = useRef<HTMLElement>(null)
 
-  // Where New/Import land: the open folder in Files, otherwise the Files root (VISION v3).
+  // Where New/Import land: the open project, otherwise outside any project (spec: projects).
   const destination = route.name === 'files' ? route.folderId : null
-  const destName = destination ? getLibrary().entries[destination]?.name ?? 'Files' : 'Files'
+  const destName = destination ? getLibrary().entries[destination]?.name ?? 'your library' : 'your library'
   const destinationRef = useRef(destination)
   destinationRef.current = destination
 
@@ -50,7 +50,7 @@ export function DesktopApp() {
 
   const create = useCallback(() => {
     const id = newDeck(destination)
-    toast({ message: `New deck in ${destName}` })
+    if (destination) toast({ message: `New deck in ${destName}` })
     actions.open(getLibrary().entries[id])
   }, [destination, destName, actions])
 
@@ -88,17 +88,17 @@ export function DesktopApp() {
             <div className={s.topbar}>
               <SearchTrigger onOpen={() => setPalette(true)} />
               <div className={s.primary}>
-                <Tooltip label={`Import into ${destName}`}>
+                <Tooltip label={destination ? `Import into ${destName}` : 'Import PowerPoint files'}>
                   <Button variant="secondary" icon={<UploadSimple size={16} />} onClick={actions.pickFiles}>Import</Button>
                 </Tooltip>
-                <Tooltip label={`New deck in ${destName}`}>
+                <Tooltip label={destination ? `New deck in ${destName}` : 'A new deck, not in a project'}>
                   <Button variant="primary" icon={<Plus size={16} weight="bold" />} onClick={create}>New deck</Button>
                 </Tooltip>
               </div>
             </div>
             <div className={s.content}>
               {route.name === 'home' && <RecentsView />}
-              {route.name === 'files' && <FilesView folderId={route.folderId} />}
+              {route.name === 'files' && (route.folderId ? <ProjectView projectId={route.folderId} /> : <ProjectsView />)}
               {route.name === 'starred' && <StarredView />}
               {route.name === 'trash' && <TrashView />}
             </div>

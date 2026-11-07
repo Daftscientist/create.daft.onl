@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react'
 
 export type Route =
   | { name: 'home' }
+  /** Projects (spec: projects): the list, or one project (`folderId`). */
   | { name: 'files'; folderId: string | null }
   | { name: 'starred' }
   | { name: 'trash' }
@@ -13,7 +14,7 @@ export type Route =
 export function parse(path: string): Route {
   const [, a, b, c] = path.split('/')
   switch (a) {
-    case 'files': return { name: 'files', folderId: b || null }
+    case 'files': case 'projects': return { name: 'files', folderId: b || null }
     case 'starred': return { name: 'starred' }
     case 'trash': return { name: 'trash' }
     case 'browse': return { name: 'browse' }
@@ -26,7 +27,7 @@ export function parse(path: string): Route {
 export function href(r: Route): string {
   switch (r.name) {
     case 'home': return '/'
-    case 'files': return r.folderId ? `/files/${r.folderId}` : '/files'
+    case 'files': return r.folderId ? `/projects/${r.folderId}` : '/projects'
     case 'starred': return '/starred'
     case 'trash': return '/trash'
     case 'browse': return '/browse'

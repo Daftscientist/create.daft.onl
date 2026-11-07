@@ -5,3 +5,4 @@
 .smoke { position: absolute; inset: 0; background: var(--smoke); pointer-events: auto; }
 .content { position: relative; pointer-events: none; outline: none; }
 .content > * { pointer-events: auto; }
+.root[data-align="end"] { justify-items: end; align-items: stretch; }

@@ -89,7 +89,7 @@ export function StorageSettings() {
 
       <div className={s.tiles}>
         <Tile icon={<Presentation size={18} />} label="Decks" value={all.length} sub={count(slides, 'slide')} />
-        <Tile icon={<FolderSimple size={18} />} label="Folders" value={nFolders} />
+        <Tile icon={<FolderSimple size={18} />} label="Projects" value={nFolders} />
         {cloud
           ? <Tile icon={<HardDrives size={18} />} label="On this device" value={all.length - remoteOnly} sub={remoteOnly ? `${remoteOnly} still in ${where} only` : 'Every deck works offline'} />
           : <Tile icon={<ShieldCheck size={18} />} label="Protected" value={est?.persisted ? 'Yes' : 'No'} sub={est?.persisted ? 'The browser won’t clear it' : 'May be cleared when space is low'} />}
@@ -107,7 +107,7 @@ export function StorageSettings() {
       <SyncSettingsGroup />
 
       <SettingGroup title="Backups and export">
-        <SettingRow label="Back up now" description={lib.lastBackupAt ? `Last backup ${relTimeInline(lib.lastBackupAt)}. One file with every deck and folder.` : 'One file with every deck and folder, saved to your downloads.'}>
+        <SettingRow label="Back up now" description={lib.lastBackupAt ? `Last backup ${relTimeInline(lib.lastBackupAt)}. One file with every deck, project and chat.` : 'One file with every deck, project and chat, saved to your downloads.'}>
           <Button variant="secondary" icon={<Archive size={15} />} onClick={backUp}>Back up</Button>
         </SettingRow>
         <SettingRow label="Export every deck" description="A .zip of PowerPoint files, for use anywhere.">

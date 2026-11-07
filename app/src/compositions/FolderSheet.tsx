@@ -1,21 +1,19 @@
-// Mobile "Move to…": a sheet listing every valid destination. Desktop uses the same rules via a menu.
-import { FolderSimple } from '@phosphor-icons/react'
-import { folders, getLibrary, isWithin, move, pathTo } from '../data/library'
+// Mobile "Move to project": a sheet of projects (and out of one). Desktop uses the same rules via a menu.
+import { FolderSimple, FolderSimpleDashed } from '@phosphor-icons/react'
+import { getLibrary, move, projects } from '../data/library'
 import { Sheet, SheetActions, SheetTitle } from '../ui/Sheet'
 
 export function FolderSheet({ ids, onClose }: { ids: string[]; onClose: () => void }) {
   const lib = getLibrary()
-  const options = folders(lib)
-    .filter((f) => f.trashedAt === null && !ids.some((m) => isWithin(lib, f.id, m)))
-    .map((f) => ({ f, path: pathTo(lib, f.id).map((x) => x.name) }))
-    .sort((a, b) => a.path.join('/').localeCompare(b.path.join('/')))
+  const decks = ids.filter((i) => lib.entries[i]?.type === 'deck')
+  const here = decks.length === 1 ? lib.entries[decks[0]]?.parentId ?? null : undefined
   return (
-    <Sheet label="Move to" onClose={onClose} header={<SheetTitle>Move {ids.length === 1 ? `“${lib.entries[ids[0]]?.name}”` : `${ids.length} items`} to</SheetTitle>}>
+    <Sheet label="Move to" onClose={onClose} header={<SheetTitle>Move {decks.length === 1 ? `“${lib.entries[decks[0]]?.name}”` : `${decks.length} decks`} to</SheetTitle>}>
       <SheetActions
         onDone={onClose}
         groups={[[
-          { label: 'Files', icon: <FolderSimple size={20} />, run: () => move(ids, null) },
-          ...options.map(({ f, path }) => ({ label: path.join(' / '), icon: <FolderSimple size={20} />, run: () => move(ids, f.id) })),
+          ...projects(lib).filter((f) => f.id !== here).map((f) => ({ label: f.name, icon: <FolderSimple size={20} />, run: () => move(decks, f.id) })),
+          ...(here !== null ? [{ label: 'Not in a project', icon: <FolderSimpleDashed size={20} />, run: () => move(decks, null) }] : []),
         ]]}
       />
     </Sheet>

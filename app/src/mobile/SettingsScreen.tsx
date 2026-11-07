@@ -17,7 +17,7 @@ export function SettingsScreen({ section }: { section: string | null }) {
   }
   const groups = [...new Set(sections.map((x) => x.group))]
   return (
-    <LargeTitle title="Settings" leading={<BackButton label="Files" onClick={back} />}>
+    <LargeTitle title="Settings" leading={<BackButton label="Back" onClick={back} />}>
       {groups.map((g) => (
         <ListGroup key={g} title={g === 'Ream' ? undefined : g}>
           {sections.filter((x) => x.group === g).map((x) => (

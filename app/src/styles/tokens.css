@@ -31,6 +31,7 @@
   --s-6: 24px; --s-7: 32px; --s-8: 40px; --s-9: 56px;
 
   --r-xs: 6px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-panel: 14px; --r-pill: 999px;
+  --r-bubble: 18px; --r-bubble-tail: 6px;
 
   --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.04);
   --shadow-tile: 0 0 0 1px var(--hair), 0 1px 2px rgb(0 0 0 / 0.04);

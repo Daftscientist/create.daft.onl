@@ -187,8 +187,7 @@ const seeds: Seed[] = [
 const folderSeeds: { id: string; name: string; parent: string | null; modified: number }[] = [
   { id: 'f-finance', name: 'Finance', parent: null, modified: 2 * H },
   { id: 'f-talks', name: 'Talks', parent: null, modified: 26 * H },
-  { id: 'f-clients', name: 'Clients', parent: null, modified: 2 * D },
-  { id: 'f-northwind', name: 'Northwind', parent: 'f-clients', modified: 2 * D },
+  { id: 'f-northwind', name: 'Northwind', parent: null, modified: 2 * D },
   { id: 'f-team', name: 'Team', parent: null, modified: 3 * D },
   { id: 'f-archive', name: 'Archive', parent: null, modified: 300 * D },
 ]

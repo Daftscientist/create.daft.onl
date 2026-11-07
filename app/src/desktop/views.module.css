@@ -3,3 +3,29 @@
 .crumb:hover { background: var(--fill); color: var(--ink); }
 .crumbSep { color: var(--ink-3); opacity: 0.6; }
 .note { margin: -18px 0 18px; font-size: 13px; color: var(--ink-3); }
+
+/* Project page (spec: projects v2): the conversation fills the panel under the top bar; chats and files sit in a
+   quiet column on the right (from 1280px; below that they open as a sheet). Both scroll on their own. */
+.project { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 32px; height: calc(100dvh - 16px - 70px - 14px); }
+.projectMain { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.projectHead { flex: none; display: flex; align-items: center; gap: 4px; min-height: 36px; margin-bottom: 4px; font-size: 13px; color: var(--ink-3); }
+.crumbHere { padding: 2px 6px; font-size: 13px; color: var(--ink-2); font-weight: 560; }
+.projectName { font-size: 15px; line-height: 22px; font-weight: 640; color: var(--ink); min-width: 0; display: flex; }
+.headSpacer { flex: 1; }
+.heroName { display: flex; justify-content: center; min-width: 0; max-width: 100%; font: inherit; }
+.projectSide { min-height: 0; overflow-y: auto; padding: 4px 0 24px; border-left: 1px solid var(--hair); padding-left: 16px; margin-left: -16px; }
+.filesButton { display: none !important; }
+.chatTitle { min-width: 0; padding: 0 6px; font-size: 13px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40ch; }
+/* With the side column showing, New chat lives there (one control, not two). */
+@media (min-width: 1280px) { .headNewChat { display: none !important; } }
+.sideSheet { width: min(360px, 92vw); height: 100%; overflow-y: auto; padding: 20px 14px; background: var(--panel); box-shadow: var(--shadow-panel), 0 0 0 1px var(--hair); }
+@media (max-width: 1279px) {
+  .project { grid-template-columns: minmax(0, 1fr); }
+  .projectSide { display: none; }
+  .filesButton { display: inline-flex !important; }
+}
+.titleButton { flex: 0 1 auto; font: inherit; letter-spacing: inherit; color: inherit; text-align: inherit; border-radius: var(--r-xs); padding: 0 6px; margin: 0 -6px; min-width: 0; max-width: calc(100% + 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; }
+.titleButton:hover { background: var(--fill); }
+.titleInput { font: inherit; letter-spacing: inherit; color: inherit; text-align: inherit; border: 0; outline: none; background: var(--fill); border-radius: var(--r-xs); padding: 0 6px; margin: 0 -6px; box-shadow: 0 0 0 2px var(--select); min-width: 0; max-width: calc(100% + 12px); }
+/* Stacked collections (Projects, then Not in a project): the selection-bar room only after the last one. */
+.section:not(:last-child) [data-collection] { padding-bottom: 0; }

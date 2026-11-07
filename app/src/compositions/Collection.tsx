@@ -1,10 +1,10 @@
 // The one file browser (desktop). Recents, Files, Starred and Trash are all this component with
 // different entries. Owns: selection, the keyboard map (DESIGN.md §6 Deck tile), context menu,
 // rename, Move to…, drag-to-folder, and the selection bar.
-import { DownloadSimple, FolderSimple, Trash as TrashIcon, ArrowCounterClockwise, X } from '@phosphor-icons/react'
+import { DownloadSimple, FolderSimple, FolderSimpleDashed, Trash as TrashIcon, ArrowCounterClockwise, X } from '@phosphor-icons/react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
-  askDeleteForever, deleteForever, download, duplicate, folders as allFolders, getLibrary, isWithin, move, pathTo, rename, restore,
+  askDeleteForever, deleteForever, download, duplicate, folders as allFolders, getLibrary, isWithin, move, rename, restore,
   retryImport, toggleStar, trash, useLibrary,
 } from '../data/library'
 import type { Entry } from '../data/types'
@@ -48,7 +48,7 @@ export function Collection(p: CollectionProps) {
   const [focus, setFocus] = useState<string | null>(null)
   const [anchor, setAnchor] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuItem[]; label: string } | null>(null)
+  const [menu, setMenu] = useState<{ anchor: MenuAnchor; items: MenuItem[]; label: string; search?: string } | null>(null)
   const dnd = useDnd()
   const root = useRef<HTMLDivElement>(null)
 
@@ -86,21 +86,16 @@ export function Collection(p: CollectionProps) {
   const pickFolder = useCallback((moveIds: string[]) => {
     const lib = getLibrary()
     const r = root.current?.querySelector(`[data-id="${moveIds[0]}"]`)?.getBoundingClientRect()
-    const options = allFolders(lib)
-      .filter((f) => f.trashedAt === null && !moveIds.some((m) => isWithin(lib, f.id, m)))
-      .map((f) => ({ f, path: pathTo(lib, f.id) }))
-      .sort((a, b) => a.path.map((x) => x.name).join('/').localeCompare(b.path.map((x) => x.name).join('/')))
+    const here = lib.entries[moveIds[0]]?.parentId ?? null
+    const options = allFolders(lib).filter((f) => f.trashedAt === null).sort((a, b) => a.name.localeCompare(b.name))
     setMenu({
-      label: 'Move to',
+      label: 'Move to project',
       anchor: r ? { x: r.left + 12, y: r.top + 40 } : { x: innerWidth / 2 - 120, y: innerHeight / 3 },
+      search: options.length > 10 ? 'Find a project' : undefined,
       items: [
-        { kind: 'header', content: <span className={s.menuTitle}>Move {moveIds.length === 1 ? `“${lib.entries[moveIds[0]]?.name}”` : `${moveIds.length} items`} to</span> },
-        { label: 'Files', icon: <FolderSimple size={16} />, run: () => move(moveIds, null) },
-        ...options.map(({ f, path }) => ({
-          label: `${' '.repeat(path.length - 1)}${f.name}`,
-          icon: <FolderSimple size={16} />,
-          run: () => move(moveIds, f.id),
-        })),
+        { kind: 'header', content: <span className={s.menuTitle}>Move {moveIds.length === 1 ? `“${lib.entries[moveIds[0]]?.name}”` : `${moveIds.length} decks`} to</span> },
+        ...options.map((f) => ({ label: f.name, icon: <FolderSimple size={16} />, disabled: f.id === here, run: () => move(moveIds, f.id) })),
+        ...(here ? [{ label: 'Not in a project', icon: <FolderSimpleDashed size={16} />, run: () => move(moveIds, null) }] : []),
       ],
     })
   }, [])
@@ -257,7 +252,7 @@ export function Collection(p: CollectionProps) {
       ]
     : [
         ...(selDecks.length ? [{ label: 'Download', icon: <DownloadSimple size={16} />, run: () => download(selDecks, 'pptx') }] : []),
-        { label: 'Move', icon: <FolderSimple size={16} />, run: () => pickFolder(selIds) },
+        ...(selDecks.length === selIds.length ? [{ label: 'Move', icon: <FolderSimple size={16} />, run: () => pickFolder(selIds) }] : []),
         { label: 'Delete', icon: <TrashIcon size={16} />, danger: true, run: () => { trash(selIds); clear() } },
       ]
 
@@ -298,7 +293,7 @@ export function Collection(p: CollectionProps) {
         })}
       </div>
       <SelectionBar count={selected.size} actions={barActions} onClear={clear} />
-      <Menu open={!!menu} anchor={menu?.anchor ?? null} items={menu?.items ?? []} label={menu?.label ?? ''} onClose={() => setMenu(null)} />
+      <Menu open={!!menu} anchor={menu?.anchor ?? null} items={menu?.items ?? []} label={menu?.label ?? ''} search={menu?.search} onClose={() => setMenu(null)} />
     </>
   )
 }

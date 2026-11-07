@@ -14,6 +14,7 @@
 }
 .btn:has(.icon):has(.text) { padding-left: 11px; }
 .btn[data-size="lg"] { height: 44px; padding: 0 18px; font-size: 16px; }
+.btn[data-size="sm"] { height: 28px; padding: 0 11px; font-size: 13px; gap: 6px; border-radius: var(--r-sm); }
 .btn:active:not(:disabled) { scale: 0.97; }
 .btn:disabled { opacity: 0.4; }
 

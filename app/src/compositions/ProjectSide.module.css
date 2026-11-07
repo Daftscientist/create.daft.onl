@@ -1,0 +1,45 @@
+/* Chats and files beside a project's conversation. Solid, quiet, hairline-separated: lists of handles, not content. */
+.side { display: flex; flex-direction: column; gap: 22px; min-height: 0; }
+.group { display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.head { display: flex; align-items: center; justify-content: space-between; min-height: 30px; padding: 0 2px 0 10px; }
+.head h2 { font-size: 12px; font-weight: 640; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); display: flex; gap: 6px; }
+.head h2 span { font-weight: 560; }
+.none { margin: 0; padding: 4px 10px; font-size: 13px; line-height: 19px; color: var(--ink-3); }
+
+.chats { display: flex; flex-direction: column; gap: 1px; }
+.chat { display: flex; align-items: center; gap: 9px; min-height: 34px; padding: 0 10px; border-radius: var(--r-sm); text-align: left; color: var(--ink-2); }
+.chat:hover { background: var(--fill); color: var(--ink); }
+.chat[aria-current] { background: var(--fill-2); color: var(--ink); }
+.chat svg { flex: none; color: var(--ink-3); }
+.chat[aria-current] svg { color: var(--ink); }
+.chatName { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 520; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.when { font-size: 12px; color: var(--ink-3); flex: none; }
+.more { align-self: flex-start; margin: 2px 0 0 6px; padding: 4px 6px; border-radius: var(--r-xs); font-size: 12.5px; font-weight: 600; color: var(--select); }
+.more:hover { background: var(--select-soft); }
+
+.files { display: flex; flex-direction: column; gap: 1px; }
+.fileItem { position: relative; display: flex; align-items: center; border-radius: var(--r-sm); }
+.fileItem:hover { background: var(--fill); }
+.file { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px 36px 6px 6px; border-radius: var(--r-sm); text-align: left; }
+.file:focus-visible { outline: 2px solid var(--select); outline-offset: -2px; }
+.thumb { width: 64px; flex: none; --thumb-r: 4px; }
+.fileText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.fileText b { font-size: 13.5px; font-weight: 580; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fileText small { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rename { font: inherit; font-size: 13.5px; font-weight: 580; border: 0; outline: none; background: var(--paper); border-radius: 4px; padding: 0 4px; margin: 0 -4px; box-shadow: 0 0 0 2px var(--select); min-width: 0; }
+.dots { position: absolute; right: 4px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-xs); color: var(--ink-3); opacity: 0; }
+.fileItem:hover .dots, .dots:focus-visible, .fileItem:focus-within .dots { opacity: 1; }
+.dots:hover { background: var(--fill-2); color: var(--ink); }
+
+/* Phones (in a sheet): bigger rows, actions always visible. */
+.side[data-touch] .chat { min-height: 48px; font-size: 15px; }
+.side[data-touch] .chatName { font-size: 15px; }
+.side[data-touch] .file { padding: 8px 52px 8px 8px; }
+.side[data-touch] .thumb { width: 80px; }
+.side[data-touch] .fileText b { font-size: 15px; }
+.side[data-touch] .dots { opacity: 1; width: 44px; height: 44px; }
+.running { width: 8px; height: 8px; border-radius: 50%; background: var(--select); flex: none; margin-right: 4px; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .running { animation: none; } }
+.rename { flex: 1; font-size: 16px; padding: 4px 6px; }
+.side:not([data-touch]) .rename { font-size: 13.5px; }

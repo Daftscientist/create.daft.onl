@@ -1,9 +1,7 @@
 // Desktop sidebar (DESIGN.md §6 Sidebar): sits on the frame, no panel, no glass.
-import {
-  CaretRight, FolderSimple, GearSix, House, Plus, Star, Trash,
-} from '@phosphor-icons/react'
-import { useState } from 'react'
-import { childrenOf, folders, isLive, isTrashRoot, isWithin, move, newFolder, useLibrary, getLibrary, importFiles } from '../data/library'
+import { FolderSimple, GearSix, House, Plus, SquaresFour, Star, Trash } from '@phosphor-icons/react'
+import { deckCount, isLive, isTrashRoot, isWithin, move, newProject, projects, useLibrary, getLibrary, importFiles } from '../data/library'
+import { renameOnArrival } from '../lib/arrival'
 import type { Folder } from '../data/types'
 import { relTimeInline } from '../lib/format'
 import { navigate, type Route } from '../lib/router'
@@ -18,12 +16,11 @@ export function Sidebar({ route }: { route: Route }) {
   const lib = useLibrary()
   const starred = Object.values(lib.entries).filter((e) => e.starred && isLive(e)).length
   const trashed = Object.values(lib.entries).filter(isTrashRoot).length
-  const top = folders(lib).filter((f) => f.parentId === null && isLive(f)).sort((a, b) => a.name.localeCompare(b.name))
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(route.name === 'files' && route.folderId ? ancestors(route.folderId) : []))
+  const list = projects(lib)
 
   const nav = [
     { route: { name: 'home' } as Route, label: 'Home', icon: <House size={18} />, active: route.name === 'home' },
-    { route: { name: 'files', folderId: null } as Route, label: 'Files', icon: <FolderSimple size={18} />, active: route.name === 'files' && !route.folderId, drop: '' },
+    { route: { name: 'files', folderId: null } as Route, label: 'Projects', icon: <SquaresFour size={18} />, active: route.name === 'files' && !route.folderId, drop: '' },
     { route: { name: 'starred' } as Route, label: 'Starred', icon: <Star size={18} />, active: route.name === 'starred', count: starred },
     { route: { name: 'trash' } as Route, label: 'Trash', icon: <Trash size={18} />, active: route.name === 'trash', count: trashed },
   ]
@@ -45,18 +42,17 @@ export function Sidebar({ route }: { route: Route }) {
 
       <div className={s.section}>
         <div className={s.sectionHead}>
-          <span>Folders</span>
-          <IconButton label="New folder" size="sm" tone="plain" side="right" className={s.add} onClick={() => {
-            const id = newFolder(null)
+          <span>Projects</span>
+          <IconButton label="New project" size="sm" tone="plain" side="right" className={s.add} onClick={() => {
+            const id = newProject()
+            renameOnArrival(id)
             navigate({ name: 'files', folderId: id })
           }}>
             <Plus size={14} />
           </IconButton>
         </div>
-        <div className={s.tree} role="tree" aria-label="Folders">
-          {top.map((f) => (
-            <FolderNode key={f.id} folder={f} depth={0} route={route} expanded={expanded} setExpanded={setExpanded} />
-          ))}
+        <div className={s.tree} aria-label="Projects">
+          {list.map((f) => <ProjectItem key={f.id} project={f} route={route} />)}
         </div>
       </div>
 
@@ -65,13 +61,6 @@ export function Sidebar({ route }: { route: Route }) {
       </div>
     </aside>
   )
-}
-
-function ancestors(id: string): string[] {
-  const out: string[] = []
-  let cur = getLibrary().entries[id]
-  while (cur?.parentId) { out.push(cur.parentId); cur = getLibrary().entries[cur.parentId] }
-  return out
 }
 
 export function NavItem({ label, icon, active, count, onClick, drop }: { label: string; icon: React.ReactNode; active: boolean; count?: number; onClick: () => void; drop?: string }) {
@@ -93,7 +82,7 @@ export function NavItem({ label, icon, active, count, onClick, drop }: { label: 
   )
 }
 
-/** Sidebar folders accept internal moves and external files. '' = Files root. */
+/** Sidebar projects accept decks moved in and dropped files. '' (the Projects item) = out of any project. */
 function dropHandlers(folderId: string) {
   const target = folderId || null
   return {
@@ -124,45 +113,23 @@ function dropHandlers(folderId: string) {
   }
 }
 
-function FolderNode({ folder, depth, route, expanded, setExpanded }: {
-  folder: Folder
-  depth: number
-  route: Route
-  expanded: Set<string>
-  setExpanded: (fn: (s: Set<string>) => Set<string>) => void
-}) {
-  const lib = useLibrary()
+function ProjectItem({ project, route }: { project: Folder; route: Route }) {
   const dnd = useDnd()
-  const kids = childrenOf(lib, folder.id).filter((e): e is Folder => e.type === 'folder').sort((a, b) => a.name.localeCompare(b.name))
-  const open = expanded.has(folder.id)
-  const active = route.name === 'files' && route.folderId === folder.id
-  const over = dnd.over === folder.id && dnd.drag.kind !== 'none'
+  const active = route.name === 'files' && route.folderId === project.id
+  const over = dnd.over === project.id && dnd.drag.kind !== 'none'
+  const n = deckCount(useLibrary(), project.id)
   return (
-    <div role="treeitem" aria-expanded={kids.length ? open : undefined} aria-selected={active}>
-      <div className={s.folderRow} style={{ paddingLeft: 4 + depth * 14 }}>
-        <button
-          type="button"
-          className={s.caret}
-          aria-label={open ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
-          data-open={open || undefined}
-          style={{ visibility: kids.length ? 'visible' : 'hidden' }}
-          onClick={() => setExpanded((prev) => { const n = new Set(prev); if (n.has(folder.id)) n.delete(folder.id); else n.add(folder.id); return n })}
-        >
-          <CaretRight size={10} weight="bold" />
-        </button>
-        <button
-          type="button"
-          className={`${s.item} ${s.folderItem}`}
-          aria-current={active ? 'page' : undefined}
-          data-drop={over || undefined}
-          onClick={() => navigate({ name: 'files', folderId: folder.id })}
-          {...dropHandlers(folder.id)}
-        >
-          <span className={s.icon}><FolderSimple size={16} weight={active ? 'fill' : 'regular'} /></span>
-          <span className={s.label}>{folder.name}</span>
-        </button>
-      </div>
-      {open && kids.map((k) => <FolderNode key={k.id} folder={k} depth={depth + 1} route={route} expanded={expanded} setExpanded={setExpanded} />)}
-    </div>
+    <button
+      type="button"
+      className={`${s.item} ${s.folderItem}`}
+      aria-current={active ? 'page' : undefined}
+      data-drop={over || undefined}
+      onClick={() => navigate({ name: 'files', folderId: project.id })}
+      {...dropHandlers(project.id)}
+    >
+      <span className={s.icon}><FolderSimple size={16} weight={active ? 'fill' : 'regular'} /></span>
+      <span className={s.label}>{project.name}</span>
+      {!!n && <span className={s.count}>{n}</span>}
+    </button>
   )
 }

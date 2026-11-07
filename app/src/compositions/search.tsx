@@ -7,7 +7,7 @@ import type { Deck } from '../data/types'
 import { count, relTimeInline } from '../lib/format'
 import { navigate } from '../lib/router'
 
-export type SearchItem = { id: string; section: 'Decks' | 'Slides' | 'Folders' | 'Go to' | 'Actions' | 'Commands'; icon: ReactNode; deck?: Deck; slide?: number; title: ReactNode; sub?: ReactNode; run: () => void }
+export type SearchItem = { id: string; section: 'Decks' | 'Slides' | 'Projects' | 'Go to' | 'Actions' | 'Commands'; icon: ReactNode; deck?: Deck; slide?: number; title: ReactNode; sub?: ReactNode; run: () => void }
 
 export function highlight(text: string, q: string): ReactNode {
   if (!q) return text
@@ -23,7 +23,7 @@ export function useSearch(q: string, onDone: () => void, pickFiles: () => void):
     const lib = getLibrary()
     const go = (fn: () => void) => () => { onDone(); fn() }
     const openAt = (d: Deck, slide?: number) => go(() => { openDeck(d.id); navigate({ name: 'deck', deckId: d.id, slide }) })
-    const where = (d: Deck) => (d.parentId ? pathTo(lib, d.parentId).map((f) => f.name).join(' / ') : 'Files')
+    const where = (d: Deck) => (d.parentId ? pathTo(lib, d.parentId).map((f) => f.name).join(' / ') : 'Not in a project')
     const query = q.trim().toLowerCase()
     const actions: SearchItem[] = [
       { id: 'a-new', section: 'Actions', icon: <Plus size={16} />, title: 'New deck', run: go(() => { const id = newDeck(null); openDeck(id); navigate({ name: 'deck', deckId: id }) }) },
@@ -31,7 +31,7 @@ export function useSearch(q: string, onDone: () => void, pickFiles: () => void):
       { id: 'a-backup', section: 'Actions', icon: <CloudArrowUp size={16} />, title: 'Back up now', run: go(() => void backUp()) },
       { id: 'g-settings', section: 'Go to', icon: <GearSix size={16} />, title: 'Settings', run: go(() => navigate({ name: 'settings', section: null })) },
       { id: 'g-recents', section: 'Go to', icon: <ClockCounterClockwise size={16} />, title: 'Home', run: go(() => navigate({ name: 'home' })) },
-      { id: 'g-files', section: 'Go to', icon: <FolderSimple size={16} />, title: 'Files', run: go(() => navigate({ name: 'files', folderId: null })) },
+      { id: 'g-files', section: 'Go to', icon: <FolderSimple size={16} />, title: 'Projects', run: go(() => navigate({ name: 'files', folderId: null })) },
       { id: 'g-starred', section: 'Go to', icon: <Star size={16} />, title: 'Starred', run: go(() => navigate({ name: 'starred' })) },
       { id: 'g-trash', section: 'Go to', icon: <Trash size={16} />, title: 'Trash', run: go(() => navigate({ name: 'trash' })) },
     ]
@@ -56,7 +56,7 @@ export function useSearch(q: string, onDone: () => void, pickFiles: () => void):
       })
     }
     const folderHits = folders(lib).filter((f) => isLive(f) && f.name.toLowerCase().includes(query)).slice(0, 4)
-      .map<SearchItem>((f) => ({ id: f.id, section: 'Folders', icon: <FolderSimple size={16} />, title: highlight(f.name, q.trim()), run: go(() => navigate({ name: 'files', folderId: f.id })) }))
+      .map<SearchItem>((f) => ({ id: f.id, section: 'Projects', icon: <FolderSimple size={16} />, title: highlight(f.name, q.trim()), run: go(() => navigate({ name: 'files', folderId: f.id })) }))
     const actionHits = actions.filter((a) => String(a.title).toLowerCase().includes(query))
     const commandHits = commands.filter((c) => `${String(c.title)} ${(c as { keywords?: string }).keywords ?? ''}`.toLowerCase().includes(query)).map((c) => ({ ...c, title: highlight(String(c.title), q.trim()) }))
     return [...commandHits, ...deckHits, ...slideHits, ...folderHits, ...actionHits]

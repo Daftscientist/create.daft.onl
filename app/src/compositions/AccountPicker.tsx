@@ -16,10 +16,10 @@ export function shouldPick(): boolean {
   try {
     if (new URLSearchParams(location.search).has('account') || sessionStorage.getItem('ream.tab.picked')) return false
     const last = Number(localStorage.getItem(SEEN) ?? 0)
-    return useAccountsCount() > 1 && Date.now() - last > AWAY
+    return accountsCount() > 1 && Date.now() - last > AWAY
   } catch { return false }
 }
-const useAccountsCount = () => { try { return (JSON.parse(localStorage.getItem('ream.accounts.v1') ?? '{}').accounts ?? []).length as number } catch { return 0 } }
+const accountsCount = () => { try { return (JSON.parse(localStorage.getItem('ream.accounts.v1') ?? '{}').accounts ?? []).length as number } catch { return 0 } }
 /** Marks Ream as in use (called while the app is open). */
 export function noteSeen() {
   const mark = () => { try { localStorage.setItem(SEEN, String(Date.now())) } catch { /* ok */ } }

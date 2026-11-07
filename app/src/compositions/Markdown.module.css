@@ -1,0 +1,14 @@
+/* Chat prose. Size comes from the container (15/24 desktop, 16/24 phone). */
+.md { display: flex; flex-direction: column; gap: 10px; color: var(--ink); overflow-wrap: anywhere; }
+.md p, .md ul, .md ol, .md blockquote, .md pre { margin: 0; }
+.md .h { font-weight: 640; margin-top: 6px; }
+.md .h:first-child { margin-top: 0; }
+.md ul, .md ol { padding-left: 1.3em; display: flex; flex-direction: column; gap: 4px; }
+.md li::marker { color: var(--ink-3); }
+.md strong { font-weight: 640; }
+.md a { color: var(--select); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.md code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.88em; padding: 1px 5px; border-radius: 5px; background: var(--fill); }
+.md pre { padding: 12px 14px; border-radius: var(--r-sm); background: var(--fill); overflow-x: auto; }
+.md pre code { padding: 0; background: none; font-size: 0.85em; line-height: 1.55; }
+.md blockquote { padding-left: 12px; border-left: 2px solid var(--hair-strong, var(--hair)); color: var(--ink-2); }
+.md hr { border: 0; height: 1px; background: var(--hair); margin: 4px 0; }

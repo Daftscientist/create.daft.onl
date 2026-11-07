@@ -98,6 +98,7 @@ export function bootLibrary() {
       const opened = await storage.open()
       state = opened.meta.seeded ? fromOpened(opened) : await seed(demo)
       if (opened.meta.seeded && !opened.meta.samplesRemoved) await removeSeededSamples()
+      flattenProjects()
       adoptLibraryPrefs(state.settings?.appearance as Partial<DevicePrefs> | undefined, (appearance) => setLibrarySettings({ appearance }))
       setBoot('ready')
     } catch (e) {
@@ -357,23 +358,26 @@ export function duplicate(deckId: string): string | undefined {
 function remove(ids: string[]) {
   const entries = { ...state.entries }
   for (const i of ids) delete entries[i]
-  commit({ ...state, entries })
+  // A deck's or project's conversation goes with it.
+  const mine = (k: string) => ids.includes(k) || ids.some((i) => k.startsWith(`${i}~`))
+  const chats = Object.keys(state.chats ?? {}).some(mine) ? Object.fromEntries(Object.entries(state.chats ?? {}).filter(([k]) => !mine(k))) : state.chats
+  commit({ ...state, entries, chats })
 }
 
 export function move(ids: string[], folderId: string | null): number {
   const movable = ids.filter((i) => {
     const e = state.entries[i]
     if (!e || e.parentId === folderId) return false
-    return !(e.type === 'folder' && folderId && isWithin(state, folderId, e.id))
+    return e.type !== 'folder' // projects stay at the top
   })
   if (!movable.length) return 0
   const before = movable.map((i) => [i, state.entries[i].parentId] as const)
   const entries = { ...state.entries }
   for (const i of movable) entries[i] = { ...entries[i], parentId: folderId }
   commit({ ...state, entries })
-  const where = folderId ? (state.entries[folderId] as Folder).name : 'Files'
+  const what = movable.length === 1 ? `“${entries[movable[0]].name}”` : `${movable.length} decks`
   toast({
-    message: movable.length === 1 ? `Moved “${entries[movable[0]].name}” to ${where}` : `Moved ${movable.length} items to ${where}`,
+    message: folderId ? `Moved ${what} to ${(state.entries[folderId] as Folder).name}` : `Took ${what} out of ${movable.length === 1 && before[0][1] ? state.entries[before[0][1]]?.name ?? 'the project' : 'their projects'}`,
     action: {
       label: 'Undo',
       run: () => {
@@ -460,13 +464,33 @@ export function emptyTrash() {
 export const trashDaysLeft = (e: Entry) =>
   e.trashedAt === null ? TRASH_DAYS : Math.max(0, TRASH_DAYS - Math.floor((Date.now() - e.trashedAt) / 86_400_000))
 
-export function newFolder(parentId: string | null): string {
+/** Projects (spec: projects) are the library's folders, kept flat: always at the top, holding decks. */
+export function newProject(name = 'New project'): string {
   const f: Folder = {
-    type: 'folder', id: `f-${id()}`, name: uniqueName('New folder', parentId, 'folder'), parentId,
+    type: 'folder', id: `f-${id()}`, name: uniqueName(name, null, 'folder'), parentId: null,
     createdAt: Date.now(), modifiedAt: Date.now(), starred: false, trashedAt: null,
   }
   commit({ ...state, entries: { ...state.entries, [f.id]: f } })
   return f.id
+}
+export const projects = (s: LibraryState) => folders(s).filter(isLive).sort((a, b) => a.name.localeCompare(b.name))
+/** The project a deck is in (null when it's in none). */
+export const projectOf = (s: LibraryState, deckId: string): Folder | null => {
+  const p = s.entries[deckId]?.parentId
+  const f = p ? s.entries[p] : undefined
+  return f?.type === 'folder' ? f : null
+}
+
+/** Folders from before projects could sit inside other folders: each moves to the top as its own project, with its
+ *  decks. Nothing is merged or deleted. Runs on boot and after changes from the cloud (an older device may add one). */
+function flattenProjects() {
+  const nested = Object.values(state.entries).filter((e) => e.type === 'folder' && e.parentId !== null)
+  if (!nested.length) return
+  const entries = { ...state.entries }
+  // "Acme / 2026": the old path stays in the name, so two "2026" folders stay told apart.
+  const path = (f: Entry): string => { const up = f.parentId ? state.entries[f.parentId] : undefined; return up ? `${path(up)} / ${f.name}` : f.name }
+  for (const f of nested) entries[f.id] = { ...f, parentId: null, name: path(f) }
+  commit({ ...state, entries }, true)
 }
 
 export function newDeck(parentId: string | null): string {
@@ -583,7 +607,7 @@ export function download(ids: string[], format: ExportFormat) {
 export function backUp() {
   const n = decks(state).filter(isLive).length
   const at = Date.now()
-  const file = new Blob([JSON.stringify({ format: 'ream-backup', version: 1, at, entries: Object.values(state.entries), settings: { ...state.settings, ai: undefined } })], { type: 'application/json' })
+  const file = new Blob([JSON.stringify({ format: 'ream-backup', version: 1, at, entries: Object.values(state.entries), chats: state.chats ?? {}, settings: { ...state.settings, ai: undefined } })], { type: 'application/json' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(file)
   a.download = `Ream backup ${new Date(at).toISOString().slice(0, 10)}.json`
@@ -603,6 +627,7 @@ export function applyRemote(change: { upserts: Entry[]; deletes: string[] }) {
   for (const id of change.deletes) delete entries[id]
   const before = state
   commit({ ...state, entries }, true, 'remote')
+  flattenProjects()
   // The editor reconciles changes to the deck it has open (editor spec, contract 6).
   for (const e of change.upserts) if (e.type === 'deck' && before.entries[e.id] !== e) remoteListeners.forEach((l) => l(e.id, before.entries[e.id] as Deck | undefined))
 }
@@ -621,10 +646,16 @@ export function setLibrarySettings(update: Record<string, unknown>) {
 }
 /** Ask's conversation for a deck. */
 export const chatFor = (deckId: string): unknown[] => state.chats?.[deckId]?.turns ?? []
+/** A project's chats, newest first (spec: projects). */
+export const projectChats = (s: LibraryState, projectId: string) => Object.entries(s.chats ?? {})
+  .filter(([k, c]) => k.startsWith(`${projectId}~`) && c.turns.length)
+  .map(([id, c]) => ({ id, title: c.title ?? 'Chat', at: c.clock, turns: c.turns.length }))
+  .sort((a, b) => b.at - a.at)
 /** Saves Ask's conversation (stamped, so it syncs and the newest wins). */
-export function setChat(deckId: string, turns: unknown[]) {
+export function setChat(deckId: string, turns: unknown[], title?: string) {
   const chats = { ...state.chats }
-  if (turns.length) chats[deckId] = { clock: tick(), device: deviceId(), turns }
+  const name = title ?? state.chats?.[deckId]?.title
+  if (turns.length) chats[deckId] = { clock: tick(), device: deviceId(), turns, ...(name ? { title: name } : {}) }
   else delete chats[deckId]
   commit({ ...state, chats }, true)
 }

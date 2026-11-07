@@ -72,8 +72,8 @@ export function commandsFor(ids: string[], ctx: CommandContext, header?: ReactNo
   if (single && ctx.startRename) items.push({ label: 'Rename', icon: <PencilSimple size={16} />, hint: k('F2'), run: () => ctx.startRename!(single.id) })
   if (single?.type === 'deck' && single.status === 'ready')
     items.push({ label: 'Duplicate', icon: <Copy size={16} />, hint: k(`${modKey}D`), run: () => duplicate(single.id) })
+  if (entries.every((e) => e.type === 'deck')) items.push({ label: 'Move to project…', icon: <FolderSimple size={16} />, run: () => ctx.pickFolder(ids) })
   items.push(
-    { label: 'Move to…', icon: <FolderSimple size={16} />, run: () => ctx.pickFolder(ids) },
     {
       label: entries.every((e) => e.starred) ? 'Remove star' : 'Star',
       icon: <Star size={16} weight={entries.every((e) => e.starred) ? 'fill' : 'regular'} />,

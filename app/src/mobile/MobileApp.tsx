@@ -8,7 +8,7 @@ import { ActionSheet } from '../compositions/ActionSheet'
 import { FolderSheet } from '../compositions/FolderSheet'
 import { pickPptx } from '../compositions/importPicker'
 import type { MobileSelect } from '../compositions/MobileList'
-import { download, getLibrary, newFolder, openDeck, trash } from '../data/library'
+import { download, getLibrary, newProject, openDeck, trash } from '../data/library'
 import type { Entry } from '../data/types'
 import { back, navigate, useRoute } from '../lib/router'
 import { BackButton, IconButton, TextButton } from '../ui/Button'
@@ -16,7 +16,7 @@ import { Sheet, SheetActions, SheetTitle } from '../ui/Sheet'
 import { ConfirmHost } from '../ui/Dialog'
 import { Toaster } from '../ui/Toaster'
 import { MobileViewer } from './Viewer'
-import { FilesScreen, RecentsScreen, StarredScreen, TrashScreen } from './screens'
+import { FilesScreen, ProjectScreen, RecentsScreen, StarredScreen, TrashScreen } from './screens'
 import { SearchSheet } from './SearchSheet'
 import { SettingsScreen } from './SettingsScreen'
 import { SyncFlowHost } from '../compositions/SyncFlows'
@@ -41,7 +41,7 @@ export function MobileApp() {
   }, [])
 
   const destination = route.name === 'files' ? route.folderId : null
-  const destName = destination ? getLibrary().entries[destination]?.name ?? 'Files' : 'Files'
+  const destName = destination ? getLibrary().entries[destination]?.name ?? 'your library' : 'your library'
 
   const open = useCallback((e: Entry) => {
     if (e.type === 'folder') return navigate({ name: 'files', folderId: e.id })
@@ -72,7 +72,7 @@ export function MobileApp() {
       ) : (
         <>
           <TextButton onClick={() => setSelecting(true)}>Select</TextButton>
-          <IconButton label={`New in ${destName}`} size="lg" tone="plain" tooltip={false} onClick={() => setSheet({ kind: 'create' })}><Plus size={22} /></IconButton>
+          <IconButton label={destination ? `Add to ${destName}` : 'New'} size="lg" tone="plain" tooltip={false} onClick={() => setSheet({ kind: 'create' })}><Plus size={22} /></IconButton>
           {(route.name === 'home' || (route.name === 'files' && !route.folderId)) && <AccountAvatarButton />}
         </>
       ),
@@ -102,14 +102,14 @@ export function MobileApp() {
     <div className={s.app}>
       <main className={s.main}>
         {route.name === 'home' && <RecentsScreen {...screen} />}
-        {route.name === 'files' && <FilesScreen {...screen} folderId={route.folderId} />}
+        {route.name === 'files' && (route.folderId ? <ProjectScreen projectId={route.folderId} onBack={back} /> : <FilesScreen {...screen} />)}
         {route.name === 'starred' && <StarredScreen {...screen} />}
         {route.name === 'trash' && <TrashScreen {...screen} />}
         {route.name === 'settings' && <SettingsScreen section={route.section} />}
       </main>
       <TabBar
         tab={route.name === 'home' ? 'recents' : 'files'}
-        hidden={route.name === 'settings'}
+        hidden={route.name === 'settings' || (route.name === 'files' && !!route.folderId)}
         onTab={(t) => navigate(t === 'recents' ? { name: 'home' } : { name: 'files', folderId: null })}
         onSearch={() => setSheet({ kind: 'search' })}
         batch={batch}
@@ -122,13 +122,13 @@ export function MobileApp() {
         {sheet?.kind === 'move' && <FolderSheet key="m" ids={sheet.ids} onClose={() => { setSheet(null); setSelecting(false); setSelected(new Set()) }} />}
         {sheet?.kind === 'search' && <SearchSheet key="s" onClose={() => setSheet(null)} />}
         {sheet?.kind === 'create' && (
-          <Sheet key="c" label="Create" onClose={() => setSheet(null)} header={<SheetTitle>Add to {destName}</SheetTitle>}>
+          <Sheet key="c" label="Create" onClose={() => setSheet(null)} header={<SheetTitle>{destination ? `Add to ${destName}` : 'New'}</SheetTitle>}>
             <SheetActions
               onDone={() => setSheet(null)}
               groups={[[
                 // No New deck on phones until they can edit (editor spec: coarse pointers get the viewer).
-                { label: 'Import from Files', icon: <UploadSimple size={20} />, run: () => pickPptx(destination) },
-                { label: 'New folder', icon: <FolderSimplePlus size={20} />, run: () => navigate({ name: 'files', folderId: newFolder(destination) }) },
+                { label: destination ? 'Import a .pptx here' : 'Import a .pptx', icon: <UploadSimple size={20} />, run: () => pickPptx(destination) },
+                ...(destination ? [] : [{ label: 'New project', icon: <FolderSimplePlus size={20} />, run: () => navigate({ name: 'files', folderId: newProject() }) }]),
               ]]}
             />
           </Sheet>

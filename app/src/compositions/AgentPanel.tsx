@@ -37,7 +37,7 @@ type Edit = { before: SlideDoc[]; after: SlideDoc[]; undone?: boolean }
 /** A voice conversation, in order: what you said, what Ream said (a bubble per pause), and the deck work it did. */
 type TalkItem = { kind: 'heard'; text: string; done?: boolean } | { kind: 'said'; text: string } | { kind: 'work'; label: string; done: boolean; changes?: Change[]; edit?: Edit }
 /** What happened in a turn, in order: the model's words between (or before) its steps. */
-type Item = { kind: 'text'; text: string } | { kind: 'step'; label: string }
+export type Item = { kind: 'text'; text: string } | { kind: 'step'; label: string }
 type Turn = {
   prompt: string
   slide: number
@@ -400,7 +400,7 @@ export function AgentPanel({ deck, slide, onClose }: { deck: Deck; slide: number
   )
 }
 
-function Activity({ line }: { line: string | null }) {
+export function Activity({ line }: { line: string | null }) {
   return (
     <div className={s.activity} role="status" aria-live="polite">
       <span className={s.dot} aria-hidden />
@@ -416,7 +416,7 @@ function Activity({ line }: { line: string | null }) {
 
 /** A turn as it happened: the model's messages in order, with each run of steps between them folded into one
  *  line ("3 steps") you can open. While it runs, the live activity line sits at the end. */
-function Log({ turn: t, line }: { turn: Turn; line: string | null }) {
+export function Log({ turn: t, line }: { turn: Pick<Turn, 'log' | 'state' | 'ms'>; line: string | null }) {
   const groups: ({ kind: 'text'; text: string } | { kind: 'steps'; labels: string[] })[] = []
   for (const it of t.log ?? []) {
     const last = groups[groups.length - 1]
@@ -492,7 +492,7 @@ function ChangeCard({ deck, changes, undone, onUndo }: { deck: Deck; changes: Ch
 }
 
 /** Shown when the model wants to look at slides but can't see pictures: pick a model that can, or carry on. */
-function VisionCard({ onChoice }: { onChoice: (c: 'retry' | 'continue') => void }) {
+export function VisionCard({ onChoice }: { onChoice: (c: 'retry' | 'continue') => void }) {
   const ai = useAi()
   const browser = useBrowserModel()
   const active = useActiveModel()

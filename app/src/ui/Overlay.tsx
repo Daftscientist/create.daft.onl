@@ -11,7 +11,7 @@ export function Overlay({ onClose, label, children, className, align = 'center' 
   label: string
   children: ReactNode
   className?: string
-  align?: 'center' | 'top' | 'bottom'
+  align?: 'center' | 'top' | 'bottom' | 'end'
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const root = useRef<HTMLDivElement>(null)
