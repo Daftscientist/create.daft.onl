@@ -1,6 +1,10 @@
 # Ream core: one Rust engine everywhere (proposal v2)
 
-Status: **proposal, needs the user's approval**, 2026-11-07. v1 was reviewed by a Claude subagent (17 findings) and
+Status: **long-term design, not a rewrite plan** (the user, 2026-11-07): domOXML stays the Python core; parts move to
+Rust one at a time when measurement shows a bottleneck, behind the same interfaces. HTML stays the AI's authoring
+language (any layout; the browser measures it once; domOXML captures it). See `docs/ROADMAP.md`.
+
+Originally a proposal, 2026-11-07. v1 was reviewed by a Claude subagent (17 findings) and
 Codex high (23); they agreed on every major point. v2 below is the plan rewritten around their findings (triage at
 the end).
 
